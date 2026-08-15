@@ -251,6 +251,13 @@ export function validateConflictResolutionAuthority({ ledger, conflictResolution
     if (!sameAuthorityRef(predecessor.semanticPayload.knowledgeConflictRef, conflict.ref)) {
       throw new ConflictAuthorityValidationError('CONFLICT_RESOLUTION_INVALID', 'resolution supersession crosses KnowledgeConflict boundary');
     }
+    const supersessionLineage = ledger.lineageFor(resolution.ref).some((edge) =>
+      edge.relation === 'supersedes'
+        && sameAuthorityRef(edge.from, resolution.ref)
+        && sameAuthorityRef(edge.to, predecessor.ref));
+    if (!supersessionLineage) {
+      throw new ConflictAuthorityValidationError('CONFLICT_RESOLUTION_LINEAGE_INVALID', 'resolution predecessor is declared without exact supersession lineage');
+    }
   }
   const resolutionLineage = ledger.lineageFor(resolution.ref).some((edge) =>
     edge.relation === 'derived_from'
