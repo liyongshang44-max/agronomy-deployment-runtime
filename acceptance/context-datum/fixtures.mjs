@@ -13,9 +13,9 @@ export function audit(actor = principal, suffix = 'ctx') {
 export function baseDatum(overrides = {}) {
   return {
     contractVersion: CONTEXT_DATUM_CONTRACT_VERSION,
-    semanticId: 'soil.water.vwc',
-    value: { type: 'decimal', decimal: '0.32' },
-    unit: 'm3/m3',
+    semanticId: 'soil.volumetric_water_content',
+    value: { type: 'DECIMAL', decimal: '0.32' },
+    unit: 'm3_per_m3',
     epistemicClass: 'OBSERVATION',
     provenanceClass: 'SENSOR',
     effectiveInterval: { start: '2026-08-16T01:00:00Z', end: '2026-08-16T02:00:00Z' },
