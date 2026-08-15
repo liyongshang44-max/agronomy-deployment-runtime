@@ -27,6 +27,16 @@ function normalizeTarget(target) {
   });
 }
 
+function normalizeOwnership(ownership) {
+  if (!ownership || typeof ownership !== 'object' || Array.isArray(ownership)) {
+    throw new KnowledgeReleaseAuthorizationError('INVALID_RELEASE_OWNERSHIP', 'knowledge ownership must be an object');
+  }
+  return deepFreeze({
+    organizationId: requiredText(ownership.organizationId, 'ownership.organizationId'),
+    ...(ownership.tenantId ? { tenantId: requiredText(ownership.tenantId, 'ownership.tenantId') } : {})
+  });
+}
+
 function exactRefKey(ref) {
   return JSON.stringify([ref.kind, ref.logicalId, ref.version, ref.semanticHash]);
 }
@@ -71,19 +81,22 @@ function assertRoleAssignment(record) {
   return record;
 }
 
+function releaseAssignments(principal, roleAssignments, authorityScope) {
+  if (!Array.isArray(roleAssignments)) {
+    throw new KnowledgeReleaseAuthorizationError('INVALID_RELEASE_ROLE_ASSIGNMENTS', 'roleAssignments must be an array');
+  }
+  return roleAssignments
+    .map(assertRoleAssignment)
+    .filter((record) => samePrincipalIdentity(record.semanticPayload.principal, principal))
+    .filter((record) => record.semanticPayload.permissions.includes(PERMISSIONS.KNOWLEDGE_RELEASE))
+    .filter((record) => scopeContains(record.semanticPayload.scope, authorityScope));
+}
+
 export function authorizeKnowledgeRelease({ principal, policy, roleAssignments, releaseTarget }) {
   const normalizedPrincipal = createPrincipal(principal);
   const normalizedPolicy = assertPolicy(policy);
   const target = normalizeTarget(releaseTarget);
-  if (!Array.isArray(roleAssignments)) {
-    throw new KnowledgeReleaseAuthorizationError('INVALID_RELEASE_ROLE_ASSIGNMENTS', 'roleAssignments must be an array');
-  }
-
-  const assignments = roleAssignments
-    .map(assertRoleAssignment)
-    .filter((record) => samePrincipalIdentity(record.semanticPayload.principal, normalizedPrincipal))
-    .filter((record) => record.semanticPayload.permissions.includes(PERMISSIONS.KNOWLEDGE_RELEASE))
-    .filter((record) => scopeContains(record.semanticPayload.scope, target));
+  const assignments = releaseAssignments(normalizedPrincipal, roleAssignments, target);
 
   const entitlementAllowed = normalizedPolicy.semanticPayload.deploymentScope.some((scope) => constraintMatches(scope, target));
   const reasons = [];
@@ -96,6 +109,30 @@ export function authorizeKnowledgeRelease({ principal, policy, roleAssignments, 
     policyRef: normalizedPolicy.ref,
     assignmentRefs: sortedRefs(assignments),
     request: { releaseTarget: cloneCanonicalValue(target) },
+    allowed: reasons.length === 0,
+    reasons: [...new Set(reasons)].sort()
+  };
+  return deepFreeze({ ...payload, decisionHash: semanticHash('AuthorizationDecision', payload) });
+}
+
+export function authorizeKnowledgeReleaseEntitlementControl({ principal, policy, roleAssignments }) {
+  const normalizedPrincipal = createPrincipal(principal);
+  const normalizedPolicy = assertPolicy(policy);
+  const ownership = normalizeOwnership(normalizedPolicy.semanticPayload.ownership);
+  const assignments = releaseAssignments(normalizedPrincipal, roleAssignments, ownership);
+
+  const principalOwnsPolicy = normalizedPrincipal.organizationId === ownership.organizationId
+    && (normalizedPrincipal.tenantId ?? null) === (ownership.tenantId ?? null);
+  const reasons = [];
+  if (!principalOwnsPolicy) reasons.push('KNOWLEDGE_RELEASE_ENTITLEMENT_OWNER_MISMATCH');
+  if (assignments.length === 0) reasons.push('KNOWLEDGE_RELEASE_ENTITLEMENT_CONTROL_PERMISSION_DENIED');
+
+  const payload = {
+    operation: 'KNOWLEDGE_RELEASE_ENTITLEMENT_CONTROL',
+    principal: normalizedPrincipal,
+    policyRef: normalizedPolicy.ref,
+    assignmentRefs: sortedRefs(assignments),
+    request: { knowledgeOwnership: cloneCanonicalValue(ownership) },
     allowed: reasons.length === 0,
     reasons: [...new Set(reasons)].sort()
   };
