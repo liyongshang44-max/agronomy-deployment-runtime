@@ -62,6 +62,38 @@ function preparePublication({ kind, logicalId, version, semanticPayload, operati
   return { ref, record, event };
 }
 
+function prepareLineage({ relation, from, to, audit, details = {} }, resolveRecord) {
+  if (!LINEAGE_RELATION_SET.has(relation)) {
+    throw new AuthorityLedgerError('INVALID_LINEAGE_RELATION', `unsupported lineage relation ${relation}`);
+  }
+  if (!audit) throw new AuthorityLedgerError('AUDIT_REQUIRED', 'lineage creation requires explicit audit metadata');
+
+  const fromRecord = resolveRecord(from);
+  const toRecord = resolveRecord(to);
+  const semanticPayload = {
+    relation,
+    from: fromRecord.ref,
+    to: toRecord.ref
+  };
+  const record = deepFreeze({
+    ...semanticPayload,
+    details: freezeCanonical(details),
+    lineageHash: semanticHash('AuthorityLineage', semanticPayload)
+  });
+  const event = createAuditEvent({
+    ...audit,
+    action: audit.action ?? `LINEAGE_${relation.toUpperCase()}`,
+    objectRef: fromRecord.ref,
+    inputRefs: [toRecord.ref, ...(audit.inputRefs ?? [])],
+    details: {
+      relation,
+      lineageHash: record.lineageHash,
+      ...(audit.details ?? {})
+    }
+  });
+  return { record, event };
+}
+
 export class AuthorityLedger {
   #records = new Map();
   #lineage = new Map();
@@ -134,14 +166,112 @@ export class AuthorityLedger {
       resultRecords.push(prepared.record);
     }
 
-    // Commit only after every entry has passed preflight. This gives the in-memory
-    // authority substrate semantic all-or-none publication for the batch.
     for (const [key, prepared] of stagedByKey.entries()) {
       this.#records.set(key, prepared.record);
       this.#audit.push(prepared.event);
     }
 
     return deepFreeze(resultRecords);
+  }
+
+  publishBatchWithLineage({ entries, lineages }) {
+    if (!Array.isArray(entries) || entries.length === 0) {
+      throw new AuthorityLedgerError('INVALID_AUTHORITY_BATCH', 'publishBatchWithLineage requires a non-empty entries array');
+    }
+    if (!Array.isArray(lineages)) {
+      throw new AuthorityLedgerError('INVALID_LINEAGE_BATCH', 'publishBatchWithLineage lineages must be an array');
+    }
+
+    const stagedByKey = new Map();
+    const resultRecords = [];
+    for (const entry of entries) {
+      const prepared = preparePublication(entry);
+      const key = authorityRefKey(prepared.ref);
+      const existing = this.#records.get(key);
+      const staged = stagedByKey.get(key);
+
+      if (existing) {
+        if (existing.ref.semanticHash !== prepared.ref.semanticHash) {
+          throw new AuthorityLedgerError(
+            'SEMANTIC_MUTATION_FORBIDDEN',
+            `published authority ${prepared.ref.kind}/${prepared.ref.logicalId}@${prepared.ref.version} already exists with different semantics`
+          );
+        }
+        resultRecords.push(existing);
+        continue;
+      }
+      if (staged) {
+        if (staged.ref.semanticHash !== prepared.ref.semanticHash) {
+          throw new AuthorityLedgerError(
+            'SEMANTIC_MUTATION_FORBIDDEN',
+            `authority batch contains conflicting semantics for ${prepared.ref.kind}/${prepared.ref.logicalId}@${prepared.ref.version}`
+          );
+        }
+        resultRecords.push(staged.record);
+        continue;
+      }
+      stagedByKey.set(key, prepared);
+      resultRecords.push(prepared.record);
+    }
+
+    const resolveStagedOrExisting = (ref) => {
+      const normalized = assertAuthorityRef(ref);
+      const key = authorityRefKey(normalized);
+      const staged = stagedByKey.get(key);
+      if (staged) {
+        if (staged.ref.semanticHash !== normalized.semanticHash) {
+          throw new AuthorityLedgerError(
+            'AUTHORITY_HASH_MISMATCH',
+            `staged authority ${normalized.kind}/${normalized.logicalId}@${normalized.version} semantic hash does not match`
+          );
+        }
+        return staged.record;
+      }
+      const existing = this.#records.get(key);
+      if (!existing) {
+        throw new AuthorityLedgerError('AUTHORITY_NOT_FOUND', `authority ${normalized.kind}/${normalized.logicalId}@${normalized.version} not found during lineage preflight`);
+      }
+      if (existing.ref.semanticHash !== normalized.semanticHash) {
+        throw new AuthorityLedgerError(
+          'AUTHORITY_HASH_MISMATCH',
+          `authority ${normalized.kind}/${normalized.logicalId}@${normalized.version} exists but semantic hash does not match`
+        );
+      }
+      return existing;
+    };
+
+    const stagedLineage = new Map();
+    for (const lineage of lineages) {
+      const prepared = prepareLineage(lineage, resolveStagedOrExisting);
+      const key = lineageKey(prepared.record);
+      const existing = this.#lineage.get(key);
+      const staged = stagedLineage.get(key);
+      if (existing) {
+        if (!sameAuthorityRef(existing.from, prepared.record.from)
+          || !sameAuthorityRef(existing.to, prepared.record.to)
+          || existing.relation !== prepared.record.relation) {
+          throw new AuthorityLedgerError('LINEAGE_COLLISION', `lineage ${key} exists with different semantics`);
+        }
+        continue;
+      }
+      if (staged) continue;
+      stagedLineage.set(key, prepared);
+    }
+
+    // No mutation occurs before all authority and lineage entries pass preflight.
+    for (const [key, prepared] of stagedByKey.entries()) {
+      this.#records.set(key, prepared.record);
+      this.#audit.push(prepared.event);
+    }
+    for (const [key, prepared] of stagedLineage.entries()) {
+      this.#lineage.set(key, prepared.record);
+      this.#audit.push(prepared.event);
+    }
+
+    return deepFreeze({
+      records: resultRecords,
+      lineage: [...stagedLineage.values()].map((prepared) => prepared.record)
+    });
   }
 
   resolve(ref) {
@@ -181,40 +311,16 @@ export class AuthorityLedger {
   }
 
   addLineage({ relation, from, to, audit, details = {} }) {
-    if (!LINEAGE_RELATION_SET.has(relation)) {
-      throw new AuthorityLedgerError('INVALID_LINEAGE_RELATION', `unsupported lineage relation ${relation}`);
-    }
-    if (!audit) throw new AuthorityLedgerError('AUDIT_REQUIRED', 'lineage creation requires explicit audit metadata');
-
-    const fromRecord = this.resolve(from);
-    const toRecord = this.resolve(to);
-    const semanticPayload = {
-      relation,
-      from: fromRecord.ref,
-      to: toRecord.ref
-    };
-    const record = deepFreeze({
-      ...semanticPayload,
-      details: freezeCanonical(details),
-      lineageHash: semanticHash('AuthorityLineage', semanticPayload)
-    });
-
-    const existing = this.#lineage.get(lineageKey(record));
+    const prepared = prepareLineage(
+      { relation, from, to, audit, details },
+      (ref) => this.resolve(ref)
+    );
+    const existing = this.#lineage.get(lineageKey(prepared.record));
     if (existing) return existing;
 
-    this.#lineage.set(lineageKey(record), record);
-    this.#audit.push(createAuditEvent({
-      ...audit,
-      action: audit.action ?? `LINEAGE_${relation.toUpperCase()}`,
-      objectRef: fromRecord.ref,
-      inputRefs: [toRecord.ref, ...(audit.inputRefs ?? [])],
-      details: {
-        relation,
-        lineageHash: record.lineageHash,
-        ...(audit.details ?? {})
-      }
-    }));
-    return record;
+    this.#lineage.set(lineageKey(prepared.record), prepared.record);
+    this.#audit.push(prepared.event);
+    return prepared.record;
   }
 
   lineageFor(ref) {
