@@ -21,6 +21,19 @@ const PROBLEM_KEYS = new Set([
   'decisionAuthorityMode',
   'decisionDeadline'
 ]);
+const FORBIDDEN_CONCLUSION_KEYS = new Set([
+  'recommendedaction',
+  'selectedaction',
+  'chosenaction',
+  'finalaction',
+  'recommendation',
+  'decisionresult',
+  'runtimeresult',
+  'decisionrobustness',
+  'applicabilityassessment',
+  'agronomicconclusion'
+]);
+const ISO_DURATION_RE = /^P(?:(\d+(?:\.\d+)?)Y)?(?:(\d+(?:\.\d+)?)M)?(?:(\d+(?:\.\d+)?)W)?(?:(\d+(?:\.\d+)?)D)?(?:T(?:(\d+(?:\.\d+)?)H)?(?:(\d+(?:\.\d+)?)M)?(?:(\d+(?:\.\d+)?)S)?)?$/;
 
 export class DecisionProblemError extends Error {
   constructor(code, message) {
@@ -68,6 +81,27 @@ function canonicalObject(value, name) {
   return deepFreeze(normalized);
 }
 
+function semanticKey(key) {
+  return String(key).toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function assertNoConclusionCarrier(value, path) {
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => assertNoConclusionCarrier(item, `${path}[${index}]`));
+    return;
+  }
+  if (!value || typeof value !== 'object') return;
+  for (const [key, nested] of Object.entries(value)) {
+    if (FORBIDDEN_CONCLUSION_KEYS.has(semanticKey(key))) {
+      throw new DecisionProblemError(
+        'DECISION_PROBLEM_CONCLUSION_LAUNDERING_FORBIDDEN',
+        `${path}.${key} would embed downstream agronomic/applicability/runtime/decision authority inside DecisionProblem`
+      );
+    }
+    assertNoConclusionCarrier(nested, `${path}.${key}`);
+  }
+}
+
 function normalizeTargetRef(value) {
   exactObject(value, 'targetRef', TARGET_KEYS);
   const target = {
@@ -84,8 +118,22 @@ function normalizeTargetRef(value) {
 function normalizeHorizon(value) {
   exactObject(value, 'decisionHorizon', new Set(['duration']));
   const duration = requiredText(value.duration, 'decisionHorizon.duration');
-  if (!/^P(?=.*\d)[0-9YMWDTHS.]+$/.test(duration)) {
-    throw new DecisionProblemError('INVALID_DECISION_HORIZON', 'decisionHorizon.duration must use an ISO-8601 duration form');
+  const match = ISO_DURATION_RE.exec(duration);
+  if (!match) {
+    throw new DecisionProblemError('INVALID_DECISION_HORIZON', 'decisionHorizon.duration must use ISO-8601 duration syntax');
+  }
+  const components = match.slice(1);
+  if (!components.some((component) => component !== undefined)) {
+    throw new DecisionProblemError('INVALID_DECISION_HORIZON', 'decisionHorizon.duration must contain at least one duration component');
+  }
+  const hasWeek = match[3] !== undefined;
+  const hasOtherDateComponent = match[1] !== undefined || match[2] !== undefined || match[4] !== undefined;
+  const hasTimeComponent = match[5] !== undefined || match[6] !== undefined || match[7] !== undefined;
+  if (hasWeek && (hasOtherDateComponent || hasTimeComponent)) {
+    throw new DecisionProblemError('INVALID_DECISION_HORIZON', 'ISO-8601 week duration cannot be mixed with other duration components');
+  }
+  if (duration.includes('T') && !hasTimeComponent) {
+    throw new DecisionProblemError('INVALID_DECISION_HORIZON', 'ISO-8601 time designator T requires at least one time component');
   }
   return deepFreeze({ duration });
 }
@@ -113,6 +161,7 @@ function normalizeConstraints(value = []) {
   }
   const keyed = value.map((constraint, index) => {
     const normalized = canonicalObject(constraint, `constraints[${index}]`);
+    assertNoConclusionCarrier(normalized, `constraints[${index}]`);
     return [semanticHash('DecisionProblemConstraint', normalized), normalized];
   });
   const hashes = keyed.map(([hash]) => hash);
