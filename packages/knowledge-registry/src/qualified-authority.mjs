@@ -223,7 +223,11 @@ export function validateQualifiedKnowledgeAuthority({ ledger, qualifiedKnowledge
     const key = targetKey(target);
     if (forbidden.some((item) => targetKey(item) === key)) useStatus = 'PROHIBITED';
     else if (!allowed.some((item) => targetKey(item) === key)) useStatus = 'UNQUALIFIED';
-    else {
+    else if (allowHistorical) {
+      // Historical replay evaluates the exact QualifiedKnowledge semantics as published.
+      // Later revocation/requalification authority remains visible in lineage but does not rewrite that past state.
+      useStatus = 'QUALIFIED';
+    } else {
       const revoked = ledger.lineageFor(knowledge.ref).some((edge) => {
         if (edge.relation !== 'revokes' || !sameAuthorityRef(edge.to, knowledge.ref)) return false;
         const revocation = resolveKind(ledger, edge.from, 'ScientificQualificationRevocation', 'QUALIFICATION_REVOCATION_REQUIRED');
