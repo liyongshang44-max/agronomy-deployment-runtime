@@ -19,6 +19,8 @@ const PRINCIPAL_SCOPE_KEYS = new Set([
   'semanticIds'
 ]);
 const ARRAY_SCOPE_KEYS = new Set(['fieldIds', 'resourceIds', 'semanticIds']);
+const SECRET_SCOPE_KEY_RE = /(?:token|secret|password|credential|authorization|bearer|api.?key|private.?key|session.?key)/i;
+const SIGNED_QUERY_KEY_RE = /(?:^|[-_])(?:token|secret|password|credential|signature|security[-_]?token|api[-_]?key|access[-_]?key|signed[-_]?headers?|sig)(?:$|[-_])/i;
 
 function requiredText(value, name) {
   if (typeof value !== 'string' || value.trim().length === 0) {
@@ -51,7 +53,23 @@ function canonicalIdentifierSet(value, name) {
 }
 
 export function normalizeProviderPrincipalScope(value) {
-  exactObject(value, 'authorizationContext.principalScope', PRINCIPAL_SCOPE_KEYS);
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new ReferenceResolutionError('INVALID_AUTHORIZATION_CONTEXT', 'authorizationContext.principalScope must be an object');
+  }
+  for (const key of Object.keys(value)) {
+    if (!PRINCIPAL_SCOPE_KEYS.has(key)) {
+      if (SECRET_SCOPE_KEY_RE.test(key)) {
+        throw new ReferenceResolutionError(
+          'SECRET_AUTH_MATERIAL_FORBIDDEN',
+          `authorizationContext.principalScope.${key} is credential-shaped and cannot enter ADR semantic identity`
+        );
+      }
+      throw new ReferenceResolutionError(
+        'INVALID_REFERENCE_RESOLUTION_FIELD',
+        `authorizationContext.principalScope.${key} is not a frozen non-secret scope field`
+      );
+    }
+  }
   const organizationId = requiredText(value.organizationId, 'authorizationContext.principalScope.organizationId');
   const normalized = {
     organizationId,
@@ -66,6 +84,23 @@ export function normalizeProviderPrincipalScope(value) {
     if (value[key] !== undefined) normalized[key] = canonicalIdentifierSet(value[key], `authorizationContext.principalScope.${key}`);
   }
   return deepFreeze(normalized);
+}
+
+function assertNoSignedLocatorSecrets(locator) {
+  const queryIndex = locator.indexOf('?');
+  if (queryIndex < 0) return;
+  const query = locator.slice(queryIndex + 1).split('#')[0];
+  for (const pair of query.split('&')) {
+    const [rawKey] = pair.split('=');
+    let key = rawKey;
+    try { key = decodeURIComponent(rawKey); } catch {}
+    if (SIGNED_QUERY_KEY_RE.test(key)) {
+      throw new ReferenceResolutionError(
+        'SECRET_AUTH_MATERIAL_FORBIDDEN',
+        `reference.locator query parameter ${key} is credential/signature material and cannot enter semantic identity`
+      );
+    }
+  }
 }
 
 function locatorBindsExpectedHash(locator, expectedContentHash) {
@@ -93,6 +128,7 @@ function hardenedReferenceInput(input) {
       principalScope
     }
   });
+  assertNoSignedLocatorSecrets(normalized.reference.locator);
   if (normalized.reference.addressingMode === 'CONTENT_ADDRESSED'
     && !locatorBindsExpectedHash(normalized.reference.locator, normalized.reference.expectedContentHash)) {
     throw new ReferenceResolutionError(
