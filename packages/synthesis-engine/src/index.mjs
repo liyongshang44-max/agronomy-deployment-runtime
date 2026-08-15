@@ -184,9 +184,9 @@ export class DerivedKnowledgeService {
   #ledger;
 
   constructor({ ledger }) {
-    if (!ledger || typeof ledger.publish !== 'function' || typeof ledger.publishBatch !== 'function'
+    if (!ledger || typeof ledger.publish !== 'function' || typeof ledger.publishBatchWithLineage !== 'function'
       || typeof ledger.resolve !== 'function' || typeof ledger.addLineage !== 'function') {
-      throw new SynthesisAuthorityError('INVALID_LEDGER', 'DerivedKnowledgeService requires shared AuthorityLedger with atomic publishBatch');
+      throw new SynthesisAuthorityError('INVALID_LEDGER', 'DerivedKnowledgeService requires shared AuthorityLedger with atomic authority+lineage publication');
     }
     this.#ledger = ledger;
   }
@@ -344,49 +344,56 @@ export class DerivedKnowledgeService {
       approverPrincipal: cloneCanonicalValue(approverPrincipal),
       authorizationDecisionAuditRef: synthesisApproval.authAudit.ref,
       synthesisPolicyRef: synthesisApproval.policy.ref,
+      derivationEvidenceClass: 'SCIENTIFIC_ADJUDICATION_RECORD',
       authorityClass: 'DERIVATION_AUTHORITY'
     };
+    const knowledgeRef = predictedRef('DerivedKnowledge', derivedKnowledgeLogicalId, derivedKnowledgeVersion, knowledgePayload);
 
-    const [derivedContext, derivedKnowledge] = this.#ledger.publishBatch([
-      {
-        kind: 'DerivedKnowledgeContext',
-        logicalId: requiredText(derivedContextLogicalId, 'derivedContextLogicalId'),
-        version: requiredText(derivedContextVersion, 'derivedContextVersion'),
-        semanticPayload: contextPayload,
-        audit: auditEvent(audit, 'derived-context', [method.ref, synthesisApproval.authAudit.ref, ...inputRefs, ...originContexts.map((item) => item.sourceContextRef)])
-      },
-      {
-        kind: 'DerivedKnowledge',
-        logicalId: requiredText(derivedKnowledgeLogicalId, 'derivedKnowledgeLogicalId'),
-        version: requiredText(derivedKnowledgeVersion, 'derivedKnowledgeVersion'),
-        semanticPayload: knowledgePayload,
-        audit: auditEvent(audit, 'derived-knowledge', [contextRef, method.ref, synthesisApproval.authAudit.ref, synthesisApproval.policy.ref, ...inputRefs])
-      }
-    ]);
-
+    const lineages = [];
     for (const input of validatedInputs) {
-      this.#ledger.addLineage({
+      lineages.push({
         relation: 'derived_from',
-        from: derivedKnowledge.ref,
+        from: knowledgeRef,
         to: input.knowledge.ref,
         details: { lineageRole: 'QUALIFIED_KNOWLEDGE_INPUT', scientificUseTarget: firstUse, derivationMethodRef: method.ref },
         audit: auditEvent(audit, `knowledge-lineage-${input.index}`, [method.ref, synthesisApproval.authAudit.ref])
       });
-      this.#ledger.addLineage({
+      lineages.push({
         relation: 'derived_from',
-        from: derivedContext.ref,
+        from: contextRef,
         to: input.sourceContext.ref,
         details: { lineageRole: 'ORIGIN_SOURCE_CONTEXT', qualifiedKnowledgeRef: input.knowledge.ref },
         audit: auditEvent(audit, `context-lineage-${input.index}`, [method.ref, synthesisApproval.authAudit.ref])
       });
     }
-    this.#ledger.addLineage({
+    lineages.push({
       relation: 'derived_from',
-      from: derivedKnowledge.ref,
+      from: knowledgeRef,
       to: method.ref,
-      details: { lineageRole: 'DERIVATION_METHOD', contextRef: derivedContext.ref },
+      details: { lineageRole: 'DERIVATION_METHOD', contextRef },
       audit: auditEvent(audit, 'method-lineage', [synthesisApproval.authAudit.ref])
     });
+
+    const publication = this.#ledger.publishBatchWithLineage({
+      entries: [
+        {
+          kind: 'DerivedKnowledgeContext',
+          logicalId: requiredText(derivedContextLogicalId, 'derivedContextLogicalId'),
+          version: requiredText(derivedContextVersion, 'derivedContextVersion'),
+          semanticPayload: contextPayload,
+          audit: auditEvent(audit, 'derived-context', [method.ref, synthesisApproval.authAudit.ref, ...inputRefs, ...originContexts.map((item) => item.sourceContextRef)])
+        },
+        {
+          kind: 'DerivedKnowledge',
+          logicalId: requiredText(derivedKnowledgeLogicalId, 'derivedKnowledgeLogicalId'),
+          version: requiredText(derivedKnowledgeVersion, 'derivedKnowledgeVersion'),
+          semanticPayload: knowledgePayload,
+          audit: auditEvent(audit, 'derived-knowledge', [contextRef, method.ref, synthesisApproval.authAudit.ref, synthesisApproval.policy.ref, ...inputRefs])
+        }
+      ],
+      lineages
+    });
+    const [derivedContext, derivedKnowledge] = publication.records;
 
     return deepFreeze({ derivedKnowledge, derivedContext, method });
   }
