@@ -76,6 +76,19 @@ function hasLineage(ledger, from, to, lineageRole) {
       && edge.details?.lineageRole === lineageRole);
 }
 
+function assertDirectMethodAudit(ledger, method, approval) {
+  const principal = method.semanticPayload.approverPrincipal;
+  const valid = ledger.auditFor(method.ref).some((event) =>
+    sameAuthorityRef(event.objectRef, method.ref)
+      && event.actor?.id === principal.principalId
+      && event.actor?.type === principal.type
+      && exactRefIn(event.inputRefs, approval.authAudit.ref)
+      && exactRefIn(event.inputRefs, approval.policy.ref));
+  if (!valid) {
+    throw new DerivedAuthorityValidationError('DERIVATION_METHOD_AUDIT_INVALID', 'DerivationMethod lacks direct approver audit over exact authorization/policy');
+  }
+}
+
 export function validateDerivedKnowledgeAuthority({ ledger, derivedKnowledgeRef, requiredUseTarget = null }) {
   if (!ledger || typeof ledger.resolve !== 'function' || typeof ledger.auditFor !== 'function' || typeof ledger.lineageFor !== 'function') {
     throw new DerivedAuthorityValidationError('INVALID_LEDGER', 'replayable AuthorityLedger is required');
@@ -84,6 +97,12 @@ export function validateDerivedKnowledgeAuthority({ ledger, derivedKnowledgeRef,
   const payload = knowledge.semanticPayload;
   if (payload.authorityClass !== 'DERIVATION_AUTHORITY') {
     throw new DerivedAuthorityValidationError('DERIVED_KNOWLEDGE_INVALID', 'DerivedKnowledge authorityClass is invalid');
+  }
+  if (payload.derivationEvidenceClass !== 'SCIENTIFIC_ADJUDICATION_RECORD') {
+    throw new DerivedAuthorityValidationError(
+      'DERIVATION_EVIDENCE_CLASS_INVALID',
+      'K05 DerivedKnowledge records governed scientific adjudication; it must not imply executed model/computation proof'
+    );
   }
   if ('calibrationArtifactRef' in payload || 'calibrationBindings' in payload) {
     throw new DerivedAuthorityValidationError('CALIBRATION_LAUNDERING_FORBIDDEN', 'CalibrationArtifact semantics cannot be embedded in DerivedKnowledge');
@@ -127,6 +146,7 @@ export function validateDerivedKnowledgeAuthority({ ledger, derivedKnowledgeRef,
     target: { use: 'DERIVATION_METHOD_APPROVAL' },
     ownership: method.semanticPayload.ownership
   });
+  assertDirectMethodAudit(ledger, method, methodApproval);
 
   const validatedInputs = payload.inputQualifiedKnowledgeRefs.map((ref) => validateQualifiedKnowledgeAuthority({
     ledger,
@@ -164,9 +184,10 @@ export function validateDerivedKnowledgeAuthority({ ledger, derivedKnowledgeRef,
       && exactRefIn(event.inputRefs, context.ref)
       && exactRefIn(event.inputRefs, method.ref)
       && exactRefIn(event.inputRefs, synthesisApproval.authAudit.ref)
+      && exactRefIn(event.inputRefs, synthesisApproval.policy.ref)
       && payload.inputQualifiedKnowledgeRefs.every((ref) => exactRefIn(event.inputRefs, ref)));
   if (!directAudit) {
-    throw new DerivedAuthorityValidationError('DERIVED_AUDIT_INVALID', 'DerivedKnowledge lacks direct synthesis audit over exact method/context/input authority');
+    throw new DerivedAuthorityValidationError('DERIVED_AUDIT_INVALID', 'DerivedKnowledge lacks direct synthesis audit over exact method/context/auth/policy/input authority');
   }
 
   for (const input of validatedInputs) {
