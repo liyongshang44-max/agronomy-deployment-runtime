@@ -5,9 +5,39 @@ import { authorizeContextWrite } from '../../authorization/src/context-write.mjs
 
 export const CONTEXT_DATUM_CONTRACT_VERSION = 'adr.context-datum.v1';
 export const CONTEXT_VALUE_MODES = deepFreeze(['INLINE', 'AUTHORIZED_REFERENCE']);
-export const EPISTEMIC_CLASSES = deepFreeze(['OBSERVATION', 'STATE_ESTIMATE', 'FORECAST', 'ASSERTION', 'MODEL_PRIOR']);
-export const PROVENANCE_CLASSES = deepFreeze(['SENSOR', 'MACHINERY', 'USER', 'EXTERNAL_PROVIDER', 'MODEL', 'CUSTOMER_SYSTEM']);
-export const CONTEXT_VALUE_TYPES = deepFreeze(['decimal', 'integer', 'boolean', 'string', 'category', 'date', 'timestamp', 'interval', 'set', 'unknown']);
+export const EPISTEMIC_CLASSES = deepFreeze([
+  'OBSERVATION',
+  'ASSERTION',
+  'DERIVED',
+  'STATE_ESTIMATE',
+  'FORECAST',
+  'CONFIGURATION',
+  'MODEL_PRIOR'
+]);
+export const PROVENANCE_CLASSES = deepFreeze([
+  'USER',
+  'AGRONOMIST',
+  'SENSOR',
+  'MACHINERY',
+  'REMOTE_SENSING',
+  'EXTERNAL_PROVIDER',
+  'CUSTOMER_SYSTEM',
+  'LABORATORY',
+  'MODEL',
+  'PLATFORM'
+]);
+export const CONTEXT_VALUE_TYPES = deepFreeze([
+  'DECIMAL',
+  'INTEGER',
+  'BOOLEAN',
+  'STRING',
+  'CATEGORY',
+  'DATE',
+  'TIMESTAMP',
+  'INTERVAL',
+  'SET',
+  'UNKNOWN'
+]);
 export const UNCERTAINTY_TYPES = deepFreeze(['NONE', 'INTERVAL', 'CATEGORICAL_SET', 'DISTRIBUTION_REFERENCE', 'UNKNOWN']);
 
 const EPISTEMIC_SET = new Set(EPISTEMIC_CLASSES);
@@ -21,6 +51,7 @@ const DATUM_KEYS = new Set([
 ]);
 const DECIMAL_RE = /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/;
 const INTEGER_RE = /^-?(?:0|[1-9]\d*)$/;
+const RFC3339_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.\d{1,3})?(Z|[+-]\d{2}:\d{2})$/;
 
 export class ContextDatumError extends Error {
   constructor(code, message) {
@@ -46,10 +77,45 @@ function exactObject(value, name, keys) {
   }
 }
 
+function daysInMonth(year, month) {
+  if ([1, 3, 5, 7, 8, 10, 12].includes(month)) return 31;
+  if ([4, 6, 9, 11].includes(month)) return 30;
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  return leap ? 29 : 28;
+}
+
 function normalizeTimestamp(value, name) {
   const text = requiredText(value, name);
+  const match = RFC3339_RE.exec(text);
+  if (!match) {
+    throw new ContextDatumError(
+      'INVALID_CONTEXT_TIME',
+      `${name} must be an RFC3339 timestamp with seconds, explicit timezone and at most millisecond precision`
+    );
+  }
+  const [, yearText, monthText, dayText, hourText, minuteText, secondText, fraction = '', zone] = match;
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+  const second = Number(secondText);
+  if (month < 1 || month > 12
+    || day < 1 || day > daysInMonth(year, month)
+    || hour > 23 || minute > 59 || second > 59) {
+    throw new ContextDatumError('INVALID_CONTEXT_TIME', `${name} contains an impossible calendar date or clock time`);
+  }
+  if (zone !== 'Z') {
+    const offsetHour = Number(zone.slice(1, 3));
+    const offsetMinute = Number(zone.slice(4, 6));
+    if (offsetHour > 14 || offsetMinute > 59 || (offsetHour === 14 && offsetMinute !== 0)) {
+      throw new ContextDatumError('INVALID_CONTEXT_TIME', `${name} contains an invalid timezone offset`);
+    }
+  }
   const parsed = new Date(text);
-  if (Number.isNaN(parsed.getTime())) throw new ContextDatumError('INVALID_CONTEXT_TIME', `${name} must be a valid timestamp`);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new ContextDatumError('INVALID_CONTEXT_TIME', `${name} must be a valid RFC3339 timestamp`);
+  }
   return parsed.toISOString();
 }
 
@@ -97,32 +163,32 @@ function normalizeAtomicValue(value, name) {
   const type = requiredText(value.type, `${name}.type`);
   if (!VALUE_TYPE_SET.has(type)) throw new ContextDatumError('INVALID_CONTEXT_VALUE_TYPE', `unsupported context value type ${type}`);
   switch (type) {
-    case 'decimal':
+    case 'DECIMAL':
       exactObject(value, name, new Set(['type', 'decimal']));
       return deepFreeze({ type, decimal: normalizeDecimal(value.decimal, `${name}.decimal`) });
-    case 'integer': {
+    case 'INTEGER': {
       exactObject(value, name, new Set(['type', 'integer']));
       const integer = requiredText(value.integer, `${name}.integer`);
       if (!INTEGER_RE.test(integer)) throw new ContextDatumError('INVALID_CONTEXT_INTEGER', `${name}.integer must be a canonical integer string`);
       return deepFreeze({ type, integer: integer === '-0' ? '0' : integer });
     }
-    case 'boolean':
+    case 'BOOLEAN':
       exactObject(value, name, new Set(['type', 'boolean']));
       if (typeof value.boolean !== 'boolean') throw new ContextDatumError('INVALID_CONTEXT_BOOLEAN', `${name}.boolean must be boolean`);
       return deepFreeze({ type, boolean: value.boolean });
-    case 'string':
+    case 'STRING':
       exactObject(value, name, new Set(['type', 'string']));
       return deepFreeze({ type, string: requiredText(value.string, `${name}.string`) });
-    case 'category':
+    case 'CATEGORY':
       exactObject(value, name, new Set(['type', 'category']));
       return deepFreeze({ type, category: requiredText(value.category, `${name}.category`) });
-    case 'date':
+    case 'DATE':
       exactObject(value, name, new Set(['type', 'date']));
       return deepFreeze({ type, date: normalizeDate(value.date, `${name}.date`) });
-    case 'timestamp':
+    case 'TIMESTAMP':
       exactObject(value, name, new Set(['type', 'timestamp']));
       return deepFreeze({ type, timestamp: normalizeTimestamp(value.timestamp, `${name}.timestamp`) });
-    case 'unknown':
+    case 'UNKNOWN':
       exactObject(value, name, new Set(['type', 'reasonCode']));
       return deepFreeze({ type, reasonCode: requiredText(value.reasonCode, `${name}.reasonCode`) });
     default:
@@ -130,47 +196,55 @@ function normalizeAtomicValue(value, name) {
   }
 }
 
+function compareIntervalEndpoints(lower, upper) {
+  if (lower.type === 'DECIMAL' || lower.type === 'INTEGER') {
+    const lk = lower.type === 'DECIMAL' ? lower.decimal : lower.integer;
+    const uk = upper.type === 'DECIMAL' ? upper.decimal : upper.integer;
+    return compareDecimal(lk, uk);
+  }
+  if (lower.type === 'DATE') return lower.date.localeCompare(upper.date);
+  if (lower.type === 'TIMESTAMP') return lower.timestamp.localeCompare(upper.timestamp);
+  throw new ContextDatumError(
+    'INVALID_CONTEXT_INTERVAL',
+    'interval endpoints require an explicitly ordered type: DECIMAL, INTEGER, DATE or TIMESTAMP'
+  );
+}
+
 function normalizeValue(value, name = 'value') {
   const atomic = normalizeAtomicValue(value, name);
   if (atomic) return atomic;
-  if (value.type === 'interval') {
+  if (value?.type === 'INTERVAL') {
     exactObject(value, name, new Set(['type', 'lower', 'upper']));
     const lower = normalizeAtomicValue(value.lower, `${name}.lower`);
     const upper = normalizeAtomicValue(value.upper, `${name}.upper`);
-    if (!lower || !upper || lower.type !== upper.type || ['unknown', 'boolean'].includes(lower.type)) {
-      throw new ContextDatumError('INVALID_CONTEXT_INTERVAL', 'interval endpoints must be comparable atomic values of the same type');
+    if (!lower || !upper || lower.type !== upper.type) {
+      throw new ContextDatumError('INVALID_CONTEXT_INTERVAL', 'interval endpoints must be atomic values of the same type');
     }
-    if (['decimal', 'integer'].includes(lower.type)) {
-      const lk = lower.type === 'decimal' ? lower.decimal : lower.integer;
-      const uk = upper.type === 'decimal' ? upper.decimal : upper.integer;
-      if (compareDecimal(lk, uk) > 0) throw new ContextDatumError('INVALID_CONTEXT_INTERVAL', 'interval lower endpoint cannot exceed upper endpoint');
-    } else {
-      const lk = lower[lower.type];
-      const uk = upper[upper.type];
-      if (lk > uk) throw new ContextDatumError('INVALID_CONTEXT_INTERVAL', 'interval lower endpoint cannot exceed upper endpoint');
+    if (compareIntervalEndpoints(lower, upper) > 0) {
+      throw new ContextDatumError('INVALID_CONTEXT_INTERVAL', 'interval lower endpoint cannot exceed upper endpoint');
     }
-    return deepFreeze({ type: 'interval', lower, upper });
+    return deepFreeze({ type: 'INTERVAL', lower, upper });
   }
-  if (value.type === 'set') {
+  if (value?.type === 'SET') {
     exactObject(value, name, new Set(['type', 'items']));
     if (!Array.isArray(value.items) || value.items.length === 0) throw new ContextDatumError('INVALID_CONTEXT_SET', 'set value must contain at least one item');
     const items = value.items.map((item, index) => normalizeAtomicValue(item, `${name}.items[${index}]`));
-    if (items.some((item) => !item || item.type === 'unknown')) throw new ContextDatumError('INVALID_CONTEXT_SET', 'set items must be known atomic values');
+    if (items.some((item) => !item || item.type === 'UNKNOWN')) throw new ContextDatumError('INVALID_CONTEXT_SET', 'set items must be known atomic values');
     const itemType = items[0].type;
     if (!items.every((item) => item.type === itemType)) throw new ContextDatumError('INVALID_CONTEXT_SET', 'set items must share one atomic value type');
     const keyed = items.map((item) => [semanticHash('ContextDatumSetItem', item), item]);
     if (new Set(keyed.map(([hash]) => hash)).size !== keyed.length) throw new ContextDatumError('DUPLICATE_CONTEXT_SET_ITEM', 'set cannot contain duplicate canonical values');
     keyed.sort(([a], [b]) => a.localeCompare(b));
-    return deepFreeze({ type: 'set', items: keyed.map(([, item]) => item) });
+    return deepFreeze({ type: 'SET', items: keyed.map(([, item]) => item) });
   }
-  throw new ContextDatumError('INVALID_CONTEXT_VALUE_TYPE', `unsupported context value type ${value.type}`);
+  throw new ContextDatumError('INVALID_CONTEXT_VALUE_TYPE', `unsupported context value type ${value?.type}`);
 }
 
 function normalizeEffectiveInterval(value) {
   exactObject(value, 'effectiveInterval', new Set(['start', 'end']));
   const start = normalizeTimestamp(value.start, 'effectiveInterval.start');
   const end = normalizeTimestamp(value.end, 'effectiveInterval.end');
-  if (new Date(end).getTime() < new Date(start).getTime()) throw new ContextDatumError('INVALID_EFFECTIVE_INTERVAL', 'effectiveInterval.end cannot precede start');
+  if (end < start) throw new ContextDatumError('INVALID_EFFECTIVE_INTERVAL', 'effectiveInterval.end cannot precede start');
   return deepFreeze({ start, end });
 }
 
@@ -386,10 +460,21 @@ export function validateContextDatumAuthority({ ledger, contextDatumRef }) {
 }
 
 function publicValue(value) {
-  if (value.type === 'interval') return { type: value.type, lower: publicValue(value.lower), upper: publicValue(value.upper) };
-  if (value.type === 'set') return { type: value.type, items: value.items.map(publicValue) };
+  if (value.type === 'INTERVAL') return { type: value.type, lower: publicValue(value.lower), upper: publicValue(value.upper) };
+  if (value.type === 'SET') return { type: value.type, items: value.items.map(publicValue) };
   const out = { type: value.type };
-  for (const [key, item] of Object.entries(value)) if (key !== 'type') out[key.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`)] = item;
+  for (const [key, item] of Object.entries(value)) {
+    if (key !== 'type') out[key.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`)] = item;
+  }
+  return out;
+}
+
+function publicUncertainty(uncertainty) {
+  const out = { type: uncertainty.type };
+  for (const [key, item] of Object.entries(uncertainty)) {
+    if (key === 'type') continue;
+    out[key.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`)] = cloneCanonicalValue(item);
+  }
   return out;
 }
 
@@ -409,7 +494,7 @@ export function materializePublicContextDatum(record) {
     spatial_support: { type: p.spatialSupport.type, ...(p.spatialSupport.geometryRef ? { geometry_ref: p.spatialSupport.geometryRef } : {}) },
     vertical_support: p.verticalSupport ? { from_mm: p.verticalSupport.fromMm, to_mm: p.verticalSupport.toMm } : null,
     temporal_support: { type: p.temporalSupport.type },
-    uncertainty: cloneCanonicalValue(p.uncertainty),
+    uncertainty: publicUncertainty(p.uncertainty),
     source: { provider_id: p.source.providerId, source_ref: p.source.sourceRef, content_hash: p.source.contentHash },
     semantic_hash: record.ref.semanticHash
   });
