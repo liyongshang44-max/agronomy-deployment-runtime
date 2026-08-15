@@ -11,7 +11,7 @@
     "check:constitution": "node scripts/constitution/check.mjs",
     "test:constitution": "node acceptance/constitution/run.mjs",
     "test:authority": "node acceptance/authority/run.mjs",
-    "test:authorization": "node acceptance/authorization/run.mjs",
+    "test:authorization": "node acceptance/authorization/run.mjs && node acceptance/authorization/integrity.mjs",
     "test": "npm run test:constitution && npm run test:authority && npm run test:authorization"
   }
 }
