@@ -4,6 +4,8 @@ Status: **IMPLEMENTATION AUTHORITY EXTENSION — F03 → A03**
 
 Baseline: `main @ c4eaa97ccab27e64ba697bafbc34e2e447d47575`
 
+> **A04 extension notice.** The three-type resource vocabulary below is the exact A03-stage vocabulary. MTL-A04 subsequently extends the current `context.write` resource vocabulary with `CONTEXT_MANIFEST`. That later extension does not alter A03 reference/receipt semantics or weaken A03 resource-type isolation. See `ADR-v0.1-MTL-A04-F03-CONTEXT-WRITE-SEAM.md`.
+
 ## 1. Reused permission
 
 A03 does not introduce a new IAM permission. It reuses the F03 permission already frozen before A03:
@@ -12,7 +14,7 @@ A03 does not introduce a new IAM permission. It reuses the F03 permission alread
 context.write
 ```
 
-The A02 seam used that permission for `CONTEXT_DATUM`. A03 extends the exact resource-type vocabulary to:
+The A02 seam used that permission for `CONTEXT_DATUM`. At the A03 stage, the exact resource-type vocabulary is:
 
 ```text
 CONTEXT_DATUM
@@ -20,7 +22,7 @@ AUTHORIZED_CONTEXT_REFERENCE
 RESOLVED_CONTEXT_DATUM_RECEIPT
 ```
 
-No other resource type is authorized by this seam.
+No other resource type is authorized **by the A03 extension itself**. Later task-line capabilities may explicitly extend the shared F03 resource vocabulary under their own implementation authority without retroactively changing A03 semantics.
 
 ## 2. Exact request scope
 
@@ -85,9 +87,9 @@ This extension does not silently change any built-in role permission set.
 
 `INTEGRATION_SERVICE` already carried `context.write` before A03. A03 only makes the resource-type interpretation explicit and exact for reference-resolution authority.
 
-## 8. Nonclaims
+## 8. A03 nonclaims
 
-This extension does not authorize:
+At the A03 stage this extension did not establish:
 
 ```text
 ContextManifest publication
@@ -97,4 +99,4 @@ RuntimeBinding
 DecisionResult
 ```
 
-Those remain separate later capabilities and cannot be smuggled into `context.write` through an unrecognized resource type.
+A04 later establishes ContextManifest publication under its own explicit `CONTEXT_MANIFEST` resource extension. Applicability, deployment, binding and decision authority remain separate later capabilities and cannot be smuggled into `context.write` through an unrecognized resource type.
