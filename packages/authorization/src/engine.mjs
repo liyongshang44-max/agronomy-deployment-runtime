@@ -352,7 +352,8 @@ export function authorizeDecisionProblemCreation({ principal, roleAssignments, a
   const targetScope = normalizeAuthScope({
     organizationId: requiredText(authorizationScope?.organizationId, 'authorizationScope.organizationId'),
     ...(authorizationScope?.tenantId ? { tenantId: requiredText(authorizationScope.tenantId, 'authorizationScope.tenantId') } : {}),
-    resourceType: 'DECISION_PROBLEM'
+    resourceType: 'DECISION_PROBLEM',
+    resourceId: requiredText(authorizationScope?.resourceId, 'authorizationScope.resourceId')
   });
   const assignments = matchingPermissionAssignments({
     principal: normalizedPrincipal,
