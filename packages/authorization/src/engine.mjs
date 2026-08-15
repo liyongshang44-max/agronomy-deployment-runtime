@@ -13,7 +13,8 @@ export const PERMISSIONS = deepFreeze({
   DEPLOY_PRODUCTION: 'deployment.production',
   AUDIT_READ: 'audit.read',
   CONTEXT_WRITE: 'context.write',
-  CANDIDATE_COMPILE: 'compiler.candidate.compile'
+  CANDIDATE_COMPILE: 'compiler.candidate.compile',
+  DECISION_PROBLEM_CREATE: 'decision.problem.create'
 });
 
 const VALID_PERMISSIONS = new Set(Object.values(PERMISSIONS));
@@ -332,6 +333,47 @@ function makeAuthorizationDecision({ operation, principal, policy, assignments, 
     reasons: uniqueSortedStrings(reasons, 'reasons')
   };
   return deepFreeze({ ...payload, decisionHash: semanticHash('AuthorizationDecision', payload) });
+}
+
+function makeScopedAuthorizationDecision({ operation, principal, assignments, request, allowed, reasons }) {
+  const payload = {
+    operation: requiredText(operation, 'operation'),
+    principal: createPrincipal(principal),
+    assignmentRefs: sortedRefs(assignments),
+    request: cloneCanonicalValue(request),
+    allowed: Boolean(allowed),
+    reasons: uniqueSortedStrings(reasons, 'reasons')
+  };
+  return deepFreeze({ ...payload, decisionHash: semanticHash('AuthorizationDecision', payload) });
+}
+
+export function authorizeDecisionProblemCreation({ principal, roleAssignments, authorizationScope }) {
+  const normalizedPrincipal = createPrincipal(principal);
+  const targetScope = normalizeAuthScope({
+    organizationId: requiredText(authorizationScope?.organizationId, 'authorizationScope.organizationId'),
+    ...(authorizationScope?.tenantId ? { tenantId: requiredText(authorizationScope.tenantId, 'authorizationScope.tenantId') } : {}),
+    resourceType: 'DECISION_PROBLEM',
+    resourceId: requiredText(authorizationScope?.resourceId, 'authorizationScope.resourceId')
+  });
+  const assignments = matchingPermissionAssignments({
+    principal: normalizedPrincipal,
+    permission: PERMISSIONS.DECISION_PROBLEM_CREATE,
+    targetScope,
+    roleAssignments
+  });
+  const identityMatchesTarget = normalizedPrincipal.organizationId === targetScope.organizationId
+    && (normalizedPrincipal.tenantId ?? null) === (targetScope.tenantId ?? null);
+  const reasons = [];
+  if (!identityMatchesTarget) reasons.push('DECISION_PROBLEM_TARGET_IDENTITY_DENIED');
+  if (assignments.length === 0) reasons.push('DECISION_PROBLEM_CREATE_PERMISSION_DENIED');
+  return makeScopedAuthorizationDecision({
+    operation: 'DECISION_PROBLEM_CREATE',
+    principal: normalizedPrincipal,
+    assignments,
+    request: { authorizationScope: targetScope },
+    allowed: reasons.length === 0,
+    reasons
+  });
 }
 
 export function authorizeKnowledgeInspection({ principal, policy, roleAssignments, authorizationScope }) {

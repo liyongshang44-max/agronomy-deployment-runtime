@@ -1,6 +1,7 @@
 import {
   AuthorizationError,
   createPrincipal,
+  authorizeDecisionProblemCreation as engineAuthorizeDecisionProblemCreation,
   authorizeKnowledgeInspection as engineAuthorizeKnowledgeInspection,
   authorizeKnowledgeQualification as engineAuthorizeKnowledgeQualification,
   authorizeKnowledgeDeployment as engineAuthorizeKnowledgeDeployment,
@@ -31,6 +32,13 @@ function exactPrincipalAssignments(principal, roleAssignments) {
     const storedPrincipal = record?.semanticPayload?.principal;
     if (!storedPrincipal) return true; // Engine validation will reject malformed role records.
     return samePrincipalIdentity(normalizedPrincipal, storedPrincipal);
+  });
+}
+
+export function authorizeDecisionProblemCreation(args) {
+  return engineAuthorizeDecisionProblemCreation({
+    ...args,
+    roleAssignments: exactPrincipalAssignments(args.principal, args.roleAssignments)
   });
 }
 
@@ -86,7 +94,10 @@ export function recordAuthorizationDecision({ ledger, decision, audit }) {
   if (!audit || typeof audit !== 'object') {
     throw new AuthorizationError('AUDIT_REQUIRED', 'authorization decision audit metadata is required');
   }
-  const inputRefs = [decision.policyRef, ...(decision.assignmentRefs ?? [])];
+  const inputRefs = [
+    ...(decision.policyRef ? [decision.policyRef] : []),
+    ...(decision.assignmentRefs ?? [])
+  ];
   return ledger.publish({
     kind: 'AuthorizationDecisionAudit',
     logicalId: decision.decisionHash,

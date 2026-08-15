@@ -11,13 +11,14 @@
     "check:constitution": "node scripts/constitution/check.mjs",
     "test:constitution": "node acceptance/constitution/run.mjs",
     "test:authority": "node acceptance/authority/run.mjs",
-    "test:authorization": "node acceptance/authorization/run.mjs && node acceptance/authorization/integrity.mjs",
+    "test:authorization": "node acceptance/authorization/run.mjs && node acceptance/authorization/integrity.mjs && node acceptance/authorization/scoped.mjs",
     "test:source": "node acceptance/source-materialization/run.mjs",
     "test:compiler": "node acceptance/scientific-compiler/run.mjs",
     "test:source-faithful": "node acceptance/source-faithful/run.mjs && node acceptance/source-faithful/integrity.mjs",
     "test:qualification": "node acceptance/scientific-qualification/run.mjs && node acceptance/scientific-qualification/integrity.mjs && node acceptance/scientific-qualification/lifecycle.mjs",
     "test:derived-knowledge": "node acceptance/derived-knowledge/run.mjs && node acceptance/derived-knowledge/integrity.mjs && node acceptance/derived-knowledge/lifecycle.mjs",
     "test:knowledge-release": "node acceptance/knowledge-release/run.mjs && node acceptance/knowledge-release/integrity.mjs && node acceptance/knowledge-release/entitlement.mjs && node acceptance/knowledge-release/conflict-coverage.mjs",
-    "test": "npm run test:constitution && npm run test:authority && npm run test:authorization && npm run test:source && npm run test:compiler && npm run test:source-faithful && npm run test:qualification && npm run test:derived-knowledge && npm run test:knowledge-release"
+    "test:decision-problem": "node acceptance/decision-problem/run.mjs && node acceptance/decision-problem/integrity.mjs",
+    "test": "npm run test:constitution && npm run test:authority && npm run test:authorization && npm run test:source && npm run test:compiler && npm run test:source-faithful && npm run test:qualification && npm run test:derived-knowledge && npm run test:knowledge-release && npm run test:decision-problem"
   }
 }
