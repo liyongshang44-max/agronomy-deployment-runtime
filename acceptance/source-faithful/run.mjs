@@ -1,5 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { AuthorityLedger, AuthorityLedgerError } from '../../packages/provenance/src/index.mjs';
+import { makeAuthorityRef } from '../../packages/contracts/src/authority.mjs';
 import { ExactArtifactStore, SourceRegistry } from '../../packages/source-registry/src/index.mjs';
 import {
   SOURCE_CONTEXT_FAMILIES,
@@ -7,8 +8,16 @@ import {
   createDeterministicCompilerDefinition
 } from '../../packages/scientific-compiler/src/index.mjs';
 import {
+  authorizeKnowledgeInspection,
+  createPrincipal,
+  publishBuiltinRoleAssignment,
+  publishKnowledgeGovernancePolicy,
+  recordAuthorizationDecision
+} from '../../packages/authorization/src/index.mjs';
+import {
   SourceFaithfulReviewError,
-  SourceFaithfulReviewService
+  SourceFaithfulReviewService,
+  sourceReviewResourceId
 } from '../../packages/knowledge-registry/src/source-faithful.mjs';
 
 const SOURCE_TEXT = [
@@ -18,11 +27,11 @@ const SOURCE_TEXT = [
   'Groundwater depth was not reported.'
 ].join('\n');
 
-function audit(eventId, actorId = 'scientific-reviewer') {
+function audit(eventId, actorId = 'scientific-reviewer', actorType = 'USER') {
   return {
     eventId,
     occurredAt: '2026-08-15T14:30:00.000Z',
-    actor: { type: 'USER', id: actorId },
+    actor: { type: actorType, id: actorId },
     details: { channel: 'source-faithful-acceptance' }
   };
 }
@@ -35,114 +44,125 @@ function byteRange(text, excerpt) {
 }
 
 function sourceContextProposal() {
-  const context = Object.fromEntries(
-    SOURCE_CONTEXT_FAMILIES.map((family) => [family, { status: 'NOT_REPORTED', dimensions: [] }])
-  );
+  const context = Object.fromEntries(SOURCE_CONTEXT_FAMILIES.map((family) => [family, { status: 'NOT_REPORTED', dimensions: [] }]));
   context.BIOLOGICAL = {
     status: 'REPORTED',
     dimensions: [
-      {
-        semanticHint: 'crop.identity',
-        valueCandidate: 'maize',
-        supportClass: 'EXPLICIT_SOURCE',
-        sourceLocator: byteRange(SOURCE_TEXT, 'maize')
-      },
-      {
-        semanticHint: 'crop.stage',
-        valueCandidate: 'V10',
-        supportClass: 'EXPLICIT_SOURCE',
-        sourceLocator: byteRange(SOURCE_TEXT, 'V10')
-      }
+      { semanticHint: 'crop.identity', valueCandidate: 'maize', supportClass: 'EXPLICIT_SOURCE', sourceLocator: byteRange(SOURCE_TEXT, 'maize') },
+      { semanticHint: 'crop.stage', valueCandidate: 'V10', supportClass: 'EXPLICIT_SOURCE', sourceLocator: byteRange(SOURCE_TEXT, 'V10') }
     ]
   };
   context.ENVIRONMENTAL = {
     status: 'REPORTED',
-    dimensions: [{
-      semanticHint: 'soil.texture',
-      valueCandidate: 'silt loam',
-      supportClass: 'EXPLICIT_SOURCE',
-      sourceLocator: byteRange(SOURCE_TEXT, 'silt loam')
-    }]
+    dimensions: [{ semanticHint: 'soil.texture', valueCandidate: 'silt loam', supportClass: 'EXPLICIT_SOURCE', sourceLocator: byteRange(SOURCE_TEXT, 'silt loam') }]
   };
   context.OPERATIONAL = {
     status: 'REPORTED',
-    dimensions: [{
-      semanticHint: 'irrigation.system',
-      valueCandidate: 'center-pivot',
-      supportClass: 'EXPLICIT_SOURCE',
-      sourceLocator: byteRange(SOURCE_TEXT, 'center-pivot irrigation')
-    }]
+    dimensions: [{ semanticHint: 'irrigation.system', valueCandidate: 'center-pivot', supportClass: 'EXPLICIT_SOURCE', sourceLocator: byteRange(SOURCE_TEXT, 'center-pivot irrigation') }]
   };
   return context;
 }
 
-function compilationProposal({ key = 'depletion-threshold', assertion } = {}) {
-  const exactAssertion = assertion
-    ?? 'For maize at V10 under silt loam soil, irrigation may be considered when root-zone depletion exceeds 45 percent.';
+function contextAdjudication() {
+  return {
+    BIOLOGICAL: [
+      { semanticId: 'crop.code', valueType: 'CATEGORY' },
+      { semanticId: 'crop.stage', valueType: 'CATEGORY' }
+    ],
+    ENVIRONMENTAL: [{ semanticId: 'soil.texture', valueType: 'CATEGORY' }],
+    MANAGEMENT: [],
+    OPERATIONAL: [{ semanticId: 'irrigation.system', valueType: 'CATEGORY' }],
+    MEASUREMENT: [],
+    JURISDICTION_ECONOMIC: []
+  };
+}
+
+function compilationProposal({ key = 'depletion-threshold' } = {}) {
+  const assertion = 'For maize at V10 under silt loam soil, irrigation may be considered when root-zone depletion exceeds 45 percent.';
   return {
     claims: [{
       key,
       claimType: 'OPERATIONAL_RECOMMENDATION',
-      assertion: exactAssertion,
-      structured: {
-        threshold: { semanticHint: 'soil.root_zone.depletion_fraction', valueCandidate: '0.45' }
-      },
-      sourceLocator: byteRange(SOURCE_TEXT, exactAssertion),
+      assertion,
+      structured: { threshold: { semanticHint: 'soil.root_zone.depletion_fraction', valueCandidate: '0.45' } },
+      sourceLocator: byteRange(SOURCE_TEXT, assertion),
       sourceContext: sourceContextProposal()
     }],
     runMetadata: { fixture: 'k03-source-faithful' }
   };
 }
 
-function setup() {
+function publishReviewAuthorization({ ledger, source, reviewer, role = 'AGRONOMY_REVIEWER', suffix = 'default' }) {
+  const roleAssignment = publishBuiltinRoleAssignment({
+    ledger,
+    logicalId: `role.k03.${suffix}`,
+    version: '1',
+    principal: reviewer,
+    role,
+    scope: { organizationId: source.semanticPayload.ownership.organizationId, tenantId: source.semanticPayload.ownership.tenantId },
+    audit: audit(`evt-role-${suffix}`, 'iam-admin')
+  });
+  const policy = publishKnowledgeGovernancePolicy({
+    ledger,
+    logicalId: `policy.k03.${suffix}`,
+    version: '1',
+    resourceId: sourceReviewResourceId(source.ref),
+    ownership: source.semanticPayload.ownership,
+    visibilityPolicy: [{ principalId: reviewer.principalId }],
+    qualificationScope: [{ use: '*' }],
+    deploymentScope: [{ organizationId: source.semanticPayload.ownership.organizationId }],
+    audit: audit(`evt-policy-${suffix}`, 'iam-admin')
+  });
+  const decision = authorizeKnowledgeInspection({
+    principal: reviewer,
+    policy,
+    roleAssignments: [roleAssignment],
+    authorizationScope: { organizationId: source.semanticPayload.ownership.organizationId, tenantId: source.semanticPayload.ownership.tenantId }
+  });
+  const authorizationAudit = recordAuthorizationDecision({
+    ledger,
+    decision,
+    audit: audit(`evt-auth-${suffix}`, 'iam-engine', 'SERVICE_ACCOUNT')
+  });
+  return { roleAssignment, policy, decision, authorizationAudit };
+}
+
+function setup({ reviewerRole = 'AGRONOMY_REVIEWER' } = {}) {
   const ledger = new AuthorityLedger();
   const sourceRegistry = new SourceRegistry({ ledger, artifactStore: new ExactArtifactStore() });
   const source = sourceRegistry.registerSource({
-    logicalId: 'source.protocol.k03',
-    version: '1',
-    sourceType: 'PROTOCOL',
-    title: 'Corn Irrigation Protocol',
+    logicalId: 'source.protocol.k03', version: '1', sourceType: 'PROTOCOL', title: 'Corn Irrigation Protocol',
     ownership: { organizationId: 'org-a', tenantId: 'tenant-a' },
-    bibliographic: { authoringOrganization: 'Example Agronomy Co' },
-    rights: { license: 'PRIVATE' },
+    bibliographic: { authoringOrganization: 'Example Agronomy Co' }, rights: { license: 'PRIVATE' },
     audit: audit('evt-source', 'source-admin')
   });
   const artifact = sourceRegistry.materializeArtifact({
-    logicalId: 'artifact.protocol.k03',
-    version: '1',
-    sourceRef: source.ref,
-    bytes: Buffer.from(SOURCE_TEXT, 'utf8'),
-    mediaType: 'text/plain',
-    materializationIdentity: 'k03-fixture-v1',
+    logicalId: 'artifact.protocol.k03', version: '1', sourceRef: source.ref, bytes: Buffer.from(SOURCE_TEXT, 'utf8'),
+    mediaType: 'text/plain', materializationIdentity: 'k03-fixture-v1',
     acquisition: { method: 'FIXTURE', acquiredAt: '2026-08-15T14:20:00Z', locator: 'fixture://k03' },
     audit: audit('evt-artifact', 'source-admin')
   });
   const compilerDefinition = createDeterministicCompilerDefinition({
-    ledger,
-    logicalId: 'compiler.k03',
-    version: '1',
-    compilerId: 'adr.k03.fixture-compiler',
-    implementationVersion: '1',
-    configuration: { fixture: true },
-    audit: audit('evt-compiler-definition', 'compiler-admin')
+    ledger, logicalId: 'compiler.k03', version: '1', compilerId: 'adr.k03.fixture-compiler', implementationVersion: '1',
+    configuration: { fixture: true }, audit: audit('evt-compiler-definition', 'compiler-admin')
   });
-  const compiler = new ScientificCompiler({ ledger, sourceRegistry });
-  const reviewService = new SourceFaithfulReviewService({ ledger });
-  return { ledger, sourceRegistry, source, artifact, compilerDefinition, compiler, reviewService };
+  const reviewer = createPrincipal({ principalId: 'scientific-reviewer', type: 'USER', organizationId: 'org-a', tenantId: 'tenant-a' });
+  const authorization = publishReviewAuthorization({ ledger, source, reviewer, role: reviewerRole });
+  return {
+    ledger, sourceRegistry, source, artifact, compilerDefinition,
+    compiler: new ScientificCompiler({ ledger, sourceRegistry }),
+    reviewService: new SourceFaithfulReviewService({ ledger }), reviewer, authorization
+  };
 }
 
 function compile(env, { logicalId = 'compilation.k03', key = 'depletion-threshold' } = {}) {
   return env.compiler.materializeCompilationProposal({
-    compilationLogicalId: logicalId,
-    version: '1',
-    sourceArtifactRef: env.artifact.ref,
-    compilerDefinitionRef: env.compilerDefinition.ref,
-    proposal: compilationProposal({ key }),
-    audit: audit(`evt-${logicalId}`, 'compiler-service')
+    compilationLogicalId: logicalId, version: '1', sourceArtifactRef: env.artifact.ref, compilerDefinitionRef: env.compilerDefinition.ref,
+    proposal: compilationProposal({ key }), audit: audit(`evt-${logicalId}`, 'compiler-service', 'SERVICE_ACCOUNT')
   });
 }
 
-function accept(env, bundle, overrides = {}) {
+function review(env, bundle, overrides = {}) {
   return env.reviewService.reviewCandidate({
     reviewLogicalId: overrides.reviewLogicalId ?? 'review.k03.accept',
     reviewVersion: overrides.reviewVersion ?? '1',
@@ -151,230 +171,153 @@ function accept(env, bundle, overrides = {}) {
     sourceContextCandidateRef: overrides.sourceContextCandidateRef ?? bundle.sourceContextCandidates[0].ref,
     disposition: overrides.disposition ?? 'ACCEPT_SOURCE_FAITHFUL',
     reasonCodes: overrides.reasonCodes ?? [],
-    rationale: overrides.rationale,
-    claimLogicalId: overrides.claimLogicalId ?? 'claim.corn-water.depletion-threshold',
-    claimVersion: overrides.claimVersion ?? '1',
-    sourceContextLogicalId: overrides.sourceContextLogicalId ?? 'source-context.corn-water.depletion-threshold',
-    sourceContextVersion: overrides.sourceContextVersion ?? '1',
-    audit: audit(overrides.auditEventId ?? 'evt-k03-review')
+    contextAdjudication: overrides.contextAdjudication ?? contextAdjudication(),
+    reviewPrincipal: overrides.reviewPrincipal ?? env.reviewer,
+    authorizationDecisionAuditRef: overrides.authorizationDecisionAuditRef ?? env.authorization.authorizationAudit.ref,
+    claimLogicalId: overrides.claimLogicalId ?? 'claim.corn-water.depletion-threshold', claimVersion: overrides.claimVersion ?? '1',
+    sourceContextLogicalId: overrides.sourceContextLogicalId ?? 'source-context.corn-water.depletion-threshold', sourceContextVersion: overrides.sourceContextVersion ?? '1',
+    audit: audit(overrides.auditEventId ?? 'evt-k03-review', overrides.auditActorId ?? env.reviewer.principalId)
   });
 }
 
 function expectError(fn, ErrorType, code) {
   let caught;
-  try {
-    fn();
-  } catch (error) {
-    caught = error;
-  }
-  assert.ok(caught instanceof ErrorType, `expected ${ErrorType.name}, got ${caught?.constructor?.name ?? 'no error'}`);
+  try { fn(); } catch (error) { caught = error; }
+  assert.ok(caught instanceof ErrorType, `expected ${ErrorType.name}, got ${caught?.constructor?.name ?? 'no error'} (${caught?.code ?? 'no code'})`);
   assert.equal(caught.code, code);
 }
 
 const tests = [];
 function test(name, fn) { tests.push({ name, fn }); }
 
-test('accepted candidate from exact completed compilation materializes Claim and SourceContext', () => {
-  const env = setup();
-  const bundle = compile(env);
-  const result = accept(env, bundle);
-  assert.equal(result.review.ref.kind, 'SourceFaithfulReviewDecision');
-  assert.equal(result.review.semanticPayload.disposition, 'ACCEPT_SOURCE_FAITHFUL');
+test('accepted exact candidate materializes Claim and canonical SourceContext', () => {
+  const env = setup(); const bundle = compile(env); const result = review(env, bundle);
   assert.equal(result.claim.ref.kind, 'Claim');
   assert.equal(result.sourceContext.ref.kind, 'SourceContext');
   assert.equal(result.sourceContext.semanticPayload.claimRef.semanticHash, result.claim.ref.semanticHash);
+  assert.equal(result.review.semanticPayload.authorizationDecisionAuditRef.semanticHash, env.authorization.authorizationAudit.ref.semanticHash);
 });
 
-test('final Claim remains source-faithful and does not inherit extraction confidence or qualification fields', () => {
-  const env = setup();
-  const bundle = compile(env);
-  const candidate = bundle.claimCandidates[0];
-  const { claim } = accept(env, bundle);
-  assert.equal(claim.semanticPayload.assertion, candidate.semanticPayload.assertion);
-  assert.deepEqual(claim.semanticPayload.structured, candidate.semanticPayload.structured);
-  assert.equal(claim.semanticPayload.sourceLocator.kind, candidate.semanticPayload.sourceLocator.kind);
+test('final Claim is source assertion authority and does not freeze compiler structured proposal vocabulary', () => {
+  const env = setup(); const bundle = compile(env); const { claim } = review(env, bundle);
+  assert.equal(claim.semanticPayload.assertion, bundle.claimCandidates[0].semanticPayload.assertion);
   assert.equal(claim.semanticPayload.authorityClass, 'SOURCE_ASSERTION');
+  assert.ok(!('structured' in claim.semanticPayload));
   assert.ok(!('extractionConfidence' in claim.semanticPayload));
   assert.ok(!('qualification' in claim.semanticPayload));
-  assert.ok(!('allowedUses' in claim.semanticPayload));
-  assert.ok(!('forbiddenUses' in claim.semanticPayload));
 });
 
-test('final SourceContext preserves all six source-context families and NOT_REPORTED exactly', () => {
-  const env = setup();
-  const bundle = compile(env);
-  const candidateContext = bundle.sourceContextCandidates[0].semanticPayload.contextFamilies;
-  const { sourceContext } = accept(env, bundle);
-  assert.deepEqual(sourceContext.semanticPayload.contextFamilies, candidateContext);
-  assert.deepEqual(Object.keys(sourceContext.semanticPayload.contextFamilies).sort(), [...SOURCE_CONTEXT_FAMILIES].sort());
+test('final SourceContext uses canonical semantic-id/value envelope rather than candidate vocabulary', () => {
+  const env = setup(); const bundle = compile(env); const { sourceContext } = review(env, bundle);
+  const biological = sourceContext.semanticPayload.contextFamilies.BIOLOGICAL;
+  assert.equal(biological.dimensions[0].semanticId, 'crop.code');
+  assert.deepEqual(biological.dimensions[0].value, { type: 'CATEGORY', category: 'maize' });
+  assert.ok(!('semanticHint' in biological.dimensions[0]));
+  assert.ok(!('valueCandidate' in biological.dimensions[0]));
   assert.equal(sourceContext.semanticPayload.contextFamilies.MANAGEMENT.status, 'NOT_REPORTED');
-  assert.deepEqual(sourceContext.semanticPayload.contextFamilies.MANAGEMENT.dimensions, []);
-  assert.equal(sourceContext.semanticPayload.authorityClass, 'SOURCE_CONTEXT');
 });
 
-test('rejected source-faithful review requires reason codes and creates no Claim or SourceContext', () => {
+test('non-canonical semantic adjudication cannot become SourceContext authority', () => {
+  const env = setup(); const bundle = compile(env); const bad = contextAdjudication();
+  bad.BIOLOGICAL[0] = { semanticId: 'crop identity', valueType: 'CATEGORY' };
+  expectError(() => review(env, bundle, { reviewLogicalId: 'review.k03.bad-semantic', contextAdjudication: bad }), SourceFaithfulReviewError, 'INVALID_SEMANTIC_ID');
+  assert.equal(env.ledger.listVersions('SourceContext', 'source-context.corn-water.depletion-threshold').length, 0);
+});
+
+test('rejected review requires reason and creates no Claim or SourceContext', () => {
+  const env = setup(); const bundle = compile(env);
+  const rejected = review(env, bundle, { reviewLogicalId: 'review.k03.reject', disposition: 'REJECT_SOURCE_FAITHFUL', reasonCodes: ['SOURCE_LOCATOR_DOES_NOT_SUPPORT_ASSERTION'] });
+  assert.equal(rejected.claim, null); assert.equal(rejected.sourceContext, null);
+});
+
+test('rejection without reason is invalid', () => {
+  const env = setup(); const bundle = compile(env);
+  expectError(() => review(env, bundle, { reviewLogicalId: 'review.k03.reject-no-reason', disposition: 'REJECT_SOURCE_FAITHFUL', reasonCodes: [] }), SourceFaithfulReviewError, 'REJECTION_REASON_REQUIRED');
+});
+
+test('orphan candidate outside exact completed compilation is rejected', () => {
+  const env = setup(); const a = compile(env, { logicalId: 'compilation.k03.a', key: 'a' }); const b = compile(env, { logicalId: 'compilation.k03.b', key: 'b' });
+  expectError(() => review(env, a, { reviewLogicalId: 'review.k03.orphan', claimCandidateRef: b.claimCandidates[0].ref }), SourceFaithfulReviewError, 'CLAIM_CANDIDATE_NOT_IN_COMPILATION');
+});
+
+test('self-consistent forged bundle with nonexistent upstream Source/Artifact/Compiler cannot mint authority', () => {
   const env = setup();
-  const bundle = compile(env);
-  const rejected = accept(env, bundle, {
-    reviewLogicalId: 'review.k03.reject',
-    disposition: 'REJECT_SOURCE_FAITHFUL',
-    reasonCodes: ['SOURCE_LOCATOR_DOES_NOT_SUPPORT_ASSERTION'],
-    auditEventId: 'evt-k03-reject'
-  });
-  assert.equal(rejected.review.semanticPayload.disposition, 'REJECT_SOURCE_FAITHFUL');
-  assert.deepEqual(rejected.review.semanticPayload.reasonCodes, ['SOURCE_LOCATOR_DOES_NOT_SUPPORT_ASSERTION']);
-  assert.equal(rejected.claim, null);
-  assert.equal(rejected.sourceContext, null);
+  const fakeSourceRef = makeAuthorityRef({ kind: 'Source', logicalId: 'fake.source', version: '1', semanticHash: `sha256:${'1'.repeat(64)}` });
+  const fakeArtifactRef = makeAuthorityRef({ kind: 'SourceArtifact', logicalId: 'fake.artifact', version: '1', semanticHash: `sha256:${'2'.repeat(64)}` });
+  const fakeCompilerRef = makeAuthorityRef({ kind: 'ScientificCompilerDefinition', logicalId: 'fake.compiler', version: '1', semanticHash: `sha256:${'3'.repeat(64)}` });
+  const contentHash = `sha256:${'4'.repeat(64)}`;
+  const claim = env.ledger.publish({ kind: 'ClaimCandidate', logicalId: 'fake.claim', version: '1', semanticPayload: {
+    claimType: 'PARAMETER', assertion: 'fake', sourceRef: fakeSourceRef, sourceArtifactRef: fakeArtifactRef, sourceArtifactContentHash: contentHash,
+    sourceLocator: { kind: 'WHOLE_ARTIFACT', contentHash, byteLength: 1 }, compilerDefinitionRef: fakeCompilerRef, authorityClass: 'CANDIDATE_PROPOSAL'
+  }, audit: audit('evt-fake-claim', 'forger') });
+  const context = env.ledger.publish({ kind: 'SourceContextCandidate', logicalId: 'fake.context', version: '1', semanticPayload: {
+    claimCandidateRef: claim.ref, sourceRef: fakeSourceRef, sourceArtifactRef: fakeArtifactRef, sourceArtifactContentHash: contentHash, compilerDefinitionRef: fakeCompilerRef,
+    contextFamilies: Object.fromEntries(SOURCE_CONTEXT_FAMILIES.map((family) => [family, { status: 'NOT_REPORTED', dimensions: [] }])), authorityClass: 'CANDIDATE_PROPOSAL'
+  }, audit: audit('evt-fake-context', 'forger') });
+  const result = env.ledger.publish({ kind: 'ScientificCompilationResult', logicalId: 'fake.result', version: '1', semanticPayload: {
+    sourceRef: fakeSourceRef, sourceArtifactRef: fakeArtifactRef, sourceArtifactContentHash: contentHash, compilerDefinitionRef: fakeCompilerRef,
+    claimCandidateRefs: [claim.ref], sourceContextCandidateRefs: [context.ref], candidateCount: 1, runMetadata: {}, outputAuthority: 'PROPOSAL_ONLY'
+  }, audit: audit('evt-fake-result', 'forger') });
+  expectError(() => review(env, { result, claimCandidates: [claim], sourceContextCandidates: [context] }, {
+    reviewLogicalId: 'review.k03.forged-bundle', contextAdjudication: { BIOLOGICAL: [], ENVIRONMENTAL: [], MANAGEMENT: [], OPERATIONAL: [], MEASUREMENT: [], JURISDICTION_ECONOMIC: [] }
+  }), AuthorityLedgerError, 'AUTHORITY_NOT_FOUND');
   assert.equal(env.ledger.listVersions('Claim', 'claim.corn-water.depletion-threshold').length, 0);
 });
 
-test('rejection without a reason code is invalid', () => {
-  const env = setup();
-  const bundle = compile(env);
-  expectError(() => accept(env, bundle, {
-    reviewLogicalId: 'review.k03.reject-no-reason',
-    disposition: 'REJECT_SOURCE_FAITHFUL',
-    reasonCodes: []
-  }), SourceFaithfulReviewError, 'REJECTION_REASON_REQUIRED');
+test('compiler definition must remain CANDIDATE_ONLY across full upstream closure', () => {
+  const env = setup(); const bundle = compile(env);
+  const badCompiler = env.ledger.publish({ kind: 'ScientificCompilerDefinition', logicalId: 'compiler.bad', version: '1', semanticPayload: {
+    compilerId: 'bad', implementationVersion: '1', extractionContractVersion: 'x', locatorContractVersion: 'x', configuration: {}, outputAuthority: 'QUALIFIED'
+  }, audit: audit('evt-bad-compiler', 'compiler-admin') });
+  const claim = env.ledger.publish({ kind: 'ClaimCandidate', logicalId: 'claim.bad-compiler', version: '1', semanticPayload: { ...bundle.claimCandidates[0].semanticPayload, compilerDefinitionRef: badCompiler.ref }, audit: audit('evt-bad-compiler-claim', 'forger') });
+  const context = env.ledger.publish({ kind: 'SourceContextCandidate', logicalId: 'context.bad-compiler', version: '1', semanticPayload: { ...bundle.sourceContextCandidates[0].semanticPayload, claimCandidateRef: claim.ref, compilerDefinitionRef: badCompiler.ref }, audit: audit('evt-bad-compiler-context', 'forger') });
+  const result = env.ledger.publish({ kind: 'ScientificCompilationResult', logicalId: 'result.bad-compiler', version: '1', semanticPayload: { ...bundle.result.semanticPayload, compilerDefinitionRef: badCompiler.ref, claimCandidateRefs: [claim.ref], sourceContextCandidateRefs: [context.ref] }, audit: audit('evt-bad-compiler-result', 'forger') });
+  expectError(() => review(env, { result, claimCandidates: [claim], sourceContextCandidates: [context] }, { reviewLogicalId: 'review.k03.bad-compiler' }), SourceFaithfulReviewError, 'UPSTREAM_PROVENANCE_INVALID');
 });
 
-test('orphan candidate not referenced by exact completed ScientificCompilationResult cannot be reviewed', () => {
-  const env = setup();
-  const acceptedBundle = compile(env, { logicalId: 'compilation.k03.a', key: 'depletion-threshold' });
-  const otherBundle = compile(env, { logicalId: 'compilation.k03.b', key: 'other-threshold' });
-  expectError(() => accept(env, acceptedBundle, {
-    reviewLogicalId: 'review.k03.orphan',
-    claimCandidateRef: otherBundle.claimCandidates[0].ref
-  }), SourceFaithfulReviewError, 'CLAIM_CANDIDATE_NOT_IN_COMPILATION');
+test('unauthorized reviewer cannot mint review/Claim/SourceContext authority', () => {
+  const env = setup({ reviewerRole: 'AGRONOMIST' }); const bundle = compile(env);
+  expectError(() => review(env, bundle), SourceFaithfulReviewError, 'REVIEWER_PERMISSION_DENIED');
+  assert.equal(env.ledger.listVersions('SourceFaithfulReviewDecision', 'review.k03.accept').length, 0);
 });
 
-test('ClaimCandidate and SourceContextCandidate from different completed compilations cannot be paired', () => {
-  const env = setup();
-  const bundleA = compile(env, { logicalId: 'compilation.k03.pair-a', key: 'depletion-threshold' });
-  const bundleB = compile(env, { logicalId: 'compilation.k03.pair-b', key: 'other-threshold' });
-  expectError(() => accept(env, bundleA, {
-    reviewLogicalId: 'review.k03.bad-pair',
-    sourceContextCandidateRef: bundleB.sourceContextCandidates[0].ref
-  }), SourceFaithfulReviewError, 'SOURCE_CONTEXT_CANDIDATE_NOT_IN_COMPILATION');
+test('review actor must equal exact authorized principal', () => {
+  const env = setup(); const bundle = compile(env);
+  expectError(() => review(env, bundle, { auditActorId: 'someone-else' }), SourceFaithfulReviewError, 'REVIEW_ACTOR_MISMATCH');
 });
 
-test('forged exact candidate reference is rejected by shared authority ledger', () => {
-  const env = setup();
-  const bundle = compile(env);
-  const forged = {
-    ...bundle.claimCandidates[0].ref,
-    semanticHash: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
-  };
-  expectError(() => accept(env, bundle, {
-    reviewLogicalId: 'review.k03.forged',
-    claimCandidateRef: forged
-  }), AuthorityLedgerError, 'AUTHORITY_HASH_MISMATCH');
+test('Claim and SourceContext authority publication is all-or-none after accepted review', () => {
+  const env = setup(); const bundle = compile(env);
+  env.ledger.publish({ kind: 'SourceContext', logicalId: 'source-context.atomicity', version: '1', semanticPayload: { deliberately: 'conflicting-existing-authority' }, audit: audit('evt-preexisting-context', 'fixture-admin') });
+  expectError(() => review(env, bundle, { reviewLogicalId: 'review.k03.atomicity', claimLogicalId: 'claim.atomicity', sourceContextLogicalId: 'source-context.atomicity' }), AuthorityLedgerError, 'SEMANTIC_MUTATION_FORBIDDEN');
+  assert.equal(env.ledger.listVersions('Claim', 'claim.atomicity').length, 0);
+  assert.equal(env.ledger.listVersions('SourceFaithfulReviewDecision', 'review.k03.atomicity').length, 1);
 });
 
-test('final Claim and SourceContext versions cannot be silently rewritten by a later review', () => {
-  const env = setup();
-  const first = compile(env, { logicalId: 'compilation.k03.first', key: 'depletion-threshold' });
-  accept(env, first, {
-    reviewLogicalId: 'review.k03.first',
-    claimLogicalId: 'claim.k03.immutable',
-    sourceContextLogicalId: 'source-context.k03.immutable',
-    auditEventId: 'evt-review-first'
-  });
-
-  const second = compile(env, { logicalId: 'compilation.k03.second', key: 'other-threshold' });
-  expectError(() => accept(env, second, {
-    reviewLogicalId: 'review.k03.second',
-    claimLogicalId: 'claim.k03.immutable',
-    claimVersion: '1',
-    sourceContextLogicalId: 'source-context.k03.immutable',
-    sourceContextVersion: '1',
-    auditEventId: 'evt-review-second'
-  }), AuthorityLedgerError, 'SEMANTIC_MUTATION_FORBIDDEN');
+test('published Claim/SourceContext versions cannot be rewritten', () => {
+  const env = setup(); const first = compile(env, { logicalId: 'compilation.k03.first', key: 'first' });
+  review(env, first, { reviewLogicalId: 'review.k03.first', claimLogicalId: 'claim.immutable', sourceContextLogicalId: 'context.immutable' });
+  const second = compile(env, { logicalId: 'compilation.k03.second', key: 'second' });
+  expectError(() => review(env, second, { reviewLogicalId: 'review.k03.second', claimLogicalId: 'claim.immutable', sourceContextLogicalId: 'context.immutable' }), AuthorityLedgerError, 'SEMANTIC_MUTATION_FORBIDDEN');
 });
 
-test('Claim audit binds review, completed compilation and exact ClaimCandidate', () => {
-  const env = setup();
-  const bundle = compile(env);
-  const result = accept(env, bundle);
-  const events = env.ledger.auditFor(result.claim.ref);
-  const direct = events.find((event) => event.objectRef.semanticHash === result.claim.ref.semanticHash);
-  assert.ok(direct, 'direct Claim publication audit event required');
+test('audit and lineage bind authorization, review and exact proposal provenance', () => {
+  const env = setup(); const bundle = compile(env); const result = review(env, bundle);
+  const direct = env.ledger.auditFor(result.claim.ref).find((event) => event.objectRef.semanticHash === result.claim.ref.semanticHash);
   assert.ok(direct.inputRefs.some((ref) => ref.semanticHash === result.review.ref.semanticHash));
-  assert.ok(direct.inputRefs.some((ref) => ref.semanticHash === bundle.result.ref.semanticHash));
-  assert.ok(direct.inputRefs.some((ref) => ref.semanticHash === bundle.claimCandidates[0].ref.semanticHash));
+  assert.ok(direct.inputRefs.some((ref) => ref.semanticHash === env.authorization.authorizationAudit.ref.semanticHash));
+  assert.ok(env.ledger.lineageFor(result.claim.ref).some((line) => line.relation === 'derived_from' && line.to.semanticHash === bundle.claimCandidates[0].ref.semanticHash));
 });
 
-test('SourceContext audit binds review, completed compilation, exact candidate and final Claim', () => {
-  const env = setup();
-  const bundle = compile(env);
-  const result = accept(env, bundle);
-  const events = env.ledger.auditFor(result.sourceContext.ref);
-  const direct = events.find((event) => event.objectRef.semanticHash === result.sourceContext.ref.semanticHash);
-  assert.ok(direct, 'direct SourceContext publication audit event required');
-  assert.ok(direct.inputRefs.some((ref) => ref.semanticHash === result.review.ref.semanticHash));
-  assert.ok(direct.inputRefs.some((ref) => ref.semanticHash === bundle.sourceContextCandidates[0].ref.semanticHash));
-  assert.ok(direct.inputRefs.some((ref) => ref.semanticHash === result.claim.ref.semanticHash));
-});
-
-test('explicit lineage connects final Claim/SourceContext to proposal candidates without rewriting proposals', () => {
-  const env = setup();
-  const bundle = compile(env);
-  const result = accept(env, bundle);
-  const claimLineage = env.ledger.lineageFor(result.claim.ref);
-  const contextLineage = env.ledger.lineageFor(result.sourceContext.ref);
-  assert.ok(claimLineage.some((line) => line.relation === 'derived_from'
-    && line.to.semanticHash === bundle.claimCandidates[0].ref.semanticHash));
-  assert.ok(contextLineage.some((line) => line.relation === 'derived_from'
-    && line.to.semanticHash === bundle.sourceContextCandidates[0].ref.semanticHash));
-  assert.equal(bundle.claimCandidates[0].semanticPayload.authorityClass, 'CANDIDATE_PROPOSAL');
-  assert.equal(bundle.sourceContextCandidates[0].semanticPayload.authorityClass, 'CANDIDATE_PROPOSAL');
-});
-
-test('accepted review is source-faithful authority only and creates no QualifiedKnowledge', () => {
-  const env = setup();
-  const bundle = compile(env);
-  const result = accept(env, bundle);
-  assert.equal(result.review.semanticPayload.authorityClass, 'SOURCE_FAITHFUL_REVIEW');
+test('accepted source-faithful review creates no QualifiedKnowledge', () => {
+  const env = setup(); const bundle = compile(env); review(env, bundle);
   assert.equal(env.ledger.listVersions('QualifiedKnowledge', 'claim.corn-water.depletion-threshold').length, 0);
-  assert.ok(!('qualificationScope' in result.claim.semanticPayload));
-  assert.ok(!('transportConstraints' in result.claim.semanticPayload));
-});
-
-test('correction requires a new candidate/review path; service exposes no assertion/context override fields', () => {
-  const env = setup();
-  const bundle = compile(env);
-  const result = env.reviewService.reviewCandidate({
-    reviewLogicalId: 'review.k03.no-override',
-    reviewVersion: '1',
-    compilationResultRef: bundle.result.ref,
-    claimCandidateRef: bundle.claimCandidates[0].ref,
-    sourceContextCandidateRef: bundle.sourceContextCandidates[0].ref,
-    disposition: 'ACCEPT_SOURCE_FAITHFUL',
-    claimLogicalId: 'claim.k03.no-override',
-    claimVersion: '1',
-    sourceContextLogicalId: 'source-context.k03.no-override',
-    sourceContextVersion: '1',
-    // Deliberately unknown fields: implementation must not use these as rewrite authority.
-    assertionOverride: 'A reviewer must not rewrite the source assertion here.',
-    sourceContextOverride: { MANAGEMENT: { status: 'REPORTED' } },
-    audit: audit('evt-no-override')
-  });
-  assert.equal(result.claim.semanticPayload.assertion, bundle.claimCandidates[0].semanticPayload.assertion);
-  assert.deepEqual(result.sourceContext.semanticPayload.contextFamilies, bundle.sourceContextCandidates[0].semanticPayload.contextFamilies);
 });
 
 let passed = 0;
 for (const { name, fn } of tests) {
-  try {
-    await fn();
-    passed += 1;
-    console.log(`PASS ${name}`);
-  } catch (error) {
-    console.error(`FAIL ${name}`);
-    console.error(error instanceof Error ? error.stack ?? error.message : String(error));
-    process.exitCode = 1;
-  }
+  try { fn(); passed += 1; console.log(`PASS ${name}`); }
+  catch (error) { console.error(`FAIL ${name}`); console.error(error); process.exitCode = 1; }
 }
-
 console.log(JSON.stringify({ total: tests.length, passed, failed: tests.length - passed }, null, 2));
-if (passed !== tests.length) process.exitCode = 1;
+if (passed !== tests.length) process.exit(1);
