@@ -1,6 +1,14 @@
 import { cloneCanonicalValue, deepFreeze, semanticHash } from '../../canonicalization/src/index.mjs';
 import { PERMISSIONS, createPrincipal } from './engine.mjs';
 
+export const CONTEXT_WRITE_RESOURCE_TYPES = deepFreeze([
+  'CONTEXT_DATUM',
+  'AUTHORIZED_CONTEXT_REFERENCE',
+  'RESOLVED_CONTEXT_DATUM_RECEIPT'
+]);
+
+const CONTEXT_WRITE_RESOURCE_TYPE_SET = new Set(CONTEXT_WRITE_RESOURCE_TYPES);
+
 export class ContextWriteAuthorizationError extends Error {
   constructor(code, message) {
     super(message);
@@ -14,6 +22,17 @@ function requiredText(value, name) {
     throw new ContextWriteAuthorizationError('INVALID_CONTEXT_WRITE_AUTHORIZATION_INPUT', `${name} must be a non-empty string`);
   }
   return value.trim();
+}
+
+function normalizeResourceType(value) {
+  const resourceType = requiredText(value, 'authorizationScope.resourceType');
+  if (!CONTEXT_WRITE_RESOURCE_TYPE_SET.has(resourceType)) {
+    throw new ContextWriteAuthorizationError(
+      'INVALID_CONTEXT_WRITE_RESOURCE_TYPE',
+      `unsupported context.write resourceType ${resourceType}`
+    );
+  }
+  return resourceType;
 }
 
 function sameIdentity(left, right) {
@@ -51,7 +70,7 @@ export function authorizeContextWrite({ principal, roleAssignments, authorizatio
   const targetScope = deepFreeze({
     organizationId: requiredText(authorizationScope?.organizationId, 'authorizationScope.organizationId'),
     ...(authorizationScope?.tenantId ? { tenantId: requiredText(authorizationScope.tenantId, 'authorizationScope.tenantId') } : {}),
-    resourceType: 'CONTEXT_DATUM',
+    resourceType: normalizeResourceType(authorizationScope?.resourceType),
     resourceId: requiredText(authorizationScope?.resourceId, 'authorizationScope.resourceId')
   });
 
