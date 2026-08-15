@@ -98,9 +98,8 @@ export function publishDatum(ledger, logicalId = 'cd-ref-1', input = datumInput(
 }
 
 export function referenceInput({ addressingMode = 'MUTABLE_LOCATOR', expectedContentHash, versionToken, ...overrides } = {}) {
-  const contentHash = expectedContentHash ?? (addressingMode === 'CONTENT_ADDRESSED' ? providerHash : undefined);
-  const defaultLocator = addressingMode === 'CONTENT_ADDRESSED'
-    ? `/content/${contentHash}`
+  const defaultLocator = addressingMode === 'CONTENT_ADDRESSED' && expectedContentHash
+    ? `/content/${expectedContentHash}`
     : '/field/1/state/vwc';
   return {
     contractVersion: AUTHORIZED_CONTEXT_REFERENCE_CONTRACT_VERSION,
@@ -111,7 +110,7 @@ export function referenceInput({ addressingMode = 'MUTABLE_LOCATOR', expectedCon
       locator: defaultLocator,
       addressingMode,
       ...(versionToken ? { versionToken } : {}),
-      ...(contentHash ? { expectedContentHash: contentHash } : {}),
+      ...(expectedContentHash ? { expectedContentHash } : {}),
       ...(overrides.reference ?? {})
     },
     authorizationContext: {
