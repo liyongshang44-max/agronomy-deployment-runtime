@@ -1,7 +1,6 @@
 import { strict as assert } from 'node:assert';
 import {
   PERMISSIONS,
-  authorizeKnowledgeQualification,
   createPrincipal,
   publishKnowledgeGovernancePolicy,
   publishRoleAssignment,
@@ -16,7 +15,8 @@ import {
 } from '../../packages/synthesis-engine/src/index.mjs';
 import {
   KnowledgeConflictService,
-  conflictAssessmentResourceId
+  conflictAssessmentResourceId,
+  conflictResolutionResourceId
 } from '../../packages/conflict-engine/src/index.mjs';
 import {
   KnowledgeReleaseError,
@@ -45,13 +45,15 @@ function expectError(fn, ErrorType, code) {
 function makeReleaseManager(env, {
   principalId = 'release-manager',
   permissions = [PERMISSIONS.KNOWLEDGE_RELEASE],
-  scope = RELEASE_TARGET
+  scope = RELEASE_TARGET,
+  organizationId = 'org-a',
+  tenantId = 'tenant-a'
 } = {}) {
   const principal = createPrincipal({
     principalId,
     type: 'USER',
-    organizationId: 'org-a',
-    tenantId: 'tenant-a',
+    organizationId,
+    tenantId,
     programIds: ['pilot-a']
   });
   const role = publishRoleAssignment({
@@ -105,7 +107,10 @@ function releaseControlEntitlement(env, manager, release, label, target = RELEAS
     logicalId: `policy.release-control.${label}`,
     version: '1',
     resourceId: releaseControlResourceId(release.ref),
-    ownership: { organizationId: 'org-a', tenantId: 'tenant-a' },
+    ownership: {
+      organizationId: manager.principal.organizationId,
+      ...(manager.principal.tenantId ? { tenantId: manager.principal.tenantId } : {})
+    },
     visibilityPolicy: [{ principalId: manager.principal.principalId }],
     qualificationScope: [{ use: '*' }],
     deploymentScope: [target],
@@ -127,8 +132,12 @@ function publishRelease(env, manager, members, label, options = {}) {
     version: options.version ?? '1',
     memberEntitlements: entitlements,
     publisherPrincipal: manager.principal,
-    releaseTarget: RELEASE_TARGET,
+    releaseTarget: options.releaseTarget ?? RELEASE_TARGET,
     ...(options.supersedesReleaseRef ? { supersedesReleaseRef: options.supersedesReleaseRef } : {}),
+    ...(options.supersessionControl ? {
+      supersessionAuthorizationDecisionAuditRef: options.supersessionControl.authAudit.ref,
+      supersessionPolicyRef: options.supersessionControl.policy.ref
+    } : {}),
     audit: audit(`evt-release-${label}`, manager.principal.principalId)
   });
 }
@@ -186,7 +195,8 @@ function createConflict(env, a, b, label) {
     qualificationTarget: { use: 'KNOWLEDGE_CONFLICT_ASSESSMENT' },
     logicalId: `${label}-conflict-assessment`
   });
-  return new KnowledgeConflictService({ ledger: env.ledger }).createConflict({
+  const service = new KnowledgeConflictService({ ledger: env.ledger });
+  const conflict = service.createConflict({
     logicalId: `conflict.${label}`,
     version: '1',
     semanticRole,
@@ -197,6 +207,25 @@ function createConflict(env, a, b, label) {
     approverPrincipal: env.approver,
     authorizationDecisionAuditRef: approval.authAudit.ref,
     audit: audit(`evt-conflict-${label}`, env.approver.principalId)
+  });
+  return { service, conflict };
+}
+
+function resolveAlternatives(env, conflictBundle, label) {
+  const approval = authorizeForResource(env, {
+    resourceId: conflictResolutionResourceId(conflictBundle.conflict.ref),
+    qualificationTarget: { use: 'KNOWLEDGE_CONFLICT_RESOLUTION' },
+    logicalId: `${label}-conflict-resolution`
+  });
+  return conflictBundle.service.resolveConflict({
+    logicalId: `conflict-resolution.${label}`,
+    version: '1',
+    knowledgeConflictRef: conflictBundle.conflict.ref,
+    resolutionType: 'PRESERVE_ALTERNATIVES',
+    rationale: 'Preserve both exact scientific alternatives.',
+    approverPrincipal: env.approver,
+    authorizationDecisionAuditRef: approval.authAudit.ref,
+    audit: audit(`evt-conflict-resolution-${label}`, env.approver.principalId)
   });
 }
 
@@ -302,12 +331,12 @@ test('known unresolved KnowledgeConflict is frozen in publication governance wit
   const b = makeQualifiedKnowledge(env, { label: 'conflict-release-b', assertion: 'Threshold B.' });
   const conflict = createConflict(env, a, b, 'known-release-conflict');
   const published = publishRelease(env, manager, [a.knowledge, b.knowledge], 'known-conflict');
-  assert.ok(published.publicationDecision.semanticPayload.detectedConflictRefs.some((ref) => ref.semanticHash === conflict.ref.semanticHash));
+  assert.ok(published.publicationDecision.semanticPayload.detectedConflictRefs.some((ref) => ref.semanticHash === conflict.conflict.ref.semanticHash));
   assert.equal(published.publicationDecision.semanticPayload.activeConflictResolutionRefs.length, 0);
   validateKnowledgeReleaseAuthority({ ledger: env.ledger, knowledgeReleaseRef: published.release.ref });
 });
 
-test('a new relevant conflict discovered after publication makes release stale for new use but preserves historical replay', () => {
+test('new relevant conflict discovered after publication makes release stale for new use but preserves historical replay', () => {
   const env = createEnvironment();
   const manager = makeReleaseManager(env);
   const a = makeQualifiedKnowledge(env, { label: 'late-conflict-a', assertion: 'Threshold A.' });
@@ -319,20 +348,78 @@ test('a new relevant conflict discovered after publication makes release stale f
   assert.equal(historical.release.ref.semanticHash, published.release.ref.semanticHash);
 });
 
-test('new KnowledgeRelease supersedes old release without rewriting old exact member set; historical replay remains legal', () => {
+test('active conflict-resolution drift after publication also makes release stale for new use', () => {
+  const env = createEnvironment();
+  const manager = makeReleaseManager(env);
+  const a = makeQualifiedKnowledge(env, { label: 'resolution-drift-a', assertion: 'Threshold A.' });
+  const b = makeQualifiedKnowledge(env, { label: 'resolution-drift-b', assertion: 'Threshold B.' });
+  const conflict = createConflict(env, a, b, 'resolution-drift');
+  const published = publishRelease(env, manager, [a.knowledge, b.knowledge], 'resolution-drift');
+  resolveAlternatives(env, conflict, 'resolution-drift');
+  expectError(() => validateKnowledgeReleaseAuthority({ ledger: env.ledger, knowledgeReleaseRef: published.release.ref }), KnowledgeReleaseError, 'RELEASE_CONFLICT_GOVERNANCE_STALE');
+  validateKnowledgeReleaseAuthority({ ledger: env.ledger, knowledgeReleaseRef: published.release.ref, allowHistorical: true });
+});
+
+test('new KnowledgeRelease supersedes old release only with exact predecessor control authorization', () => {
   const env = createEnvironment();
   const manager = makeReleaseManager(env);
   const a = makeQualifiedKnowledge(env, { label: 'supersede-a', assertion: 'A.' });
   const b = makeQualifiedKnowledge(env, { label: 'supersede-b', assertion: 'B.' });
   const first = publishRelease(env, manager, [a.knowledge], 'supersede-v1');
-  const second = publishRelease(env, manager, [a.knowledge, b.knowledge], 'supersede-v2', { supersedesReleaseRef: first.release.ref });
+  expectError(() => publishRelease(env, manager, [a.knowledge, b.knowledge], 'supersede-v2-no-auth', { supersedesReleaseRef: first.release.ref }), KnowledgeReleaseError, 'RELEASE_SUPERSESSION_AUTHORIZATION_REQUIRED');
+  const control = releaseControlEntitlement(env, manager, first.release, 'supersede-v1');
+  const second = publishRelease(env, manager, [a.knowledge, b.knowledge], 'supersede-v2', {
+    supersedesReleaseRef: first.release.ref,
+    supersessionControl: control
+  });
   assert.equal(first.release.semanticPayload.memberRefs.length, 1);
   assert.equal(second.release.semanticPayload.memberRefs.length, 2);
   expectError(() => validateKnowledgeReleaseAuthority({ ledger: env.ledger, knowledgeReleaseRef: first.release.ref }), KnowledgeReleaseError, 'KNOWLEDGE_RELEASE_SUPERSEDED');
   validateKnowledgeReleaseAuthority({ ledger: env.ledger, knowledgeReleaseRef: first.release.ref, allowHistorical: true });
 });
 
-test('release lifecycle revocation is immutable and blocks new use without deleting historical release authority', () => {
+test('another organization cannot seize release lifecycle control or supersede the release', () => {
+  const env = createEnvironment();
+  const manager = makeReleaseManager(env);
+  const attacker = makeReleaseManager(env, {
+    principalId: 'release-attacker',
+    organizationId: 'org-b',
+    tenantId: 'tenant-b',
+    scope: { organizationId: 'org-b', tenantId: 'tenant-b', programId: 'pilot-a' }
+  });
+  const a = makeQualifiedKnowledge(env, { label: 'controller-a', assertion: 'A.' });
+  const first = publishRelease(env, manager, [a.knowledge], 'controller');
+  const maliciousPolicy = publishKnowledgeGovernancePolicy({
+    ledger: env.ledger,
+    logicalId: 'policy.release-control.attacker',
+    version: '1',
+    resourceId: releaseControlResourceId(first.release.ref),
+    ownership: { organizationId: 'org-b', tenantId: 'tenant-b' },
+    visibilityPolicy: [{ principalId: attacker.principal.principalId }],
+    qualificationScope: [{ use: '*' }],
+    deploymentScope: [{ organizationId: 'org-b', tenantId: 'tenant-b', programId: 'pilot-a' }],
+    audit: audit('evt-policy-release-control-attacker', 'iam-admin')
+  });
+  const maliciousAuth = recordAuthorizationDecision({
+    ledger: env.ledger,
+    decision: authorizeKnowledgeRelease({
+      principal: attacker.principal,
+      policy: maliciousPolicy,
+      roleAssignments: [attacker.role],
+      releaseTarget: { organizationId: 'org-b', tenantId: 'tenant-b', programId: 'pilot-a' }
+    }),
+    audit: audit('evt-auth-release-control-attacker', 'iam-engine', 'SERVICE_ACCOUNT')
+  });
+  expectError(() => new KnowledgeReleaseService({ ledger: env.ledger }).recordLifecycleDecision({
+    logicalId: 'release-lifecycle.attacker', version: '1', knowledgeReleaseRef: first.release.ref,
+    status: 'REVOKED', reasonCodes: ['ATTACK'], managerPrincipal: attacker.principal,
+    releaseTarget: { organizationId: 'org-b', tenantId: 'tenant-b', programId: 'pilot-a' },
+    authorizationDecisionAuditRef: maliciousAuth.ref, policyRef: maliciousPolicy.ref,
+    audit: audit('evt-release-lifecycle-attacker', attacker.principal.principalId)
+  }), KnowledgeReleaseError, 'RELEASE_CONTROLLER_SCOPE_MISMATCH');
+});
+
+test('release lifecycle revocation blocks new use without deleting historical release authority', () => {
   const env = createEnvironment();
   const manager = makeReleaseManager(env);
   const a = makeQualifiedKnowledge(env, { label: 'lifecycle-a', assertion: 'A.' });
@@ -350,6 +437,84 @@ test('release lifecycle revocation is immutable and blocks new use without delet
   expectError(() => validateKnowledgeReleaseAuthority({ ledger: env.ledger, knowledgeReleaseRef: published.release.ref }), KnowledgeReleaseError, 'KNOWLEDGE_RELEASE_REVOKED');
   validateKnowledgeReleaseAuthority({ ledger: env.ledger, knowledgeReleaseRef: published.release.ref, allowHistorical: true });
   assert.equal(env.ledger.resolve(published.release.ref).ref.semanticHash, published.release.ref.semanticHash);
+});
+
+test('historical replay survives later QualifiedKnowledge revocation', () => {
+  const env = createEnvironment();
+  const manager = makeReleaseManager(env);
+  const a = makeQualifiedKnowledge(env, { label: 'historical-qk-a', assertion: 'A.' });
+  const published = publishRelease(env, manager, [a.knowledge], 'historical-qk');
+  const revokeAuth = authorizeForResource(env, {
+    resourceId: qualificationResourceId(a.reviewed.claim.ref, a.reviewed.sourceContext.ref),
+    qualificationTarget: USE_APPLICABILITY,
+    logicalId: 'historical-qk-revoke'
+  });
+  a.qualification.revokeQualifiedKnowledgeUse({
+    revocationLogicalId: 'revocation.historical-qk', revocationVersion: '1',
+    qualifiedKnowledgeRef: a.knowledge.ref, qualificationTarget: USE_APPLICABILITY,
+    approverPrincipal: env.approver, authorizationDecisionAuditRef: revokeAuth.authAudit.ref,
+    reasonCodes: ['LATER_REVOCATION'], audit: audit('evt-historical-qk-revoke', env.approver.principalId)
+  });
+  assert.throws(() => validateKnowledgeReleaseAuthority({ ledger: env.ledger, knowledgeReleaseRef: published.release.ref }));
+  const historical = validateKnowledgeReleaseAuthority({ ledger: env.ledger, knowledgeReleaseRef: published.release.ref, allowHistorical: true });
+  assert.equal(historical.release.ref.semanticHash, published.release.ref.semanticHash);
+});
+
+test('historical replay of DerivedKnowledge survives later revocation of one exact input QualifiedKnowledge', () => {
+  const env = createEnvironment();
+  const manager = makeReleaseManager(env);
+  const a = makeQualifiedKnowledge(env, { label: 'historical-dk-a', assertion: 'A.' });
+  const b = makeQualifiedKnowledge(env, { label: 'historical-dk-b', assertion: 'B.' });
+  const derived = makeDerived(env, a, b, 'historical-dk');
+  const published = publishRelease(env, manager, [derived.derivedKnowledge], 'historical-dk');
+  const revokeAuth = authorizeForResource(env, {
+    resourceId: qualificationResourceId(a.reviewed.claim.ref, a.reviewed.sourceContext.ref),
+    qualificationTarget: USE_APPLICABILITY,
+    logicalId: 'historical-dk-input-revoke'
+  });
+  a.qualification.revokeQualifiedKnowledgeUse({
+    revocationLogicalId: 'revocation.historical-dk-input', revocationVersion: '1',
+    qualifiedKnowledgeRef: a.knowledge.ref, qualificationTarget: USE_APPLICABILITY,
+    approverPrincipal: env.approver, authorizationDecisionAuditRef: revokeAuth.authAudit.ref,
+    reasonCodes: ['LATER_INPUT_REVOCATION'], audit: audit('evt-historical-dk-input-revoke', env.approver.principalId)
+  });
+  assert.throws(() => validateKnowledgeReleaseAuthority({ ledger: env.ledger, knowledgeReleaseRef: published.release.ref }));
+  validateKnowledgeReleaseAuthority({ ledger: env.ledger, knowledgeReleaseRef: published.release.ref, allowHistorical: true });
+});
+
+test('same exact release identity cannot be rebound to different publication target/governance', () => {
+  const env = createEnvironment();
+  const manager = makeReleaseManager(env);
+  const a = makeQualifiedKnowledge(env, { label: 'retry-a', assertion: 'A.' });
+  const service = new KnowledgeReleaseService({ ledger: env.ledger });
+  const entitlement = memberEntitlement(env, manager, a.knowledge, { label: 'retry-first' });
+  const first = service.publishRelease({
+    logicalId: 'release.retry', version: '1', memberEntitlements: [entitlement],
+    publisherPrincipal: manager.principal, releaseTarget: RELEASE_TARGET,
+    audit: audit('evt-release-retry-first', manager.principal.principalId)
+  });
+  const otherTarget = { organizationId: 'org-a', tenantId: 'tenant-a', programId: 'pilot-b' };
+  const otherPolicy = publishKnowledgeGovernancePolicy({
+    ledger: env.ledger,
+    logicalId: 'policy.release-member.retry-second', version: '1',
+    resourceId: releaseMemberResourceId(a.knowledge.ref),
+    ownership: a.knowledge.semanticPayload.ownership,
+    visibilityPolicy: [{ principalId: manager.principal.principalId }],
+    qualificationScope: [{ use: '*' }], deploymentScope: [otherTarget],
+    audit: audit('evt-policy-release-member-retry-second', 'iam-admin')
+  });
+  const otherAuth = recordAuthorizationDecision({
+    ledger: env.ledger,
+    decision: authorizeKnowledgeRelease({ principal: manager.principal, policy: otherPolicy, roleAssignments: [manager.role], releaseTarget: otherTarget }),
+    audit: audit('evt-auth-release-member-retry-second', 'iam-engine', 'SERVICE_ACCOUNT')
+  });
+  expectError(() => service.publishRelease({
+    logicalId: 'release.retry', version: '1',
+    memberEntitlements: [{ knowledgeRef: a.knowledge.ref, policyRef: otherPolicy.ref, authorizationDecisionAuditRef: otherAuth.ref }],
+    publisherPrincipal: manager.principal, releaseTarget: otherTarget,
+    audit: audit('evt-release-retry-second', manager.principal.principalId)
+  }), KnowledgeReleaseError, 'RELEASE_PUBLICATION_RETRY_MISMATCH');
+  assert.equal(env.ledger.resolve(first.release.ref).ref.semanticHash, first.release.ref.semanticHash);
 });
 
 test('exact release set does not follow a later knowledge object by latest-version convention', () => {
