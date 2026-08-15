@@ -4,12 +4,13 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": ">=24 <25"
   },
   "scripts": {
     "build": "npm run check:constitution",
     "check:constitution": "node scripts/constitution/check.mjs",
     "test:constitution": "node acceptance/constitution/run.mjs",
-    "test": "npm run test:constitution"
+    "test:authority": "node acceptance/authority/run.mjs",
+    "test": "npm run test:constitution && npm run test:authority"
   }
 }
