@@ -60,6 +60,10 @@ function sameOwnership(left, right) {
   return left?.organizationId === right?.organizationId && (left?.tenantId ?? null) === (right?.tenantId ?? null);
 }
 
+function exactRefIn(refs, expected) {
+  return Array.isArray(refs) && refs.some((ref) => sameAuthorityRef(ref, expected));
+}
+
 function auditEvent(base, suffix, inputRefs) {
   if (!base || typeof base !== 'object') throw new SynthesisAuthorityError('AUDIT_REQUIRED', 'explicit audit metadata is required');
   return {
@@ -177,6 +181,15 @@ function assertDerivationMethodAuthority({ ledger, methodRef }) {
   if (!sameAuthorityRef(payload.approvalPolicyRef, approval.policy.ref)) {
     throw new SynthesisAuthorityError('DERIVATION_METHOD_INVALID', 'method approval policy ref differs from exact authorization authority');
   }
+  const directAudit = ledger.auditFor(method.ref).some((event) =>
+    sameAuthorityRef(event.objectRef, method.ref)
+      && event.actor?.id === payload.approverPrincipal.principalId
+      && event.actor?.type === payload.approverPrincipal.type
+      && exactRefIn(event.inputRefs, approval.authAudit.ref)
+      && exactRefIn(event.inputRefs, approval.policy.ref));
+  if (!directAudit) {
+    throw new SynthesisAuthorityError('DERIVATION_METHOD_AUDIT_INVALID', 'DerivationMethod lacks direct approver audit over exact authorization/policy');
+  }
   return method;
 }
 
@@ -185,8 +198,8 @@ export class DerivedKnowledgeService {
 
   constructor({ ledger }) {
     if (!ledger || typeof ledger.publish !== 'function' || typeof ledger.publishBatchWithLineage !== 'function'
-      || typeof ledger.resolve !== 'function' || typeof ledger.addLineage !== 'function') {
-      throw new SynthesisAuthorityError('INVALID_LEDGER', 'DerivedKnowledgeService requires shared AuthorityLedger with atomic authority+lineage publication');
+      || typeof ledger.resolve !== 'function' || typeof ledger.addLineage !== 'function' || typeof ledger.auditFor !== 'function') {
+      throw new SynthesisAuthorityError('INVALID_LEDGER', 'DerivedKnowledgeService requires shared replayable AuthorityLedger with atomic authority+lineage publication');
     }
     this.#ledger = ledger;
   }
