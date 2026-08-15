@@ -2,9 +2,12 @@ import { cloneCanonicalValue, deepFreeze, semanticHash } from '../../canonicaliz
 import { assertAuthorityRef, sameAuthorityRef } from '../../contracts/src/authority.mjs';
 import { normalizeSourceFaithfulDimension } from '../../contracts/src/context-semantic.mjs';
 import {
+  PERMISSIONS,
+  authorizeKnowledgeInspection,
   authorizeKnowledgeQualification,
   samePrincipalIdentity
 } from '../../authorization/src/index.mjs';
+import { sourceReviewResourceId } from './source-faithful.mjs';
 
 export const SCIENTIFIC_QUALIFICATION_DISPOSITIONS = deepFreeze([
   'QUALIFY_USE',
@@ -58,6 +61,20 @@ function normalizeReasonCodes(values, { required = false } = {}) {
   return deepFreeze(normalized);
 }
 
+export function normalizeScientificUseTarget(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new ScientificQualificationError('INVALID_QUALIFICATION_TARGET', 'qualificationTarget must be an object');
+  }
+  const keys = Object.keys(value).sort();
+  if (keys.length !== 1 || keys[0] !== 'use') {
+    throw new ScientificQualificationError(
+      'INVALID_QUALIFICATION_TARGET',
+      'K04 scientific-use target v1 contains exactly one field: use; context limitations belong in explicit preconditions/constraints'
+    );
+  }
+  return deepFreeze({ use: requiredText(value.use, 'qualificationTarget.use') });
+}
+
 function resolveKind(ledger, ref, expectedKind, code) {
   const record = ledger.resolve(assertAuthorityRef(ref));
   if (record.ref.kind !== expectedKind) {
@@ -71,11 +88,21 @@ function canonicalEqual(left, right) {
 }
 
 function targetKey(target) {
-  return semanticHash('ADR-ScientificUseTarget', canonicalObject(target, 'qualificationTarget'));
+  return semanticHash('ADR-ScientificUseTarget-v1', normalizeScientificUseTarget(target));
+}
+
+function exactRefKey(ref) {
+  const normalized = assertAuthorityRef(ref);
+  return JSON.stringify([normalized.kind, normalized.logicalId, normalized.version, normalized.semanticHash]);
 }
 
 function includesExactRef(refs, expected) {
   return Array.isArray(refs) && refs.some((ref) => sameAuthorityRef(ref, expected));
+}
+
+function hasExactIdentity(ledger, kind, logicalId, version) {
+  return ledger.listVersions(kind, requiredText(logicalId, 'logicalId'))
+    .some((ref) => ref.version === requiredText(version, 'version'));
 }
 
 function assertFinalContextMatchesCandidate(candidateFamilies, finalFamilies) {
@@ -127,6 +154,59 @@ function assertFinalContextMatchesCandidate(candidateFamilies, finalFamilies) {
       }
     }
   }
+}
+
+function assertK03ReviewAuthorization({ ledger, review, source }) {
+  const reviewPrincipal = review.semanticPayload.reviewPrincipal;
+  if (!reviewPrincipal || typeof reviewPrincipal !== 'object' || Array.isArray(reviewPrincipal)) {
+    throw new ScientificQualificationError('SOURCE_FAITHFUL_REVIEW_AUTHORIZATION_INVALID', 'reviewPrincipal is missing from K03 review authority');
+  }
+  const authAudit = resolveKind(
+    ledger,
+    review.semanticPayload.authorizationDecisionAuditRef,
+    'AuthorizationDecisionAudit',
+    'SOURCE_FAITHFUL_REVIEW_AUTHORIZATION_REQUIRED'
+  );
+  const decision = authAudit.semanticPayload;
+  if (decision.allowed !== true || decision.operation !== 'KNOWLEDGE_INSPECT') {
+    throw new ScientificQualificationError('SOURCE_FAITHFUL_REVIEW_AUTHORIZATION_INVALID', 'K03 review requires allowed KNOWLEDGE_INSPECT authorization');
+  }
+  if (!samePrincipalIdentity(decision.principal, reviewPrincipal)) {
+    throw new ScientificQualificationError('SOURCE_FAITHFUL_REVIEW_AUTHORIZATION_INVALID', 'K03 review principal differs from authorization principal');
+  }
+  const policy = resolveKind(ledger, decision.policyRef, 'KnowledgeGovernancePolicy', 'SOURCE_FAITHFUL_REVIEW_POLICY_REQUIRED');
+  if (policy.semanticPayload.resourceId !== sourceReviewResourceId(source.ref)) {
+    throw new ScientificQualificationError('SOURCE_FAITHFUL_REVIEW_AUTHORIZATION_INVALID', 'K03 review policy is not bound to exact Source review resource');
+  }
+  const sourceOwnership = source.semanticPayload.ownership;
+  const policyOwnership = policy.semanticPayload.ownership;
+  if (sourceOwnership.organizationId !== policyOwnership.organizationId
+    || (sourceOwnership.tenantId ?? null) !== (policyOwnership.tenantId ?? null)) {
+    throw new ScientificQualificationError('SOURCE_FAITHFUL_REVIEW_AUTHORIZATION_INVALID', 'K03 review policy ownership differs from Source ownership');
+  }
+  const assignments = (decision.assignmentRefs ?? []).map((ref) => resolveKind(
+    ledger,
+    ref,
+    'RoleAssignment',
+    'SOURCE_FAITHFUL_REVIEW_ROLE_REQUIRED'
+  ));
+  const recomputed = authorizeKnowledgeInspection({
+    principal: reviewPrincipal,
+    policy,
+    roleAssignments: assignments,
+    authorizationScope: decision.request?.authorizationScope
+  });
+  if (recomputed.allowed !== true || recomputed.decisionHash !== decision.decisionHash) {
+    throw new ScientificQualificationError('SOURCE_FAITHFUL_REVIEW_AUTHORIZATION_INVALID', 'K03 review authorization cannot be reproduced from exact F03 authority');
+  }
+  const hasSourceRead = assignments.some((assignment) =>
+    samePrincipalIdentity(assignment.semanticPayload.principal, reviewPrincipal)
+      && assignment.semanticPayload.permissions.includes(PERMISSIONS.SOURCE_READ)
+      && assignment.semanticPayload.permissions.includes(PERMISSIONS.KNOWLEDGE_INSPECT));
+  if (!hasSourceRead) {
+    throw new ScientificQualificationError('SOURCE_FAITHFUL_REVIEW_AUTHORIZATION_INVALID', 'K03 review authority lacks SOURCE_READ + KNOWLEDGE_INSPECT grant');
+  }
+  return deepFreeze({ authAudit, policy });
 }
 
 function assertSourceFaithfulAuthorityPair({ ledger, claimRef, sourceContextRef }) {
@@ -201,8 +281,18 @@ function assertSourceFaithfulAuthorityPair({ ledger, claimRef, sourceContextRef 
     sourceContextCandidate.semanticPayload.contextFamilies,
     sourceContext.semanticPayload.contextFamilies
   );
+  const reviewAuthorization = assertK03ReviewAuthorization({ ledger, review, source });
 
-  return deepFreeze({ claim, sourceContext, review, result, source, artifact, compilerDefinition });
+  return deepFreeze({
+    claim,
+    sourceContext,
+    review,
+    result,
+    source,
+    artifact,
+    compilerDefinition,
+    reviewAuthorization
+  });
 }
 
 export function qualificationResourceId(claimRef, sourceContextRef) {
@@ -226,6 +316,7 @@ function assertQualificationAuthorization({
     throw new ScientificQualificationError('QUALIFICATION_ACTOR_MISMATCH', 'audit.actor must match exact scientific approver principal');
   }
 
+  const target = normalizeScientificUseTarget(qualificationTarget);
   const authAudit = resolveKind(ledger, authorizationDecisionAuditRef, 'AuthorizationDecisionAudit', 'QUALIFICATION_AUTHORIZATION_REQUIRED');
   const storedDecision = authAudit.semanticPayload;
   if (storedDecision.operation !== 'KNOWLEDGE_QUALIFY' || storedDecision.allowed !== true) {
@@ -256,7 +347,7 @@ function assertQualificationAuthorization({
     principal: approverPrincipal,
     policy,
     roleAssignments: assignments,
-    qualificationTarget,
+    qualificationTarget: target,
     authorizationScope: storedDecision.request?.authorizationScope
   });
   if (recomputed.allowed !== true || recomputed.decisionHash !== storedDecision.decisionHash) {
@@ -290,13 +381,79 @@ function normalizeDecisionPayload(record) {
   }
   normalizeReasonCodes(record.semanticPayload.reasonCodes ?? [], { required: disposition === 'PROHIBIT_USE' });
   return deepFreeze({
-    qualificationTarget: canonicalObject(record.semanticPayload.qualificationTarget, 'qualificationTarget'),
+    qualificationTarget: normalizeScientificUseTarget(record.semanticPayload.qualificationTarget),
     disposition,
     limitations: canonicalObjectList(record.semanticPayload.limitations ?? [], 'limitations'),
     effectModifiers: canonicalObjectList(record.semanticPayload.effectModifiers ?? [], 'effectModifiers'),
     semanticPreconditions: canonicalObjectList(record.semanticPayload.semanticPreconditions ?? [], 'semanticPreconditions'),
     transportConstraints: canonicalObjectList(record.semanticPayload.transportConstraints ?? [], 'transportConstraints')
   });
+}
+
+function decisionsForPair(ledger, pair) {
+  const snapshot = ledger.exportSnapshot();
+  return snapshot.records.filter((record) =>
+    record.ref.kind === 'ScientificQualificationDecision'
+      && sameAuthorityRef(record.semanticPayload?.claimRef, pair.claim.ref)
+      && sameAuthorityRef(record.semanticPayload?.sourceContextRef, pair.sourceContext.ref));
+}
+
+function activeDecisionsForTarget(ledger, pair, target) {
+  const key = targetKey(target);
+  const decisions = decisionsForPair(ledger, pair)
+    .filter((record) => targetKey(normalizeDecisionPayload(record).qualificationTarget) === key);
+  const superseded = new Set();
+
+  for (const decision of decisions) {
+    const predecessorRef = decision.semanticPayload.supersedesDecisionRef;
+    if (!predecessorRef) continue;
+    const predecessor = resolveKind(
+      ledger,
+      predecessorRef,
+      'ScientificQualificationDecision',
+      'SUPERSEDED_QUALIFICATION_DECISION_REQUIRED'
+    );
+    if (!sameAuthorityRef(predecessor.semanticPayload.claimRef, pair.claim.ref)
+      || !sameAuthorityRef(predecessor.semanticPayload.sourceContextRef, pair.sourceContext.ref)
+      || targetKey(predecessor.semanticPayload.qualificationTarget) !== key) {
+      throw new ScientificQualificationError('INVALID_QUALIFICATION_SUPERSESSION', 'qualification supersession crosses Claim/SourceContext/use target boundary');
+    }
+    superseded.add(exactRefKey(predecessor.ref));
+  }
+
+  return deepFreeze(decisions.filter((decision) => !superseded.has(exactRefKey(decision.ref))));
+}
+
+function assertActiveDecisionForPublication(ledger, pair, decision) {
+  const target = normalizeScientificUseTarget(decision.semanticPayload.qualificationTarget);
+  const active = activeDecisionsForTarget(ledger, pair, target);
+  if (active.length !== 1) {
+    throw new ScientificQualificationError(
+      'UNRESOLVED_QUALIFICATION_DECISION_CONFLICT',
+      `scientific use ${target.use} has ${active.length} active qualification decisions; QualifiedKnowledge cannot choose a convenient branch`
+    );
+  }
+  if (!sameAuthorityRef(active[0].ref, decision.ref)) {
+    throw new ScientificQualificationError('STALE_QUALIFICATION_DECISION', `scientific use ${target.use} decision is superseded and cannot mint new QualifiedKnowledge`);
+  }
+}
+
+function assertDecisionPublicationAudit(ledger, decision, authorization, pair) {
+  const principal = decision.semanticPayload.approverPrincipal;
+  const directEvents = ledger.auditFor(decision.ref).filter((event) => sameAuthorityRef(event.objectRef, decision.ref));
+  const requiredRefs = [
+    pair.claim.ref,
+    pair.sourceContext.ref,
+    authorization.authAudit.ref,
+    authorization.policy.ref
+  ];
+  const valid = directEvents.some((event) =>
+    event.actor?.id === principal.principalId
+      && event.actor?.type === principal.type
+      && requiredRefs.every((ref) => includesExactRef(event.inputRefs, ref)));
+  if (!valid) {
+    throw new ScientificQualificationError('QUALIFICATION_DECISION_AUDIT_INVALID', 'qualification decision lacks direct approver audit binding exact Claim/SourceContext/authorization/policy');
+  }
 }
 
 function sortedDecisionRefs(records) {
@@ -321,8 +478,10 @@ export class ScientificQualificationService {
 
   constructor({ ledger }) {
     if (!ledger || typeof ledger.publish !== 'function' || typeof ledger.resolve !== 'function'
-      || typeof ledger.addLineage !== 'function' || typeof ledger.lineageFor !== 'function') {
-      throw new ScientificQualificationError('INVALID_LEDGER', 'ScientificQualificationService requires shared AuthorityLedger');
+      || typeof ledger.addLineage !== 'function' || typeof ledger.lineageFor !== 'function'
+      || typeof ledger.listVersions !== 'function' || typeof ledger.exportSnapshot !== 'function'
+      || typeof ledger.auditFor !== 'function') {
+      throw new ScientificQualificationError('INVALID_LEDGER', 'ScientificQualificationService requires shared replayable AuthorityLedger');
     }
     this.#ledger = ledger;
   }
@@ -349,7 +508,7 @@ export class ScientificQualificationService {
     if (!DISPOSITION_SET.has(normalizedDisposition)) {
       throw new ScientificQualificationError('INVALID_QUALIFICATION_DISPOSITION', `unsupported disposition ${normalizedDisposition}`);
     }
-    const target = canonicalObject(qualificationTarget, 'qualificationTarget');
+    const target = normalizeScientificUseTarget(qualificationTarget);
     const pair = assertSourceFaithfulAuthorityPair({ ledger: this.#ledger, claimRef, sourceContextRef });
     const authorization = assertQualificationAuthorization({
       ledger: this.#ledger,
@@ -360,9 +519,30 @@ export class ScientificQualificationService {
       audit
     });
     const normalizedReasons = normalizeReasonCodes(reasonCodes, { required: normalizedDisposition === 'PROHIBIT_USE' });
+
+    const existingIdentity = hasExactIdentity(this.#ledger, 'ScientificQualificationDecision', decisionLogicalId, decisionVersion);
     let supersededDecision;
-    if (supersedesDecisionRef) {
+    if (!existingIdentity) {
+      const active = activeDecisionsForTarget(this.#ledger, pair, target);
+      if (active.length > 1) {
+        throw new ScientificQualificationError('UNRESOLVED_QUALIFICATION_DECISION_CONFLICT', `scientific use ${target.use} already has multiple active decisions`);
+      }
+      if (active.length === 1) {
+        if (!supersedesDecisionRef || !sameAuthorityRef(supersedesDecisionRef, active[0].ref)) {
+          throw new ScientificQualificationError(
+            'ACTIVE_QUALIFICATION_DECISION_EXISTS',
+            `scientific use ${target.use} already has an active decision; a new judgment must explicitly supersede it`
+          );
+        }
+        supersededDecision = active[0];
+      } else if (supersedesDecisionRef) {
+        throw new ScientificQualificationError('INVALID_QUALIFICATION_SUPERSESSION', 'no active qualification decision exists to supersede for this use target');
+      }
+    } else if (supersedesDecisionRef) {
       supersededDecision = resolveKind(this.#ledger, supersedesDecisionRef, 'ScientificQualificationDecision', 'SUPERSEDED_QUALIFICATION_DECISION_REQUIRED');
+    }
+
+    if (supersededDecision) {
       const previous = normalizeDecisionPayload(supersededDecision);
       if (!sameAuthorityRef(supersededDecision.semanticPayload.claimRef, pair.claim.ref)
         || !sameAuthorityRef(supersededDecision.semanticPayload.sourceContextRef, pair.sourceContext.ref)
@@ -441,6 +621,12 @@ export class ScientificQualificationService {
       claimRef: first.semanticPayload.claimRef,
       sourceContextRef: first.semanticPayload.sourceContextRef
     });
+    const existingIdentity = hasExactIdentity(
+      this.#ledger,
+      'QualifiedKnowledge',
+      qualifiedKnowledgeLogicalId,
+      qualifiedKnowledgeVersion
+    );
 
     const seenTargets = new Map();
     const allowedUses = [];
@@ -478,6 +664,8 @@ export class ScientificQualificationService {
       if (!sameAuthorityRef(authorization.policy.ref, decision.semanticPayload.qualificationPolicyRef)) {
         throw new ScientificQualificationError('INVALID_QUALIFICATION_DECISION', 'decision qualificationPolicyRef differs from exact authorization policy');
       }
+      assertDecisionPublicationAudit(this.#ledger, decision, authorization, pair);
+      if (!existingIdentity) assertActiveDecisionForPublication(this.#ledger, pair, decision);
 
       if (normalized.disposition === 'QUALIFY_USE') allowedUses.push(target);
       else forbiddenUses.push(target);
@@ -563,9 +751,12 @@ export class ScientificQualificationService {
     audit
   }) {
     const qualifiedKnowledge = resolveKind(this.#ledger, qualifiedKnowledgeRef, 'QualifiedKnowledge', 'QUALIFIED_KNOWLEDGE_REQUIRED');
-    const target = canonicalObject(qualificationTarget, 'qualificationTarget');
+    const target = normalizeScientificUseTarget(qualificationTarget);
     if (!(qualifiedKnowledge.semanticPayload.allowedUses ?? []).some((allowed) => targetKey(allowed) === targetKey(target))) {
       throw new ScientificQualificationError('QUALIFIED_USE_NOT_FOUND', 'revocation target is not an allowed use of exact QualifiedKnowledge');
+    }
+    if (this.qualifiedUseStatus({ qualifiedKnowledgeRef: qualifiedKnowledge.ref, qualificationTarget: target }) === 'REVOKED') {
+      throw new ScientificQualificationError('QUALIFIED_USE_ALREADY_REVOKED', 'exact QualifiedKnowledge use is already revoked');
     }
     const pair = assertSourceFaithfulAuthorityPair({
       ledger: this.#ledger,
@@ -620,7 +811,7 @@ export class ScientificQualificationService {
 
   qualifiedUseStatus({ qualifiedKnowledgeRef, qualificationTarget }) {
     const qualifiedKnowledge = resolveKind(this.#ledger, qualifiedKnowledgeRef, 'QualifiedKnowledge', 'QUALIFIED_KNOWLEDGE_REQUIRED');
-    const target = canonicalObject(qualificationTarget, 'qualificationTarget');
+    const target = normalizeScientificUseTarget(qualificationTarget);
     const key = targetKey(target);
     if ((qualifiedKnowledge.semanticPayload.forbiddenUses ?? []).some((item) => targetKey(item) === key)) return 'PROHIBITED';
     if (!(qualifiedKnowledge.semanticPayload.allowedUses ?? []).some((item) => targetKey(item) === key)) return 'UNQUALIFIED';
