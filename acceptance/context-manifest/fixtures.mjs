@@ -181,7 +181,10 @@ export function publishResolvedPair(ledger, {
   retainSnapshot = false,
   bytes = Buffer.from(`{"suffix":"${suffix}","vwc":"0.33"}`, 'utf8'),
   snapshotStore = new ExactContextSnapshotStore(),
-  resolvedAt = '2026-08-16T02:03:00Z'
+  resolvedAt = '2026-08-16T02:03:00Z',
+  referenceVersion = '1',
+  datumVersion = '1',
+  receiptVersion = '1'
 } = {}) {
   const contentHash = providerResponseContentHash(bytes);
   const referenceId = `cr-${suffix}`;
@@ -195,7 +198,7 @@ export function publishResolvedPair(ledger, {
   const reference = publishAuthorizedContextReference({
     ledger,
     logicalId: referenceId,
-    version: '1',
+    version: referenceVersion,
     target: { organizationId: 'org-a', tenantId: 'tenant-a' },
     reference: {
       contractVersion: AUTHORIZED_CONTEXT_REFERENCE_CONTRACT_VERSION,
@@ -221,12 +224,12 @@ export function publishResolvedPair(ledger, {
     value: { type: 'DECIMAL', decimal: '0.33' },
     provenanceClass: 'EXTERNAL_PROVIDER',
     source: { providerId: 'customer-context-api', sourceRef: locator, contentHash }
-  }));
+  }), principal, datumVersion);
   const { recorded: receiptAuth } = writeAuthorization(ledger, receiptId, 'RESOLVED_CONTEXT_DATUM_RECEIPT');
   const receipt = publishResolvedContextDatumReceipt({
     ledger,
     logicalId: receiptId,
-    version: '1',
+    version: receiptVersion,
     referenceRef: reference.ref,
     normalizedContextDatumRef: datum.ref,
     providerResponseBytes: bytes,
