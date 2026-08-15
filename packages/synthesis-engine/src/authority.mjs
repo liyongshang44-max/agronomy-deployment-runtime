@@ -89,7 +89,7 @@ function assertDirectMethodAudit(ledger, method, approval) {
   }
 }
 
-export function validateDerivedKnowledgeAuthority({ ledger, derivedKnowledgeRef, requiredUseTarget = null }) {
+export function validateDerivedKnowledgeAuthority({ ledger, derivedKnowledgeRef, requiredUseTarget = null, allowHistorical = false }) {
   if (!ledger || typeof ledger.resolve !== 'function' || typeof ledger.auditFor !== 'function' || typeof ledger.lineageFor !== 'function') {
     throw new DerivedAuthorityValidationError('INVALID_LEDGER', 'replayable AuthorityLedger is required');
   }
@@ -151,7 +151,8 @@ export function validateDerivedKnowledgeAuthority({ ledger, derivedKnowledgeRef,
   const validatedInputs = payload.inputQualifiedKnowledgeRefs.map((ref) => validateQualifiedKnowledgeAuthority({
     ledger,
     qualifiedKnowledgeRef: ref,
-    requiredUseTarget: useTarget
+    requiredUseTarget: useTarget,
+    allowHistorical
   }));
   const ownership = validatedInputs[0]?.knowledge.semanticPayload.ownership;
   if (!ownership || !validatedInputs.every((input) => sameOwnership(input.knowledge.semanticPayload.ownership, ownership))) {
