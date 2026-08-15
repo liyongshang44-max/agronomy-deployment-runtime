@@ -1,0 +1,287 @@
+import { cloneCanonicalValue, deepFreeze, semanticHash } from '../../canonicalization/src/index.mjs';
+import { assertAuthorityRef, sameAuthorityRef } from '../../contracts/src/authority.mjs';
+import { createPrincipal } from '../../authorization/src/index.mjs';
+
+export const DECISION_PROBLEM_CONTRACT_VERSION = 'adr.decision-problem.v1';
+export const DECISION_AUTHORITY_MODES = deepFreeze(['ADR_POLICY', 'EXTERNAL_POLICY', 'RUNTIME_ONLY']);
+
+const AUTHORITY_MODE_SET = new Set(DECISION_AUTHORITY_MODES);
+const TARGET_KEYS = new Set(['organizationId', 'tenantId', 'farmId', 'fieldId', 'seasonId', 'zoneId']);
+const PROBLEM_KEYS = new Set([
+  'contractVersion',
+  'decisionType',
+  'targetRef',
+  'logicalTime',
+  'decisionHorizon',
+  'objective',
+  'actionSpace',
+  'constraints',
+  'usePurpose',
+  'useClass',
+  'decisionAuthorityMode',
+  'decisionDeadline'
+]);
+
+export class DecisionProblemError extends Error {
+  constructor(code, message) {
+    super(message);
+    this.name = 'DecisionProblemError';
+    this.code = code;
+  }
+}
+
+function requiredText(value, name) {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new DecisionProblemError('INVALID_DECISION_PROBLEM_INPUT', `${name} must be a non-empty string`);
+  }
+  return value.trim();
+}
+
+function normalizeTimestamp(value, name) {
+  const text = requiredText(value, name);
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new DecisionProblemError('INVALID_DECISION_PROBLEM_TIME', `${name} must be a valid timestamp`);
+  }
+  return parsed.toISOString();
+}
+
+function exactObject(value, name, allowedKeys) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new DecisionProblemError('INVALID_DECISION_PROBLEM_INPUT', `${name} must be an object`);
+  }
+  for (const key of Object.keys(value)) {
+    if (!allowedKeys.has(key)) {
+      throw new DecisionProblemError('INVALID_DECISION_PROBLEM_FIELD', `${name}.${key} is not part of ${DECISION_PROBLEM_CONTRACT_VERSION}`);
+    }
+  }
+}
+
+function canonicalObject(value, name) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new DecisionProblemError('INVALID_DECISION_PROBLEM_INPUT', `${name} must be an object`);
+  }
+  const normalized = cloneCanonicalValue(value);
+  if (Object.keys(normalized).length === 0) {
+    throw new DecisionProblemError('INVALID_DECISION_PROBLEM_INPUT', `${name} cannot be empty`);
+  }
+  return deepFreeze(normalized);
+}
+
+function normalizeTargetRef(value) {
+  exactObject(value, 'targetRef', TARGET_KEYS);
+  const target = {
+    organizationId: requiredText(value.organizationId, 'targetRef.organizationId'),
+    ...(value.tenantId ? { tenantId: requiredText(value.tenantId, 'targetRef.tenantId') } : {}),
+    ...(value.farmId ? { farmId: requiredText(value.farmId, 'targetRef.farmId') } : {}),
+    ...(value.fieldId ? { fieldId: requiredText(value.fieldId, 'targetRef.fieldId') } : {}),
+    ...(value.seasonId ? { seasonId: requiredText(value.seasonId, 'targetRef.seasonId') } : {}),
+    ...(value.zoneId ? { zoneId: requiredText(value.zoneId, 'targetRef.zoneId') } : {})
+  };
+  return deepFreeze(target);
+}
+
+function normalizeHorizon(value) {
+  exactObject(value, 'decisionHorizon', new Set(['duration']));
+  const duration = requiredText(value.duration, 'decisionHorizon.duration');
+  if (!/^P(?=.*\d)[0-9YMWDTHS.]+$/.test(duration)) {
+    throw new DecisionProblemError('INVALID_DECISION_HORIZON', 'decisionHorizon.duration must use an ISO-8601 duration form');
+  }
+  return deepFreeze({ duration });
+}
+
+function normalizeObjective(value) {
+  exactObject(value, 'objective', new Set(['code']));
+  return deepFreeze({ code: requiredText(value.code, 'objective.code') });
+}
+
+function normalizeActionSpace(value) {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new DecisionProblemError('INVALID_DECISION_ACTION_SPACE', 'actionSpace must be a non-empty array of action codes');
+  }
+  const actions = value.map((item, index) => requiredText(item, `actionSpace[${index}]`));
+  const unique = [...new Set(actions)];
+  if (unique.length !== actions.length) {
+    throw new DecisionProblemError('DUPLICATE_DECISION_ACTION', 'actionSpace cannot contain duplicate action codes');
+  }
+  return deepFreeze(unique.sort());
+}
+
+function normalizeConstraints(value = []) {
+  if (!Array.isArray(value)) {
+    throw new DecisionProblemError('INVALID_DECISION_CONSTRAINTS', 'constraints must be an array');
+  }
+  const keyed = value.map((constraint, index) => {
+    const normalized = canonicalObject(constraint, `constraints[${index}]`);
+    return [semanticHash('DecisionProblemConstraint', normalized), normalized];
+  });
+  const hashes = keyed.map(([hash]) => hash);
+  if (new Set(hashes).size !== hashes.length) {
+    throw new DecisionProblemError('DUPLICATE_DECISION_CONSTRAINT', 'constraints cannot contain duplicate canonical constraints');
+  }
+  keyed.sort(([left], [right]) => left.localeCompare(right));
+  return deepFreeze(keyed.map(([, constraint]) => constraint));
+}
+
+function assertNoUnknownProblemFields(problem) {
+  if (!problem || typeof problem !== 'object' || Array.isArray(problem)) {
+    throw new DecisionProblemError('INVALID_DECISION_PROBLEM_INPUT', 'problem must be an object');
+  }
+  for (const key of Object.keys(problem)) {
+    if (!PROBLEM_KEYS.has(key)) {
+      throw new DecisionProblemError(
+        'INVALID_DECISION_PROBLEM_FIELD',
+        `${key} is not part of ${DECISION_PROBLEM_CONTRACT_VERSION}; DecisionProblem cannot carry agronomic conclusions or runtime results`
+      );
+    }
+  }
+}
+
+export function normalizeDecisionProblem(problem) {
+  assertNoUnknownProblemFields(problem);
+  const contractVersion = requiredText(problem.contractVersion, 'contractVersion');
+  if (contractVersion !== DECISION_PROBLEM_CONTRACT_VERSION) {
+    throw new DecisionProblemError('UNSUPPORTED_DECISION_PROBLEM_CONTRACT', `unsupported contractVersion ${contractVersion}`);
+  }
+  const logicalTime = normalizeTimestamp(problem.logicalTime, 'logicalTime');
+  const decisionDeadline = normalizeTimestamp(problem.decisionDeadline, 'decisionDeadline');
+  if (new Date(decisionDeadline).getTime() < new Date(logicalTime).getTime()) {
+    throw new DecisionProblemError('DECISION_DEADLINE_BEFORE_LOGICAL_TIME', 'decisionDeadline cannot precede logicalTime');
+  }
+  const mode = requiredText(problem.decisionAuthorityMode, 'decisionAuthorityMode');
+  if (!AUTHORITY_MODE_SET.has(mode)) {
+    throw new DecisionProblemError('INVALID_DECISION_AUTHORITY_MODE', `unsupported decisionAuthorityMode ${mode}`);
+  }
+  return deepFreeze({
+    contractVersion,
+    authorityClass: 'DECISION_SCOPE',
+    decisionType: requiredText(problem.decisionType, 'decisionType'),
+    targetRef: normalizeTargetRef(problem.targetRef),
+    logicalTime,
+    decisionHorizon: normalizeHorizon(problem.decisionHorizon),
+    objective: normalizeObjective(problem.objective),
+    actionSpace: normalizeActionSpace(problem.actionSpace),
+    constraints: normalizeConstraints(problem.constraints),
+    usePurpose: requiredText(problem.usePurpose, 'usePurpose'),
+    useClass: requiredText(problem.useClass, 'useClass'),
+    decisionAuthorityMode: mode,
+    decisionDeadline
+  });
+}
+
+function principalOwnsTargetScope(principal, targetRef) {
+  return principal.organizationId === targetRef.organizationId
+    && (principal.tenantId ?? null) === (targetRef.tenantId ?? null);
+}
+
+function assertAuditActor(audit, principal) {
+  if (!audit || typeof audit !== 'object' || !audit.actor) {
+    throw new DecisionProblemError('DECISION_PROBLEM_AUDIT_REQUIRED', 'DecisionProblem publication requires explicit audit metadata');
+  }
+  if (audit.actor.id !== principal.principalId || audit.actor.type !== principal.type) {
+    throw new DecisionProblemError('DECISION_PROBLEM_AUDIT_ACTOR_MISMATCH', 'audit actor must be the exact DecisionProblem creator principal');
+  }
+}
+
+export function publishDecisionProblem({ ledger, logicalId, version, problem, principal, audit }) {
+  if (!ledger || typeof ledger.publish !== 'function') {
+    throw new DecisionProblemError('INVALID_LEDGER', 'publishDecisionProblem requires an AuthorityLedger');
+  }
+  const normalizedPrincipal = createPrincipal(principal);
+  const semanticPayload = normalizeDecisionProblem(problem);
+  if (!principalOwnsTargetScope(normalizedPrincipal, semanticPayload.targetRef)) {
+    throw new DecisionProblemError(
+      'DECISION_PROBLEM_TARGET_SCOPE_DENIED',
+      'DecisionProblem creator organization/tenant must exactly match the target organization/tenant under A01'
+    );
+  }
+  assertAuditActor(audit, normalizedPrincipal);
+  return ledger.publish({
+    kind: 'DecisionProblem',
+    logicalId: requiredText(logicalId, 'logicalId'),
+    version: requiredText(version, 'version'),
+    semanticPayload,
+    audit: {
+      ...audit,
+      action: 'PUBLISH_DECISION_PROBLEM',
+      details: {
+        ...(audit.details ?? {}),
+        creationPrincipal: normalizedPrincipal,
+        targetScope: semanticPayload.targetRef,
+        authorityClass: 'DECISION_SCOPE'
+      }
+    }
+  });
+}
+
+export function validateDecisionProblemAuthority({ ledger, decisionProblemRef }) {
+  if (!ledger || typeof ledger.resolve !== 'function' || typeof ledger.auditFor !== 'function') {
+    throw new DecisionProblemError('INVALID_LEDGER', 'validateDecisionProblemAuthority requires a replayable AuthorityLedger');
+  }
+  const ref = assertAuthorityRef(decisionProblemRef);
+  const record = ledger.resolve(ref);
+  if (record.ref.kind !== 'DecisionProblem') {
+    throw new DecisionProblemError('DECISION_PROBLEM_REQUIRED', `expected DecisionProblem, received ${record.ref.kind}`);
+  }
+  const normalized = normalizeDecisionProblem({
+    contractVersion: record.semanticPayload.contractVersion,
+    decisionType: record.semanticPayload.decisionType,
+    targetRef: record.semanticPayload.targetRef,
+    logicalTime: record.semanticPayload.logicalTime,
+    decisionHorizon: record.semanticPayload.decisionHorizon,
+    objective: record.semanticPayload.objective,
+    actionSpace: record.semanticPayload.actionSpace,
+    constraints: record.semanticPayload.constraints,
+    usePurpose: record.semanticPayload.usePurpose,
+    useClass: record.semanticPayload.useClass,
+    decisionAuthorityMode: record.semanticPayload.decisionAuthorityMode,
+    decisionDeadline: record.semanticPayload.decisionDeadline
+  });
+  if (record.semanticPayload.authorityClass !== 'DECISION_SCOPE'
+    || semanticHash('DecisionProblem', normalized) !== record.ref.semanticHash) {
+    throw new DecisionProblemError('DECISION_PROBLEM_SEMANTICS_INVALID', 'stored DecisionProblem does not match the frozen A01 semantic contract');
+  }
+
+  const directAudits = ledger.auditFor(record.ref).filter((event) => sameAuthorityRef(event.objectRef, record.ref));
+  const validAudit = directAudits.some((event) => {
+    if (event.action !== 'PUBLISH_DECISION_PROBLEM' || !event.details?.creationPrincipal) return false;
+    try {
+      const creator = createPrincipal(event.details.creationPrincipal);
+      return event.actor?.id === creator.principalId
+        && event.actor?.type === creator.type
+        && principalOwnsTargetScope(creator, normalized.targetRef)
+        && semanticHash('ADR-A01-TARGET-AUDIT', event.details.targetScope) === semanticHash('ADR-A01-TARGET-AUDIT', normalized.targetRef);
+    } catch {
+      return false;
+    }
+  });
+  if (!validAudit) {
+    throw new DecisionProblemError('DECISION_PROBLEM_AUDIT_INVALID', 'DecisionProblem lacks direct replayable creator/target-scope audit authority');
+  }
+  return deepFreeze({ record, semanticPayload: normalized });
+}
+
+export function assertDecisionResultAuthority({ ledger, decisionProblemRef, authorityMode }) {
+  const { record, semanticPayload } = validateDecisionProblemAuthority({ ledger, decisionProblemRef });
+  const requested = requiredText(authorityMode, 'authorityMode');
+  if (!['ADR_POLICY', 'EXTERNAL_POLICY'].includes(requested)) {
+    throw new DecisionProblemError('INVALID_DECISION_RESULT_AUTHORITY', 'final decision authority must be ADR_POLICY or EXTERNAL_POLICY');
+  }
+  if (semanticPayload.decisionAuthorityMode === 'RUNTIME_ONLY') {
+    throw new DecisionProblemError(
+      'DECISION_RESULT_FORBIDDEN_RUNTIME_ONLY',
+      'RUNTIME_ONLY permits ADR to construct a legal runtime world but forbids DecisionResult authority'
+    );
+  }
+  if (semanticPayload.decisionAuthorityMode !== requested) {
+    throw new DecisionProblemError(
+      'DECISION_RESULT_AUTHORITY_MISMATCH',
+      `DecisionProblem requires ${semanticPayload.decisionAuthorityMode}, received ${requested}`
+    );
+  }
+  return deepFreeze({
+    allowed: true,
+    decisionProblemRef: record.ref,
+    decisionAuthorityMode: requested
+  });
+}
