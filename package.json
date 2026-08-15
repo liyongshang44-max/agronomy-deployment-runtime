@@ -11,7 +11,7 @@
     "check:constitution": "node scripts/constitution/check.mjs",
     "test:constitution": "node acceptance/constitution/run.mjs",
     "test:authority": "node acceptance/authority/run.mjs",
-    "test:authorization": "node acceptance/authorization/run.mjs && node acceptance/authorization/integrity.mjs && node acceptance/authorization/scoped.mjs && node acceptance/authorization/context-write.mjs",
+    "test:authorization": "node acceptance/authorization/run.mjs && node acceptance/authorization/integrity.mjs && node acceptance/authorization/scoped.mjs && node acceptance/authorization/context-write.mjs && node acceptance/authorization/context-write-a03.mjs",
     "test:source": "node acceptance/source-materialization/run.mjs",
     "test:compiler": "node acceptance/scientific-compiler/run.mjs",
     "test:source-faithful": "node acceptance/source-faithful/run.mjs && node acceptance/source-faithful/integrity.mjs",
@@ -20,7 +20,7 @@
     "test:knowledge-release": "node acceptance/knowledge-release/run.mjs && node acceptance/knowledge-release/integrity.mjs && node acceptance/knowledge-release/entitlement.mjs && node acceptance/knowledge-release/conflict-coverage.mjs",
     "test:decision-problem": "node acceptance/decision-problem/run.mjs && node acceptance/decision-problem/integrity.mjs",
     "test:context-datum": "node acceptance/context-datum/run.mjs && node acceptance/context-datum/integrity.mjs",
-    "test:context-reference": "node acceptance/context-reference/run.mjs && node acceptance/context-reference/integrity.mjs",
+    "test:context-reference": "node acceptance/context-reference/run.mjs && node acceptance/context-reference/integrity.mjs && node acceptance/context-reference/hardening.mjs",
     "test": "npm run test:constitution && npm run test:authority && npm run test:authorization && npm run test:source && npm run test:compiler && npm run test:source-faithful && npm run test:qualification && npm run test:derived-knowledge && npm run test:knowledge-release && npm run test:decision-problem && npm run test:context-datum && npm run test:context-reference"
   }
 }
