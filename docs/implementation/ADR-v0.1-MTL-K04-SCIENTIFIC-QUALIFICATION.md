@@ -40,7 +40,15 @@ SOURCE-FAITHFUL ≠ QUALIFIED ≠ APPLICABLE ≠ RUNTIME_ELIGIBLE ≠ DECISION
 
 ## 2. Qualification granularity
 
-A `ScientificQualificationDecision` is scoped to one exact `qualificationTarget`.
+A `ScientificQualificationDecision` is scoped to one exact scientific-use target.
+
+K04 v1 freezes that target shape narrowly as:
+
+```yaml
+use: CORN_IRRIGATION_APPLICABILITY
+```
+
+No arbitrary target fields may be added to silently broaden or narrow authority. Scientific context limitations belong in explicit preconditions, limitations, effect modifiers or transport constraints, not in ad-hoc target keys.
 
 Frozen K04 dispositions:
 
@@ -79,6 +87,7 @@ Before qualification it closes the exact K03 chain through:
 Claim
 + SourceContext
 → ACCEPT_SOURCE_FAITHFUL SourceFaithfulReviewDecision
+→ exact K03 reviewer AuthorizationDecisionAudit
 → ClaimCandidate + SourceContextCandidate
 → ScientificCompilationResult
 → ScientificCompilerDefinition (CANDIDATE_ONLY)
@@ -86,7 +95,9 @@ Claim
 → Source
 ```
 
-It also reconstructs final SourceContext dimensions from the candidate vocabulary using the frozen K03 semantic contract. A forged final SourceContext that cannot be reconstructed source-faithfully is not qualification-eligible.
+The K03 authorization is recomputed from exact F03 policy/role authority; an `ACCEPT_SOURCE_FAITHFUL` record with forged or missing reviewer authorization is not qualification-eligible.
+
+K04 also reconstructs final SourceContext dimensions from the candidate vocabulary using the frozen K03 semantic contract. A forged final SourceContext that cannot be reconstructed source-faithfully is not qualification-eligible.
 
 ---
 
@@ -149,6 +160,8 @@ Authentication/SSO remains outside K04; authorization authority does not.
 
 Constraints/effect modifiers/preconditions/transport constraints retain the exact qualification-decision ref that introduced them.
 
+These payloads are **qualified scientific payloads, not automatically executable runtime predicates**. K04 permits canonical governed objects to preserve scientific judgment, but no later Applicability/Runtime component may silently interpret an arbitrary field. A later typed semantic capability must explicitly support a constraint shape; otherwise it remains an unsupported limitation/information requirement rather than becoming executable authority by convention.
+
 `QualifiedKnowledge` deliberately contains no:
 
 ```text
@@ -162,9 +175,54 @@ field TargetContext
 
 Qualification therefore cannot launder scientific-use authority into downstream runtime/action authority.
 
+Omitting a different use target from one QualifiedKnowledge snapshot does not grant it. Absence means `UNQUALIFIED`, never implicitly allowed.
+
 ---
 
-## 6. Requalification and revocation
+## 6. Competing judgments and branch convergence
+
+K04 allows multiple independently authorized scientific judgments for the same exact:
+
+```text
+Claim + SourceContext + use
+```
+
+to coexist temporarily. This is deliberate: disagreement must not be suppressed at write time.
+
+However, while more than one active branch exists:
+
+```text
+QualifiedKnowledge publication for that use → FAIL
+```
+
+The caller may not cherry-pick the convenient `QUALIFY_USE` branch and hide an active `PROHIBIT_USE` branch.
+
+Conflict resolution is explicit multi-parent supersession:
+
+```text
+Decision A  QUALIFY_USE ─┐
+                         ├─→ Decision C
+Decision B  PROHIBIT_USE ┘    supersedesDecisionRefs = [A, B]
+```
+
+For a new resolving judgment, the supplied `supersedesDecisionRefs` must equal the **complete currently-active branch set** for that exact Claim/SourceContext/use target. Superseding only one branch while silently leaving another active is rejected.
+
+A normal one-parent requalification is simply the same mechanism with an array of length one.
+
+Thus:
+
+```text
+independent disagreement is representable
+→ unresolved disagreement blocks QualifiedKnowledge
+→ explicit adjudication closes every active branch
+→ one new active scientific-use judgment remains
+```
+
+This prevents both silent conflict laundering and an unrecoverable authority fork.
+
+---
+
+## 7. Requalification and revocation
 
 Authority objects are immutable.
 
@@ -172,8 +230,7 @@ Changed scientific judgment produces a new qualification decision and, where app
 
 ```text
 ScientificQualificationDecision v2
-  supersedes
-ScientificQualificationDecision v1
+  supersedesDecisionRefs = [v1]
 
 QualifiedKnowledge v2
   requalifies
@@ -182,9 +239,26 @@ QualifiedKnowledge v1
 
 Historical objects remain resolvable.
 
-A use-specific revocation produces a separate immutable `ScientificQualificationRevocation` with explicit `revokes` lineage to the historical QualifiedKnowledge. Revocation does not mutate the old object.
+A use-specific revocation is not implemented as a cosmetic flag on one QualifiedKnowledge snapshot. It creates:
 
-Current use status is therefore one of:
+```text
+active QUALIFY_USE decision
+        ↓ superseded by
+PROHIBIT_USE decision
+        +
+ScientificQualificationRevocation audit authority
+```
+
+The revocation record retains the exact historical QualifiedKnowledge and the exact allow/prohibit decision transition. This matters because otherwise a caller could revoke `QualifiedKnowledge v1` and immediately mint `QualifiedKnowledge v2` from the still-active old allow decision.
+
+After revocation:
+
+- the historical QualifiedKnowledge remains immutable and resolves exactly;
+- its current use status is `REVOKED`;
+- the old allow decision is stale and cannot mint another QualifiedKnowledge;
+- later requalification requires a new authorized `QUALIFY_USE` decision that supersedes the active prohibition decision.
+
+Current snapshot/lifecycle status is one of:
 
 ```text
 QUALIFIED
@@ -195,9 +269,11 @@ UNQUALIFIED
 
 These are scientific-use lifecycle states only. They are not applicability or runtime statuses.
 
+Revocation currently uses the same exact `KNOWLEDGE_QUALIFY` scientific authority because it is a qualification-lifecycle judgment; K04 does not invent a new frozen IAM permission.
+
 ---
 
-## 7. Merge-blocking negative acceptance
+## 8. Merge-blocking negative acceptance
 
 K04 must fail when:
 
@@ -208,28 +284,38 @@ K04 must fail when:
 5. policy qualification scope excludes the target use;
 6. an AuthorizationDecisionAudit cannot be reproduced from exact F03 authority;
 7. a forged Claim/SourceContext pair lacks the exact accepted K03 upstream chain;
-8. prohibition-only decisions attempt to mint `QualifiedKnowledge`;
-9. conflicting decisions for the same use target are hidden in one QualifiedKnowledge;
-10. a published QualifiedKnowledge version is semantically rewritten;
-11. revocation targets an unqualified use;
-12. denied authorization attempts a revocation.
+8. a forged K03 accepted review lacks reproducible reviewer authorization;
+9. arbitrary scientific-use target fields attempt to alter authority shape;
+10. prohibition-only decisions attempt to mint `QualifiedKnowledge`;
+11. unresolved competing active decisions are cherry-picked into QualifiedKnowledge;
+12. a resolving decision supersedes only a subset of the active conflict branches;
+13. a superseded/stale decision attempts to mint new QualifiedKnowledge;
+14. a directly forged qualification decision lacks exact approver publication audit;
+15. a published QualifiedKnowledge version is semantically rewritten;
+16. revocation targets an unqualified use;
+17. denied authorization attempts a revocation;
+18. a revoked allow decision is reused to resurrect scientific-use authority.
 
 ---
 
-## 8. Explicit nonclaims
+## 9. Explicit nonclaims
 
 K04 does **not** establish:
 
 - `DerivedKnowledge` / `DerivedKnowledgeContext`;
-- `KnowledgeConflict`;
+- `KnowledgeConflict` across different QualifiedKnowledge assertions (`MTL-K05` owns that domain);
 - `KnowledgeRelease`;
 - Source→Target transport/applicability;
 - TargetContext / ContextManifest;
+- executable semantics for arbitrary limitation/effect-modifier/precondition/transport payloads;
 - RuntimeProfile / Deployment;
 - RuntimeEligibility;
 - DecisionResult;
 - scientific truth or causal truth;
-- deployment entitlement merely because a scientific use is qualified.
+- deployment entitlement merely because a scientific use is qualified;
+- production authentication/SSO/MFA.
+
+K04's same-Claim/use branch disagreement is a qualification-lifecycle seam, not the broader `KnowledgeConflict` capability defined for K05.
 
 Next only after K04 is independently reviewed and exact-head acceptance is green:
 
