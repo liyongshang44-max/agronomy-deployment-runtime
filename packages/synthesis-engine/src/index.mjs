@@ -78,8 +78,28 @@ function predictedRef(kind, logicalId, version, semanticPayload) {
   });
 }
 
-function exactRefIn(refs, expected) {
-  return Array.isArray(refs) && refs.some((ref) => sameAuthorityRef(ref, expected));
+function containsForbiddenShortcut(value, path = 'methodSpec') {
+  if (typeof value === 'string') {
+    const normalized = value.trim().toUpperCase().replace(/[\s-]+/g, '_');
+    if (FORBIDDEN_METHOD_SHORTCUTS.has(normalized)) return { path, shortcut: normalized };
+    return null;
+  }
+  if (Array.isArray(value)) {
+    for (let index = 0; index < value.length; index += 1) {
+      const found = containsForbiddenShortcut(value[index], `${path}[${index}]`);
+      if (found) return found;
+    }
+    return null;
+  }
+  if (value && typeof value === 'object') {
+    for (const [key, child] of Object.entries(value)) {
+      const keyFound = containsForbiddenShortcut(key, `${path}.<key>`);
+      if (keyFound) return keyFound;
+      const found = containsForbiddenShortcut(child, `${path}.${key}`);
+      if (found) return found;
+    }
+  }
+  return null;
 }
 
 export function derivationMethodResourceId(logicalId) {
@@ -133,9 +153,13 @@ function assertDerivationMethodAuthority({ ledger, methodRef }) {
   if (!METHOD_TYPES.has(payload.methodType) || !CONTEXT_POLICIES.has(payload.contextPolicy)) {
     throw new SynthesisAuthorityError('DERIVATION_METHOD_INVALID', 'DerivationMethod type/context policy is invalid');
   }
-  for (const shortcut of payload.prohibitedShortcuts ?? []) {
-    if (!FORBIDDEN_METHOD_SHORTCUTS.has(shortcut)) {
-      throw new SynthesisAuthorityError('DERIVATION_METHOD_INVALID', `unknown prohibited shortcut ${shortcut}`);
+  const forbiddenInSpec = containsForbiddenShortcut(payload.methodSpec);
+  if (forbiddenInSpec) {
+    throw new SynthesisAuthorityError('FORBIDDEN_DERIVATION_SHORTCUT', `${forbiddenInSpec.shortcut} is embedded in ${forbiddenInSpec.path}`);
+  }
+  for (const required of FORBIDDEN_METHOD_SHORTCUTS) {
+    if (!(payload.prohibitedShortcuts ?? []).includes(required)) {
+      throw new SynthesisAuthorityError('DERIVATION_METHOD_INVALID', `DerivationMethod no longer prohibits ${required}`);
     }
   }
   const approval = assertScientificApproval({
@@ -192,6 +216,11 @@ export class DerivedKnowledgeService {
     if (!Number.isInteger(minimumInputs) || minimumInputs < 1) {
       throw new SynthesisAuthorityError('INVALID_DERIVATION_METHOD', 'minimumInputs must be a positive integer');
     }
+    const normalizedSpec = requiredObject(methodSpec, 'methodSpec');
+    const forbiddenInSpec = containsForbiddenShortcut(normalizedSpec);
+    if (forbiddenInSpec) {
+      throw new SynthesisAuthorityError('FORBIDDEN_DERIVATION_SHORTCUT', `${forbiddenInSpec.shortcut} is embedded in ${forbiddenInSpec.path}`);
+    }
     const normalizedShortcuts = [...new Set(prohibitedShortcuts.map((value) => requiredText(value, 'prohibitedShortcut')))].sort();
     for (const required of FORBIDDEN_METHOD_SHORTCUTS) {
       if (!normalizedShortcuts.includes(required)) {
@@ -218,7 +247,7 @@ export class DerivedKnowledgeService {
         semanticRole: requiredText(semanticRole, 'semanticRole'),
         minimumInputs,
         contextPolicy: normalizedContextPolicy,
-        methodSpec: requiredObject(methodSpec, 'methodSpec'),
+        methodSpec: normalizedSpec,
         prohibitedShortcuts: deepFreeze(normalizedShortcuts),
         ownership: normalizedOwnership,
         approverPrincipal: cloneCanonicalValue(approverPrincipal),
@@ -337,25 +366,25 @@ export class DerivedKnowledgeService {
 
     for (const input of validatedInputs) {
       this.#ledger.addLineage({
-        relation: 'DERIVED_FROM',
+        relation: 'derived_from',
         from: derivedKnowledge.ref,
         to: input.knowledge.ref,
-        details: { scientificUseTarget: firstUse, derivationMethodRef: method.ref },
+        details: { lineageRole: 'QUALIFIED_KNOWLEDGE_INPUT', scientificUseTarget: firstUse, derivationMethodRef: method.ref },
         audit: auditEvent(audit, `knowledge-lineage-${input.index}`, [method.ref, synthesisApproval.authAudit.ref])
       });
       this.#ledger.addLineage({
-        relation: 'ORIGIN_CONTEXT_FROM',
+        relation: 'derived_from',
         from: derivedContext.ref,
         to: input.sourceContext.ref,
-        details: { qualifiedKnowledgeRef: input.knowledge.ref },
+        details: { lineageRole: 'ORIGIN_SOURCE_CONTEXT', qualifiedKnowledgeRef: input.knowledge.ref },
         audit: auditEvent(audit, `context-lineage-${input.index}`, [method.ref, synthesisApproval.authAudit.ref])
       });
     }
     this.#ledger.addLineage({
-      relation: 'DERIVED_BY',
+      relation: 'derived_from',
       from: derivedKnowledge.ref,
       to: method.ref,
-      details: { contextRef: derivedContext.ref },
+      details: { lineageRole: 'DERIVATION_METHOD', contextRef: derivedContext.ref },
       audit: auditEvent(audit, 'method-lineage', [synthesisApproval.authAudit.ref])
     });
 
