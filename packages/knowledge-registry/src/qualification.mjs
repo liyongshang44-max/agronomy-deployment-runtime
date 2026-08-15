@@ -522,32 +522,19 @@ export class ScientificQualificationService {
 
     const existingIdentity = hasExactIdentity(this.#ledger, 'ScientificQualificationDecision', decisionLogicalId, decisionVersion);
     let supersededDecision;
-    if (!existingIdentity) {
-      const active = activeDecisionsForTarget(this.#ledger, pair, target);
-      if (active.length > 1) {
-        throw new ScientificQualificationError('UNRESOLVED_QUALIFICATION_DECISION_CONFLICT', `scientific use ${target.use} already has multiple active decisions`);
-      }
-      if (active.length === 1) {
-        if (!supersedesDecisionRef || !sameAuthorityRef(supersedesDecisionRef, active[0].ref)) {
-          throw new ScientificQualificationError(
-            'ACTIVE_QUALIFICATION_DECISION_EXISTS',
-            `scientific use ${target.use} already has an active decision; a new judgment must explicitly supersede it`
-          );
-        }
-        supersededDecision = active[0];
-      } else if (supersedesDecisionRef) {
-        throw new ScientificQualificationError('INVALID_QUALIFICATION_SUPERSESSION', 'no active qualification decision exists to supersede for this use target');
-      }
-    } else if (supersedesDecisionRef) {
+    if (supersedesDecisionRef) {
       supersededDecision = resolveKind(this.#ledger, supersedesDecisionRef, 'ScientificQualificationDecision', 'SUPERSEDED_QUALIFICATION_DECISION_REQUIRED');
-    }
-
-    if (supersededDecision) {
       const previous = normalizeDecisionPayload(supersededDecision);
       if (!sameAuthorityRef(supersededDecision.semanticPayload.claimRef, pair.claim.ref)
         || !sameAuthorityRef(supersededDecision.semanticPayload.sourceContextRef, pair.sourceContext.ref)
         || targetKey(previous.qualificationTarget) !== targetKey(target)) {
         throw new ScientificQualificationError('INVALID_QUALIFICATION_SUPERSESSION', 'superseded decision must concern the same Claim, SourceContext and qualification target');
+      }
+      if (!existingIdentity) {
+        const active = activeDecisionsForTarget(this.#ledger, pair, target);
+        if (!active.some((record) => sameAuthorityRef(record.ref, supersededDecision.ref))) {
+          throw new ScientificQualificationError('INVALID_QUALIFICATION_SUPERSESSION', 'only an active scientific-use decision may be explicitly superseded');
+        }
       }
     }
 
