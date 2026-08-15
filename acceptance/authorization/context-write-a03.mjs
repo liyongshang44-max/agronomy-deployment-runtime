@@ -29,11 +29,12 @@ function test(name, fn) {
   try { fn(); console.log(`PASS ${name}`); } catch (error) { console.error(`FAIL ${name}`); throw error; }
 }
 
-test('context.write frozen resource vocabulary includes A02 and both A03 authority kinds', () => {
+test('context.write current resource vocabulary preserves A02/A03 kinds and adds A04 ContextManifest', () => {
   assert.deepEqual(CONTEXT_WRITE_RESOURCE_TYPES, [
     'CONTEXT_DATUM',
     'AUTHORIZED_CONTEXT_REFERENCE',
-    'RESOLVED_CONTEXT_DATUM_RECEIPT'
+    'RESOLVED_CONTEXT_DATUM_RECEIPT',
+    'CONTEXT_MANIFEST'
   ]);
 });
 
@@ -71,11 +72,11 @@ test('resource type isolation prevents receipt grant from authorizing ContextDat
   assert(result.reasons.includes('CONTEXT_WRITE_PERMISSION_DENIED'));
 });
 
-test('unsupported context.write resource type fails closed', () => {
+test('unrecognized future context.write resource type still fails closed', () => {
   const ledger = new AuthorityLedger();
   const grant = assignment(ledger, 'CONTEXT_DATUM');
   assert.throws(
-    () => authorizeContextWrite({ principal, roleAssignments: [grant], authorizationScope: request('CONTEXT_MANIFEST', 'cm-1') }),
+    () => authorizeContextWrite({ principal, roleAssignments: [grant], authorizationScope: request('RUNTIME_BINDING', 'rb-1') }),
     (error) => error?.code === 'INVALID_CONTEXT_WRITE_RESOURCE_TYPE'
   );
 });
