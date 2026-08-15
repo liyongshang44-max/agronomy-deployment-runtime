@@ -1,0 +1,34 @@
+name: ADR Constitution
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  constitutional-boundary:
+    name: Constitutional boundary acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Report runtime
+        run: node --version
+
+      - name: Constitutional static checks
+        run: npm run build
+
+      - name: Constitutional acceptance
+        run: npm test
