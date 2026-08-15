@@ -188,6 +188,10 @@ export function validateConflictResolutionAuthority({ ledger, conflictResolution
   const conflictValidation = validateKnowledgeConflictAuthority({ ledger, knowledgeConflictRef: payload.knowledgeConflictRef });
   const conflict = conflictValidation.conflict;
   const members = conflict.semanticPayload.memberBindings.map((binding) => binding.knowledgeRef);
+  const requiredResolutionInputs = [conflict.ref];
+  if (payload.selectedKnowledgeRef) requiredResolutionInputs.push(payload.selectedKnowledgeRef);
+  if (payload.derivedKnowledgeRef) requiredResolutionInputs.push(payload.derivedKnowledgeRef);
+  if (payload.supersedesResolutionRef) requiredResolutionInputs.push(payload.supersedesResolutionRef);
   const approval = assertApproval({
     ledger,
     authAuditRef: payload.authorizationDecisionAuditRef,
@@ -196,7 +200,7 @@ export function validateConflictResolutionAuthority({ ledger, conflictResolution
     target: { use: 'KNOWLEDGE_CONFLICT_RESOLUTION' },
     ownership: conflict.semanticPayload.ownership,
     directObjectRef: resolution.ref,
-    requiredInputRefs: [conflict.ref]
+    requiredInputRefs: requiredResolutionInputs
   });
   if (!sameAuthorityRef(payload.resolutionPolicyRef, approval.policy.ref)) {
     throw new ConflictAuthorityValidationError('CONFLICT_RESOLUTION_INVALID', 'resolutionPolicyRef differs from exact authorization policy');
