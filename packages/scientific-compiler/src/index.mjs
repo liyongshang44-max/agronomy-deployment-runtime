@@ -270,6 +270,12 @@ export class ScientificCompiler {
     if (typeof extractor !== 'function') {
       throw new ScientificCompilerError('EXTRACTOR_REQUIRED', 'compileWithExtractor requires a local extractor function');
     }
+    if (extractor.constructor?.name === 'AsyncFunction' || extractor.constructor?.name === 'AsyncGeneratorFunction') {
+      throw new ScientificCompilerError(
+        'ASYNC_EXTRACTOR_NOT_SUPPORTED_IN_CORE',
+        'async extractors are rejected before invocation; external/provider workers must materialize a proposal explicitly'
+      );
+    }
     const artifact = exactSourceArtifact(this.#sourceRegistry.resolveArtifact(assertAuthorityRef(sourceArtifactRef)));
     const compilerDefinition = compilerDefinitionRecord(this.#ledger.resolve(assertAuthorityRef(compilerDefinitionRef)));
     const bytes = this.#sourceRegistry.readArtifactBytes(artifact.ref);
@@ -281,7 +287,7 @@ export class ScientificCompiler {
     if (proposal && typeof proposal.then === 'function') {
       throw new ScientificCompilerError(
         'ASYNC_EXTRACTOR_NOT_SUPPORTED_IN_CORE',
-        'core ScientificCompiler does not call async/external providers directly; external workers must materialize a proposal explicitly'
+        'core ScientificCompiler accepts only synchronous local extractor results; external workers must materialize a proposal explicitly'
       );
     }
     return this.materializeCompilationProposal({
