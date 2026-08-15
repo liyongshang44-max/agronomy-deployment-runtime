@@ -7,17 +7,25 @@ import {
   createDeterministicCompilerDefinition
 } from '../../packages/scientific-compiler/src/index.mjs';
 import {
+  authorizeKnowledgeInspection,
+  createPrincipal,
+  publishBuiltinRoleAssignment,
+  publishKnowledgeGovernancePolicy,
+  recordAuthorizationDecision
+} from '../../packages/authorization/src/index.mjs';
+import {
   SourceFaithfulReviewError,
-  SourceFaithfulReviewService
+  SourceFaithfulReviewService,
+  sourceReviewResourceId
 } from '../../packages/knowledge-registry/src/source-faithful.mjs';
 
 const TEXT = 'For maize at V10, irrigation may be considered.';
 
-function audit(eventId, actorId = 'reviewer-integrity') {
+function audit(eventId, actorId = 'reviewer-integrity', actorType = 'USER') {
   return {
     eventId,
     occurredAt: '2026-08-15T14:45:00.000Z',
-    actor: { type: 'USER', id: actorId },
+    actor: { type: actorType, id: actorId },
     details: { channel: 'k03-integrity' }
   };
 }
@@ -84,9 +92,69 @@ function setup() {
         sourceContext: wholeContextWithConfidence()
       }]
     },
-    audit: audit('evt-compilation', 'compiler-service')
+    audit: audit('evt-compilation', 'compiler-service', 'SERVICE_ACCOUNT')
   });
-  return { ledger, sourceRegistry, source, artifact, compilerDefinition, bundle, service: new SourceFaithfulReviewService({ ledger }) };
+
+  const reviewer = createPrincipal({
+    principalId: 'reviewer-integrity',
+    type: 'USER',
+    organizationId: 'org-a',
+    tenantId: 'tenant-a'
+  });
+  const roleAssignment = publishBuiltinRoleAssignment({
+    ledger,
+    logicalId: 'role.k03.integrity-reviewer',
+    version: '1',
+    principal: reviewer,
+    role: 'AGRONOMY_REVIEWER',
+    scope: { organizationId: 'org-a', tenantId: 'tenant-a' },
+    audit: audit('evt-role', 'iam-admin')
+  });
+  const policy = publishKnowledgeGovernancePolicy({
+    ledger,
+    logicalId: 'policy.k03.integrity-review',
+    version: '1',
+    resourceId: sourceReviewResourceId(source.ref),
+    ownership: source.semanticPayload.ownership,
+    visibilityPolicy: [{ principalId: reviewer.principalId }],
+    qualificationScope: [{ use: '*' }],
+    deploymentScope: [{ organizationId: 'org-a' }],
+    audit: audit('evt-policy', 'iam-admin')
+  });
+  const decision = authorizeKnowledgeInspection({
+    principal: reviewer,
+    policy,
+    roleAssignments: [roleAssignment],
+    authorizationScope: { organizationId: 'org-a', tenantId: 'tenant-a' }
+  });
+  const authorizationAudit = recordAuthorizationDecision({
+    ledger,
+    decision,
+    audit: audit('evt-auth', 'iam-engine', 'SERVICE_ACCOUNT')
+  });
+
+  return {
+    ledger,
+    sourceRegistry,
+    source,
+    artifact,
+    compilerDefinition,
+    bundle,
+    reviewer,
+    authorizationAudit,
+    service: new SourceFaithfulReviewService({ ledger })
+  };
+}
+
+function contextAdjudication() {
+  return {
+    BIOLOGICAL: [{ semanticId: 'crop.code', valueType: 'CATEGORY' }],
+    ENVIRONMENTAL: [],
+    MANAGEMENT: [],
+    OPERATIONAL: [],
+    MEASUREMENT: [],
+    JURISDICTION_ECONOMIC: []
+  };
 }
 
 function accept(env, overrides = {}) {
@@ -97,6 +165,9 @@ function accept(env, overrides = {}) {
     claimCandidateRef: env.bundle.claimCandidates[0].ref,
     sourceContextCandidateRef: env.bundle.sourceContextCandidates[0].ref,
     disposition: 'ACCEPT_SOURCE_FAITHFUL',
+    contextAdjudication: contextAdjudication(),
+    reviewPrincipal: env.reviewer,
+    authorizationDecisionAuditRef: env.authorizationAudit.ref,
     claimLogicalId: overrides.claimLogicalId ?? 'claim.k03.integrity',
     claimVersion: '1',
     sourceContextLogicalId: overrides.sourceContextLogicalId ?? 'source-context.k03.integrity',
@@ -107,11 +178,7 @@ function accept(env, overrides = {}) {
 
 function expectError(fn, ErrorType, code) {
   let caught;
-  try {
-    fn();
-  } catch (error) {
-    caught = error;
-  }
+  try { fn(); } catch (error) { caught = error; }
   assert.ok(caught instanceof ErrorType, `expected ${ErrorType.name}, got ${caught?.constructor?.name ?? 'no error'}`);
   assert.equal(caught.code, code);
 }
@@ -119,16 +186,18 @@ function expectError(fn, ErrorType, code) {
 const tests = [];
 function test(name, fn) { tests.push({ name, fn }); }
 
-test('compiler extraction confidence is not promoted into final SourceContext authority', () => {
+test('compiler extraction confidence and candidate vocabulary are not promoted into final SourceContext authority', () => {
   const env = setup();
   const candidateDimension = env.bundle.sourceContextCandidates[0].semanticPayload.contextFamilies.BIOLOGICAL.dimensions[0];
   assert.equal(candidateDimension.confidence, 0.41);
   const result = accept(env);
   const finalDimension = result.sourceContext.semanticPayload.contextFamilies.BIOLOGICAL.dimensions[0];
   assert.ok(!('confidence' in finalDimension));
-  assert.equal(finalDimension.semanticHint, candidateDimension.semanticHint);
-  assert.equal(finalDimension.valueCandidate, candidateDimension.valueCandidate);
-  assert.equal(finalDimension.supportClass, 'EXPLICIT_SOURCE');
+  assert.ok(!('semanticHint' in finalDimension));
+  assert.ok(!('valueCandidate' in finalDimension));
+  assert.ok(!('unitCandidate' in finalDimension));
+  assert.equal(finalDimension.semanticId, 'crop.code');
+  assert.deepEqual(finalDimension.value, { type: 'CATEGORY', category: 'maize' });
   assert.deepEqual(finalDimension.sourceLocator, candidateDimension.sourceLocator);
 });
 
@@ -146,13 +215,9 @@ test('completed compilation result provenance must match the selected candidate 
     kind: 'ScientificCompilationResult',
     logicalId: 'compilation.k03.forged-result',
     version: '1',
-    semanticPayload: {
-      ...env.bundle.result.semanticPayload,
-      sourceRef: otherSource.ref
-    },
+    semanticPayload: { ...env.bundle.result.semanticPayload, sourceRef: otherSource.ref },
     audit: audit('evt-forged-result', 'test-fixture')
   });
-
   expectError(() => accept(env, {
     reviewLogicalId: 'review.k03.forged-result',
     compilationResultRef: forgedResult.ref,
@@ -174,7 +239,6 @@ test('completed compilation result raw artifact content hash must match selected
     },
     audit: audit('evt-forged-content-result', 'test-fixture')
   });
-
   expectError(() => accept(env, {
     reviewLogicalId: 'review.k03.forged-content-hash',
     compilationResultRef: forgedResult.ref,
@@ -196,6 +260,5 @@ for (const { name, fn } of tests) {
     process.exitCode = 1;
   }
 }
-
 console.log(JSON.stringify({ total: tests.length, passed, failed: tests.length - passed }, null, 2));
 if (passed !== tests.length) process.exitCode = 1;
