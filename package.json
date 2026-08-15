@@ -13,6 +13,7 @@
     "test:authority": "node acceptance/authority/run.mjs",
     "test:authorization": "node acceptance/authorization/run.mjs && node acceptance/authorization/integrity.mjs",
     "test:source": "node acceptance/source-materialization/run.mjs",
-    "test": "npm run test:constitution && npm run test:authority && npm run test:authorization && npm run test:source"
+    "test:compiler": "node acceptance/scientific-compiler/run.mjs",
+    "test": "npm run test:constitution && npm run test:authority && npm run test:authorization && npm run test:source && npm run test:compiler"
   }
 }
