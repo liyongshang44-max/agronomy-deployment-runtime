@@ -1,6 +1,10 @@
 import { cloneCanonicalValue, deepFreeze, semanticHash } from '../../canonicalization/src/index.mjs';
 import { assertAuthorityRef, sameAuthorityRef } from '../../contracts/src/authority.mjs';
-import { createPrincipal } from '../../authorization/src/index.mjs';
+import {
+  authorizeDecisionProblemCreation,
+  createPrincipal,
+  samePrincipalIdentity
+} from '../../authorization/src/index.mjs';
 
 export const DECISION_PROBLEM_CONTRACT_VERSION = 'adr.decision-problem.v1';
 export const DECISION_AUTHORITY_MODES = deepFreeze(['ADR_POLICY', 'EXTERNAL_POLICY', 'RUNTIME_ONLY']);
@@ -104,15 +108,14 @@ function assertNoConclusionCarrier(value, path) {
 
 function normalizeTargetRef(value) {
   exactObject(value, 'targetRef', TARGET_KEYS);
-  const target = {
+  return deepFreeze({
     organizationId: requiredText(value.organizationId, 'targetRef.organizationId'),
     ...(value.tenantId ? { tenantId: requiredText(value.tenantId, 'targetRef.tenantId') } : {}),
     ...(value.farmId ? { farmId: requiredText(value.farmId, 'targetRef.farmId') } : {}),
     ...(value.fieldId ? { fieldId: requiredText(value.fieldId, 'targetRef.fieldId') } : {}),
     ...(value.seasonId ? { seasonId: requiredText(value.seasonId, 'targetRef.seasonId') } : {}),
     ...(value.zoneId ? { zoneId: requiredText(value.zoneId, 'targetRef.zoneId') } : {})
-  };
-  return deepFreeze(target);
+  });
 }
 
 function normalizeHorizon(value) {
@@ -223,6 +226,99 @@ function principalOwnsTargetScope(principal, targetRef) {
     && (principal.tenantId ?? null) === (targetRef.tenantId ?? null);
 }
 
+function decisionProblemAuthorizationScope(targetRef, logicalId) {
+  return deepFreeze({
+    organizationId: targetRef.organizationId,
+    ...(targetRef.tenantId ? { tenantId: targetRef.tenantId } : {}),
+    resourceType: 'DECISION_PROBLEM',
+    resourceId: requiredText(logicalId, 'logicalId')
+  });
+}
+
+function exactRefIn(refs, expected) {
+  return Array.isArray(refs) && refs.some((ref) => sameAuthorityRef(ref, expected));
+}
+
+function resolveKind(ledger, ref, kind, code) {
+  const normalizedRef = assertAuthorityRef(ref);
+  const record = ledger.resolve(normalizedRef);
+  if (record.ref.kind !== kind) {
+    throw new DecisionProblemError(code, `expected ${kind}, received ${record.ref.kind}`);
+  }
+  return record;
+}
+
+function assertAuthorizationDecisionHash(decision) {
+  if (!decision || typeof decision !== 'object' || typeof decision.decisionHash !== 'string') {
+    throw new DecisionProblemError('DECISION_PROBLEM_AUTHORIZATION_INVALID', 'DecisionProblem creation requires a content-addressed AuthorizationDecision');
+  }
+  const { decisionHash, ...basis } = decision;
+  if (semanticHash('AuthorizationDecision', basis) !== decisionHash) {
+    throw new DecisionProblemError('DECISION_PROBLEM_AUTHORIZATION_HASH_MISMATCH', 'stored DecisionProblem creation decisionHash is not reproducible');
+  }
+}
+
+function validateCreationAuthorization({
+  ledger,
+  authorizationDecisionAuditRef,
+  principal,
+  targetRef,
+  logicalId
+}) {
+  const authRecord = resolveKind(
+    ledger,
+    authorizationDecisionAuditRef,
+    'AuthorizationDecisionAudit',
+    'DECISION_PROBLEM_AUTHORIZATION_REQUIRED'
+  );
+  const stored = authRecord.semanticPayload;
+  assertAuthorizationDecisionHash(stored);
+  const normalizedPrincipal = createPrincipal(principal);
+  const expectedScope = decisionProblemAuthorizationScope(targetRef, logicalId);
+
+  if (stored.operation !== 'DECISION_PROBLEM_CREATE'
+    || stored.allowed !== true
+    || stored.policyRef !== undefined
+    || !samePrincipalIdentity(stored.principal, normalizedPrincipal)
+    || semanticHash('ADR-A01-CREATION-SCOPE', stored.request?.authorizationScope)
+      !== semanticHash('ADR-A01-CREATION-SCOPE', expectedScope)) {
+    throw new DecisionProblemError(
+      'DECISION_PROBLEM_AUTHORIZATION_MISMATCH',
+      'stored authorization does not bind the exact creator, target scope and DecisionProblem logical identity'
+    );
+  }
+
+  if (!Array.isArray(stored.assignmentRefs) || stored.assignmentRefs.length === 0) {
+    throw new DecisionProblemError('DECISION_PROBLEM_AUTHORIZATION_ASSIGNMENT_REQUIRED', 'DecisionProblem creation authorization requires exact RoleAssignment refs');
+  }
+  const assignments = stored.assignmentRefs.map((ref) =>
+    resolveKind(ledger, ref, 'RoleAssignment', 'DECISION_PROBLEM_AUTHORIZATION_ASSIGNMENT_REQUIRED'));
+
+  const recomputed = authorizeDecisionProblemCreation({
+    principal: normalizedPrincipal,
+    roleAssignments: assignments,
+    authorizationScope: expectedScope
+  });
+  if (!recomputed.allowed || recomputed.decisionHash !== stored.decisionHash) {
+    throw new DecisionProblemError(
+      'DECISION_PROBLEM_AUTHORIZATION_REPLAY_MISMATCH',
+      'stored DecisionProblem creation authorization cannot be reproduced from exact RoleAssignment authority'
+    );
+  }
+
+  const directAudits = ledger.auditFor(authRecord.ref).filter((event) => sameAuthorityRef(event.objectRef, authRecord.ref));
+  const auditValid = directAudits.some((event) =>
+    event.action === 'AUTHORIZATION_DECISION_PROBLEM_CREATE_ALLOW'
+      && stored.assignmentRefs.every((ref) => exactRefIn(event.inputRefs, ref)));
+  if (!auditValid) {
+    throw new DecisionProblemError(
+      'DECISION_PROBLEM_AUTHORIZATION_AUDIT_INVALID',
+      'DecisionProblem creation AuthorizationDecisionAudit lacks direct exact RoleAssignment audit inputs'
+    );
+  }
+  return authRecord;
+}
+
 function assertAuditActor(audit, principal) {
   if (!audit || typeof audit !== 'object' || !audit.actor) {
     throw new DecisionProblemError('DECISION_PROBLEM_AUDIT_REQUIRED', 'DecisionProblem publication requires explicit audit metadata');
@@ -232,10 +328,19 @@ function assertAuditActor(audit, principal) {
   }
 }
 
-export function publishDecisionProblem({ ledger, logicalId, version, problem, principal, audit }) {
-  if (!ledger || typeof ledger.publish !== 'function') {
-    throw new DecisionProblemError('INVALID_LEDGER', 'publishDecisionProblem requires an AuthorityLedger');
+export function publishDecisionProblem({
+  ledger,
+  logicalId,
+  version,
+  problem,
+  principal,
+  authorizationDecisionAuditRef,
+  audit
+}) {
+  if (!ledger || typeof ledger.publish !== 'function' || typeof ledger.resolve !== 'function' || typeof ledger.auditFor !== 'function') {
+    throw new DecisionProblemError('INVALID_LEDGER', 'publishDecisionProblem requires a replayable AuthorityLedger');
   }
+  const normalizedLogicalId = requiredText(logicalId, 'logicalId');
   const normalizedPrincipal = createPrincipal(principal);
   const semanticPayload = normalizeDecisionProblem(problem);
   if (!principalOwnsTargetScope(normalizedPrincipal, semanticPayload.targetRef)) {
@@ -244,19 +349,29 @@ export function publishDecisionProblem({ ledger, logicalId, version, problem, pr
       'DecisionProblem creator organization/tenant must exactly match the target organization/tenant under A01'
     );
   }
+  const authorization = validateCreationAuthorization({
+    ledger,
+    authorizationDecisionAuditRef,
+    principal: normalizedPrincipal,
+    targetRef: semanticPayload.targetRef,
+    logicalId: normalizedLogicalId
+  });
   assertAuditActor(audit, normalizedPrincipal);
+
   return ledger.publish({
     kind: 'DecisionProblem',
-    logicalId: requiredText(logicalId, 'logicalId'),
+    logicalId: normalizedLogicalId,
     version: requiredText(version, 'version'),
     semanticPayload,
     audit: {
       ...audit,
       action: 'PUBLISH_DECISION_PROBLEM',
+      inputRefs: [authorization.ref, ...(audit.inputRefs ?? [])],
       details: {
         ...(audit.details ?? {}),
         creationPrincipal: normalizedPrincipal,
         targetScope: semanticPayload.targetRef,
+        authorizationDecisionAuditRef: authorization.ref,
         authorityClass: 'DECISION_SCOPE'
       }
     }
@@ -292,22 +407,39 @@ export function validateDecisionProblemAuthority({ ledger, decisionProblemRef })
   }
 
   const directAudits = ledger.auditFor(record.ref).filter((event) => sameAuthorityRef(event.objectRef, record.ref));
-  const validAudit = directAudits.some((event) => {
-    if (event.action !== 'PUBLISH_DECISION_PROBLEM' || !event.details?.creationPrincipal) return false;
+  let creationAuthorization = null;
+  for (const event of directAudits) {
+    if (event.action !== 'PUBLISH_DECISION_PROBLEM' || !event.details?.creationPrincipal || !event.details?.authorizationDecisionAuditRef) continue;
     try {
       const creator = createPrincipal(event.details.creationPrincipal);
-      return event.actor?.id === creator.principalId
-        && event.actor?.type === creator.type
-        && principalOwnsTargetScope(creator, normalized.targetRef)
-        && semanticHash('ADR-A01-TARGET-AUDIT', event.details.targetScope) === semanticHash('ADR-A01-TARGET-AUDIT', normalized.targetRef);
+      if (event.actor?.id !== creator.principalId
+        || event.actor?.type !== creator.type
+        || !principalOwnsTargetScope(creator, normalized.targetRef)
+        || semanticHash('ADR-A01-TARGET-AUDIT', event.details.targetScope)
+          !== semanticHash('ADR-A01-TARGET-AUDIT', normalized.targetRef)
+        || !exactRefIn(event.inputRefs, event.details.authorizationDecisionAuditRef)) {
+        continue;
+      }
+      creationAuthorization = validateCreationAuthorization({
+        ledger,
+        authorizationDecisionAuditRef: event.details.authorizationDecisionAuditRef,
+        principal: creator,
+        targetRef: normalized.targetRef,
+        logicalId: record.ref.logicalId
+      });
+      break;
     } catch {
-      return false;
+      creationAuthorization = null;
     }
-  });
-  if (!validAudit) {
-    throw new DecisionProblemError('DECISION_PROBLEM_AUDIT_INVALID', 'DecisionProblem lacks direct replayable creator/target-scope audit authority');
   }
-  return deepFreeze({ record, semanticPayload: normalized });
+  if (!creationAuthorization) {
+    throw new DecisionProblemError(
+      'DECISION_PROBLEM_AUDIT_INVALID',
+      'DecisionProblem lacks direct replayable creator/target/creation-authorization authority'
+    );
+  }
+
+  return deepFreeze({ record, semanticPayload: normalized, creationAuthorization });
 }
 
 export function assertDecisionResultAuthority({ ledger, decisionProblemRef, authorityMode }) {
