@@ -68,6 +68,14 @@ function assertApproval({ ledger, authAuditRef, principal, policyRef, resourceId
   return { authAudit, policy };
 }
 
+function hasLineage(ledger, from, to, lineageRole) {
+  return ledger.lineageFor(from).some((edge) =>
+    edge.relation === 'derived_from'
+      && sameAuthorityRef(edge.from, from)
+      && sameAuthorityRef(edge.to, to)
+      && edge.details?.lineageRole === lineageRole);
+}
+
 export function validateDerivedKnowledgeAuthority({ ledger, derivedKnowledgeRef, requiredUseTarget = null }) {
   if (!ledger || typeof ledger.resolve !== 'function' || typeof ledger.auditFor !== 'function' || typeof ledger.lineageFor !== 'function') {
     throw new DerivedAuthorityValidationError('INVALID_LEDGER', 'replayable AuthorityLedger is required');
@@ -104,6 +112,11 @@ export function validateDerivedKnowledgeAuthority({ ledger, derivedKnowledgeRef,
   if (method.semanticPayload.authorityClass !== 'DERIVATION_METHOD_AUTHORITY'
     || method.semanticPayload.semanticRole !== payload.semanticRole) {
     throw new DerivedAuthorityValidationError('DERIVATION_METHOD_INVALID', 'DerivedKnowledge does not conform to exact DerivationMethod semantic role');
+  }
+  for (const required of ['NEWEST_WINS', 'LLM_PREFERENCE', 'SIMPLE_AVERAGE', 'LOCAL_CALIBRATION_AS_KNOWLEDGE']) {
+    if (!(method.semanticPayload.prohibitedShortcuts ?? []).includes(required)) {
+      throw new DerivedAuthorityValidationError('DERIVATION_METHOD_INVALID', `DerivationMethod does not preserve required prohibition ${required}`);
+    }
   }
   const methodApproval = assertApproval({
     ledger,
@@ -157,17 +170,15 @@ export function validateDerivedKnowledgeAuthority({ ledger, derivedKnowledgeRef,
   }
 
   for (const input of validatedInputs) {
-    const knowledgeLineage = ledger.lineageFor(knowledge.ref).some((edge) =>
-      edge.relation === 'DERIVED_FROM' && sameAuthorityRef(edge.from, knowledge.ref) && sameAuthorityRef(edge.to, input.knowledge.ref));
-    const contextLineage = ledger.lineageFor(context.ref).some((edge) =>
-      edge.relation === 'ORIGIN_CONTEXT_FROM' && sameAuthorityRef(edge.from, context.ref) && sameAuthorityRef(edge.to, input.sourceContext.ref));
+    const knowledgeLineage = hasLineage(ledger, knowledge.ref, input.knowledge.ref, 'QUALIFIED_KNOWLEDGE_INPUT');
+    const contextLineage = hasLineage(ledger, context.ref, input.sourceContext.ref, 'ORIGIN_SOURCE_CONTEXT');
     if (!knowledgeLineage || !contextLineage) {
       throw new DerivedAuthorityValidationError('DERIVED_LINEAGE_INCOMPLETE', 'DerivedKnowledge must retain complete input knowledge and origin-context lineage');
     }
   }
-  const methodLineage = ledger.lineageFor(knowledge.ref).some((edge) =>
-    edge.relation === 'DERIVED_BY' && sameAuthorityRef(edge.from, knowledge.ref) && sameAuthorityRef(edge.to, method.ref));
-  if (!methodLineage) throw new DerivedAuthorityValidationError('DERIVED_LINEAGE_INCOMPLETE', 'DerivedKnowledge lacks exact derivation-method lineage');
+  if (!hasLineage(ledger, knowledge.ref, method.ref, 'DERIVATION_METHOD')) {
+    throw new DerivedAuthorityValidationError('DERIVED_LINEAGE_INCOMPLETE', 'DerivedKnowledge lacks exact derivation-method lineage');
+  }
 
   return deepFreeze({ knowledge, context, method, validatedInputs, methodApproval, synthesisApproval, useTarget });
 }
