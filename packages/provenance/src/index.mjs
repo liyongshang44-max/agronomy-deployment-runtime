@@ -36,6 +36,32 @@ function lineageKey(record) {
   return record.lineageHash;
 }
 
+function preparePublication({ kind, logicalId, version, semanticPayload, operationalMetadata = {}, audit }) {
+  const normalizedKind = requiredText(kind, 'kind');
+  const normalizedLogicalId = requiredText(logicalId, 'logicalId');
+  const normalizedVersion = requiredText(version, 'version');
+  const payload = freezeCanonical(semanticPayload);
+  const metadata = freezeCanonical(operationalMetadata);
+  const hash = semanticHash(normalizedKind, payload);
+  const ref = makeAuthorityRef({
+    kind: normalizedKind,
+    logicalId: normalizedLogicalId,
+    version: normalizedVersion,
+    semanticHash: hash
+  });
+  if (!audit) {
+    throw new AuthorityLedgerError('AUDIT_REQUIRED', 'publishing authority requires explicit audit metadata');
+  }
+  const record = deepFreeze({ ref, semanticPayload: payload, operationalMetadata: metadata });
+  const event = createAuditEvent({
+    ...audit,
+    action: audit.action ?? 'PUBLISH_AUTHORITY',
+    objectRef: ref,
+    inputRefs: audit.inputRefs ?? []
+  });
+  return { ref, record, event };
+}
+
 export class AuthorityLedger {
   #records = new Map();
   #lineage = new Map();
@@ -49,50 +75,73 @@ export class AuthorityLedger {
     operationalMetadata = {},
     audit
   }) {
-    const normalizedKind = requiredText(kind, 'kind');
-    const normalizedLogicalId = requiredText(logicalId, 'logicalId');
-    const normalizedVersion = requiredText(version, 'version');
-    const payload = freezeCanonical(semanticPayload);
-    const metadata = freezeCanonical(operationalMetadata);
-    const hash = semanticHash(normalizedKind, payload);
-    const ref = makeAuthorityRef({
-      kind: normalizedKind,
-      logicalId: normalizedLogicalId,
-      version: normalizedVersion,
-      semanticHash: hash
-    });
-    const key = authorityRefKey(ref);
+    const prepared = preparePublication({ kind, logicalId, version, semanticPayload, operationalMetadata, audit });
+    const key = authorityRefKey(prepared.ref);
     const existing = this.#records.get(key);
 
     if (existing) {
-      if (existing.ref.semanticHash !== ref.semanticHash) {
+      if (existing.ref.semanticHash !== prepared.ref.semanticHash) {
         throw new AuthorityLedgerError(
           'SEMANTIC_MUTATION_FORBIDDEN',
-          `published authority ${normalizedKind}/${normalizedLogicalId}@${normalizedVersion} already exists with different semantics`
+          `published authority ${prepared.ref.kind}/${prepared.ref.logicalId}@${prepared.ref.version} already exists with different semantics`
         );
       }
       return existing;
     }
 
-    if (!audit) {
-      throw new AuthorityLedgerError('AUDIT_REQUIRED', 'publishing authority requires explicit audit metadata');
+    this.#records.set(key, prepared.record);
+    this.#audit.push(prepared.event);
+    return prepared.record;
+  }
+
+  publishBatch(entries) {
+    if (!Array.isArray(entries) || entries.length === 0) {
+      throw new AuthorityLedgerError('INVALID_AUTHORITY_BATCH', 'publishBatch requires a non-empty array');
     }
 
-    const record = deepFreeze({
-      ref,
-      semanticPayload: payload,
-      operationalMetadata: metadata
-    });
-    const event = createAuditEvent({
-      ...audit,
-      action: audit.action ?? 'PUBLISH_AUTHORITY',
-      objectRef: ref,
-      inputRefs: audit.inputRefs ?? []
-    });
+    const stagedByKey = new Map();
+    const resultRecords = [];
 
-    this.#records.set(key, record);
-    this.#audit.push(event);
-    return record;
+    for (const entry of entries) {
+      const prepared = preparePublication(entry);
+      const key = authorityRefKey(prepared.ref);
+      const existing = this.#records.get(key);
+      const staged = stagedByKey.get(key);
+
+      if (existing) {
+        if (existing.ref.semanticHash !== prepared.ref.semanticHash) {
+          throw new AuthorityLedgerError(
+            'SEMANTIC_MUTATION_FORBIDDEN',
+            `published authority ${prepared.ref.kind}/${prepared.ref.logicalId}@${prepared.ref.version} already exists with different semantics`
+          );
+        }
+        resultRecords.push(existing);
+        continue;
+      }
+
+      if (staged) {
+        if (staged.ref.semanticHash !== prepared.ref.semanticHash) {
+          throw new AuthorityLedgerError(
+            'SEMANTIC_MUTATION_FORBIDDEN',
+            `authority batch contains conflicting semantics for ${prepared.ref.kind}/${prepared.ref.logicalId}@${prepared.ref.version}`
+          );
+        }
+        resultRecords.push(staged.record);
+        continue;
+      }
+
+      stagedByKey.set(key, prepared);
+      resultRecords.push(prepared.record);
+    }
+
+    // Commit only after every entry has passed preflight. This gives the in-memory
+    // authority substrate semantic all-or-none publication for the batch.
+    for (const [key, prepared] of stagedByKey.entries()) {
+      this.#records.set(key, prepared.record);
+      this.#audit.push(prepared.event);
+    }
+
+    return deepFreeze(resultRecords);
   }
 
   resolve(ref) {

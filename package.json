@@ -14,6 +14,7 @@
     "test:authorization": "node acceptance/authorization/run.mjs && node acceptance/authorization/integrity.mjs",
     "test:source": "node acceptance/source-materialization/run.mjs",
     "test:compiler": "node acceptance/scientific-compiler/run.mjs",
-    "test": "npm run test:constitution && npm run test:authority && npm run test:authorization && npm run test:source && npm run test:compiler"
+    "test:source-faithful": "node acceptance/source-faithful/run.mjs && node acceptance/source-faithful/integrity.mjs",
+    "test": "npm run test:constitution && npm run test:authority && npm run test:authorization && npm run test:source && npm run test:compiler && npm run test:source-faithful"
   }
 }
