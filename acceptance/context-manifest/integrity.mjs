@@ -1,8 +1,6 @@
 import assert from 'node:assert/strict';
-import { semanticHash } from '../../packages/canonicalization/src/index.mjs';
 import { AuthorityLedger } from '../../packages/provenance/src/index.mjs';
 import { PERMISSIONS, recordAuthorizationDecision } from '../../packages/authorization/src/index.mjs';
-import { authorizeContextWrite } from '../../packages/authorization/src/context-write.mjs';
 import { ExactContextSnapshotStore } from '../../packages/reference-resolution/src/index.mjs';
 import { publishContextManifest, validateContextManifestAuthority } from '../../packages/context-manifest/src/index.mjs';
 import {
@@ -48,12 +46,13 @@ test('ContextManifest rejects duplicate exact datum and receipt refs', () => {
   const ledger = freshLedger();
   const problem = publishProblem(ledger);
   const pair = publishResolvedPair(ledger, { suffix: 'dupe' });
-  for (const args of [
+  const cases = [
     { datumRefs: [pair.datum.ref, pair.datum.ref], receiptRefs: [pair.receipt.ref] },
     { datumRefs: [pair.datum.ref], receiptRefs: [pair.receipt.ref, pair.receipt.ref] }
-  ]) {
+  ];
+  for (const [index, args] of cases.entries()) {
     assert.throws(
-      () => publishManifest(ledger, { logicalId: `cm-dupe-${Math.random()}`, decisionProblem: problem, ...args }),
+      () => publishManifest(ledger, { logicalId: `cm-dupe-${index}`, decisionProblem: problem, ...args }),
       (error) => error?.code === 'DUPLICATE_CONTEXT_MANIFEST_MEMBER'
     );
   }
