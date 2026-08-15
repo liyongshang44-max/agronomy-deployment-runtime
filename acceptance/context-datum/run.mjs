@@ -2,15 +2,28 @@ import assert from 'node:assert/strict';
 import { AuthorityLedger } from '../../packages/provenance/src/index.mjs';
 import {
   CONTEXT_VALUE_MODES,
+  CONTEXT_VALUE_TYPES,
+  EPISTEMIC_CLASSES,
+  PROVENANCE_CLASSES,
   inlineContextDatumEnvelope,
   materializePublicContextDatum,
   validateContextDatumAuthority
 } from '../../packages/context-contract/src/index.mjs';
-import { audit, baseDatum, principal, publishAuthorized } from './fixtures.mjs';
+import { baseDatum, principal, publishAuthorized } from './fixtures.mjs';
 
-function test(name, fn) { try { fn(); console.log(`PASS ${name}`); } catch (error) { console.error(`FAIL ${name}`); throw error; } }
+let passed = 0;
+function test(name, fn) {
+  try {
+    fn();
+    passed += 1;
+    console.log(`PASS ${name}`);
+  } catch (error) {
+    console.error(`FAIL ${name}`);
+    throw error;
+  }
+}
 
-test('publishes exact inline ContextDatum authority and public contract', () => {
+test('publishes exact inline ContextDatum authority and frozen public wire contract', () => {
   const ledger = new AuthorityLedger();
   const record = publishAuthorized(ledger, 'ctx-soil-vwc-1', '1');
   const validated = validateContextDatumAuthority({ ledger, contextDatumRef: record.ref });
@@ -21,20 +34,26 @@ test('publishes exact inline ContextDatum authority and public contract', () => 
   const wire = materializePublicContextDatum(record);
   assert.equal(wire.contract_version, 'adr.context-datum.v1');
   assert.equal(wire.datum_id, 'ctx-soil-vwc-1');
+  assert.equal(wire.value.type, 'DECIMAL');
+  assert.equal(wire.value.decimal, '0.32');
+  assert.equal(wire.uncertainty.type, 'INTERVAL');
+  assert.equal(wire.uncertainty.lower_decimal, '0.3');
+  assert.equal(wire.uncertainty.upper_decimal, '0.34');
+  assert.equal('lowerDecimal' in wire.uncertainty, false);
   assert.equal(wire.semantic_hash, record.ref.semanticHash);
   assert.equal(inlineContextDatumEnvelope(record).value_mode, 'INLINE');
   assert.deepEqual(CONTEXT_VALUE_MODES, ['INLINE', 'AUTHORIZED_REFERENCE']);
 });
 
-test('canonical decimal, timestamps and set ordering are identity-stable', () => {
+test('canonical decimal, RFC3339 offsets and set ordering are identity-stable', () => {
   const ledger = new AuthorityLedger();
   const a = publishAuthorized(ledger, 'ctx-canonical', '1', baseDatum({
-    value: { type: 'set', items: [{ type: 'decimal', decimal: '0.3200' }, { type: 'decimal', decimal: '0.340' }] },
+    value: { type: 'SET', items: [{ type: 'DECIMAL', decimal: '0.3200' }, { type: 'DECIMAL', decimal: '0.340' }] },
     effectiveInterval: { start: '2026-08-16T03:00:00+02:00', end: '2026-08-16T04:00:00+02:00' },
     uncertainty: { type: 'CATEGORICAL_SET', values: ['HIGH', 'LOW'] }
   }), principal, 'canonical-a');
   const b = publishAuthorized(ledger, 'ctx-canonical', '1', baseDatum({
-    value: { type: 'set', items: [{ type: 'decimal', decimal: '0.34' }, { type: 'decimal', decimal: '0.32' }] },
+    value: { type: 'SET', items: [{ type: 'DECIMAL', decimal: '0.34' }, { type: 'DECIMAL', decimal: '0.32' }] },
     effectiveInterval: { start: '2026-08-16T01:00:00Z', end: '2026-08-16T02:00:00Z' },
     uncertainty: { type: 'CATEGORICAL_SET', values: ['LOW', 'HIGH'] }
   }), principal, 'canonical-b');
@@ -42,33 +61,87 @@ test('canonical decimal, timestamps and set ordering are identity-stable', () =>
 });
 
 const valueCases = [
-  { type: 'decimal', decimal: '12.5' },
-  { type: 'integer', integer: '12' },
-  { type: 'boolean', boolean: true },
-  { type: 'string', string: 'silty clay loam' },
-  { type: 'category', category: 'MID' },
-  { type: 'date', date: '2026-04-22' },
-  { type: 'timestamp', timestamp: '2026-08-16T02:00:00Z' },
-  { type: 'interval', lower: { type: 'decimal', decimal: '10' }, upper: { type: 'decimal', decimal: '20' } },
-  { type: 'set', items: [{ type: 'category', category: 'A' }, { type: 'category', category: 'B' }] },
-  { type: 'unknown', reasonCode: 'NOT_OBSERVED' }
+  { type: 'DECIMAL', decimal: '12.5' },
+  { type: 'INTEGER', integer: '12' },
+  { type: 'BOOLEAN', boolean: true },
+  { type: 'STRING', string: 'silty clay loam' },
+  { type: 'CATEGORY', category: 'MID' },
+  { type: 'DATE', date: '2026-04-22' },
+  { type: 'TIMESTAMP', timestamp: '2026-08-16T02:00:00Z' },
+  { type: 'INTERVAL', lower: { type: 'DECIMAL', decimal: '10' }, upper: { type: 'DECIMAL', decimal: '20' } },
+  { type: 'SET', items: [{ type: 'CATEGORY', category: 'A' }, { type: 'CATEGORY', category: 'B' }] },
+  { type: 'UNKNOWN', reasonCode: 'NOT_OBSERVED' }
 ];
 
 test('supports every frozen ContextDatum value type without unsafe JS numeric coercion', () => {
+  assert.deepEqual(CONTEXT_VALUE_TYPES, [
+    'DECIMAL', 'INTEGER', 'BOOLEAN', 'STRING', 'CATEGORY',
+    'DATE', 'TIMESTAMP', 'INTERVAL', 'SET', 'UNKNOWN'
+  ]);
   for (const [index, value] of valueCases.entries()) {
     const ledger = new AuthorityLedger();
-    const record = publishAuthorized(ledger, `ctx-value-${index}`, '1', baseDatum({ value, unit: ['decimal', 'integer', 'interval'].includes(value.type) ? 'mm' : 'none' }));
+    const record = publishAuthorized(
+      ledger,
+      `ctx-value-${index}`,
+      '1',
+      baseDatum({ value, unit: ['DECIMAL', 'INTEGER', 'INTERVAL'].includes(value.type) ? 'mm' : 'none' })
+    );
     assert.equal(validateContextDatumAuthority({ ledger, contextDatumRef: record.ref }).semanticPayload.value.type, value.type);
+    assert.equal(materializePublicContextDatum(record).value.type, value.type);
   }
 });
 
-test('epistemic class is independent from provenance class', () => {
+test('accepts every frozen EpistemicClass without inferring provenance', () => {
+  assert.deepEqual(EPISTEMIC_CLASSES, [
+    'OBSERVATION', 'ASSERTION', 'DERIVED', 'STATE_ESTIMATE',
+    'FORECAST', 'CONFIGURATION', 'MODEL_PRIOR'
+  ]);
+  for (const epistemicClass of EPISTEMIC_CLASSES) {
+    const ledger = new AuthorityLedger();
+    const record = publishAuthorized(
+      ledger,
+      `ctx-epistemic-${epistemicClass.toLowerCase()}`,
+      '1',
+      baseDatum({ epistemicClass, provenanceClass: 'PLATFORM' })
+    );
+    assert.equal(record.semanticPayload.epistemicClass, epistemicClass);
+    assert.equal(record.semanticPayload.provenanceClass, 'PLATFORM');
+  }
+});
+
+test('accepts every frozen ProvenanceClass without upgrading epistemic class', () => {
+  assert.deepEqual(PROVENANCE_CLASSES, [
+    'USER', 'AGRONOMIST', 'SENSOR', 'MACHINERY', 'REMOTE_SENSING',
+    'EXTERNAL_PROVIDER', 'CUSTOMER_SYSTEM', 'LABORATORY', 'MODEL', 'PLATFORM'
+  ]);
+  for (const provenanceClass of PROVENANCE_CLASSES) {
+    const ledger = new AuthorityLedger();
+    const record = publishAuthorized(
+      ledger,
+      `ctx-provenance-${provenanceClass.toLowerCase()}`,
+      '1',
+      baseDatum({ epistemicClass: 'ASSERTION', provenanceClass })
+    );
+    assert.equal(record.semanticPayload.epistemicClass, 'ASSERTION');
+    assert.equal(record.semanticPayload.provenanceClass, provenanceClass);
+  }
+});
+
+test('epistemic class is independent from provenance class for the same real-world claim', () => {
   const ledger = new AuthorityLedger();
   const grower = publishAuthorized(ledger, 'ctx-planting-grower', '1', baseDatum({
-    semanticId: 'crop.planting_date', value: { type: 'date', date: '2026-04-22' }, unit: 'none', epistemicClass: 'ASSERTION', provenanceClass: 'CUSTOMER_SYSTEM'
+    semanticId: 'crop.planting_date',
+    value: { type: 'DATE', date: '2026-04-22' },
+    unit: 'none',
+    epistemicClass: 'ASSERTION',
+    provenanceClass: 'CUSTOMER_SYSTEM'
   }));
   const machine = publishAuthorized(ledger, 'ctx-planting-machine', '1', baseDatum({
-    semanticId: 'crop.planting_date', value: { type: 'date', date: '2026-04-22' }, unit: 'none', epistemicClass: 'OBSERVATION', provenanceClass: 'MACHINERY'
+    semanticId: 'crop.planting_date',
+    value: { type: 'DATE', date: '2026-04-22' },
+    unit: 'none',
+    epistemicClass: 'OBSERVATION',
+    provenanceClass: 'MACHINERY'
   }));
   assert.equal(grower.semanticPayload.epistemicClass, 'ASSERTION');
   assert.equal(machine.semanticPayload.epistemicClass, 'OBSERVATION');
@@ -76,8 +149,8 @@ test('epistemic class is independent from provenance class', () => {
 });
 
 for (const [label, override] of [
-  ['semantic-id', { semanticId: 'soil.water.storage' }],
-  ['value', { value: { type: 'decimal', decimal: '0.31' } }],
+  ['semantic-id', { semanticId: 'soil.root_zone_water_storage' }],
+  ['value', { value: { type: 'DECIMAL', decimal: '0.31' } }],
   ['unit', { unit: 'percent' }],
   ['epistemic', { epistemicClass: 'STATE_ESTIMATE' }],
   ['provenance', { provenanceClass: 'MODEL' }],
@@ -99,9 +172,23 @@ for (const [label, override] of [
 
 test('historical exact ContextDatum ref replays after a later version', () => {
   const ledger = new AuthorityLedger();
-  const old = publishAuthorized(ledger, 'ctx-replay', '1', baseDatum({ value: { type: 'decimal', decimal: '0.30' } }), principal, 'replay-old');
-  publishAuthorized(ledger, 'ctx-replay', '2', baseDatum({ value: { type: 'decimal', decimal: '0.35' } }), principal, 'replay-new');
+  const old = publishAuthorized(
+    ledger,
+    'ctx-replay',
+    '1',
+    baseDatum({ value: { type: 'DECIMAL', decimal: '0.30' } }),
+    principal,
+    'replay-old'
+  );
+  publishAuthorized(
+    ledger,
+    'ctx-replay',
+    '2',
+    baseDatum({ value: { type: 'DECIMAL', decimal: '0.35' } }),
+    principal,
+    'replay-new'
+  );
   assert.equal(validateContextDatumAuthority({ ledger, contextDatumRef: old.ref }).semanticPayload.value.decimal, '0.3');
 });
 
-console.log('ContextDatum acceptance: 18 passed');
+console.log(`ContextDatum acceptance: ${passed} passed`);
