@@ -72,12 +72,12 @@ function assertCandidatePair({ result, claimCandidate, sourceContextCandidate })
     throw new SourceFaithfulReviewError('CANDIDATE_PAIR_MISMATCH', 'SourceContextCandidate does not belong to the selected ClaimCandidate');
   }
 
-  const exactBindings = [
+  const candidateBindings = [
     ['sourceRef', claimCandidate.semanticPayload.sourceRef, sourceContextCandidate.semanticPayload.sourceRef],
     ['sourceArtifactRef', claimCandidate.semanticPayload.sourceArtifactRef, sourceContextCandidate.semanticPayload.sourceArtifactRef],
     ['compilerDefinitionRef', claimCandidate.semanticPayload.compilerDefinitionRef, sourceContextCandidate.semanticPayload.compilerDefinitionRef]
   ];
-  for (const [name, left, right] of exactBindings) {
+  for (const [name, left, right] of candidateBindings) {
     if (!sameAuthorityRef(left, right)) {
       throw new SourceFaithfulReviewError('CANDIDATE_PROVENANCE_MISMATCH', `${name} differs between ClaimCandidate and SourceContextCandidate`);
     }
@@ -86,12 +86,36 @@ function assertCandidatePair({ result, claimCandidate, sourceContextCandidate })
     throw new SourceFaithfulReviewError('CANDIDATE_PROVENANCE_MISMATCH', 'SourceArtifact content hash differs between candidate pair');
   }
 
-  if (!sameAuthorityRef(result.semanticPayload.sourceArtifactRef, claimCandidate.semanticPayload.sourceArtifactRef)) {
-    throw new SourceFaithfulReviewError('COMPILATION_PROVENANCE_MISMATCH', 'ClaimCandidate SourceArtifact differs from completed compilation result');
+  const resultBindings = [
+    ['sourceRef', result.semanticPayload.sourceRef, claimCandidate.semanticPayload.sourceRef],
+    ['sourceArtifactRef', result.semanticPayload.sourceArtifactRef, claimCandidate.semanticPayload.sourceArtifactRef],
+    ['compilerDefinitionRef', result.semanticPayload.compilerDefinitionRef, claimCandidate.semanticPayload.compilerDefinitionRef]
+  ];
+  for (const [name, left, right] of resultBindings) {
+    if (!sameAuthorityRef(left, right)) {
+      throw new SourceFaithfulReviewError('COMPILATION_PROVENANCE_MISMATCH', `${name} differs between completed compilation result and selected candidate`);
+    }
   }
-  if (!sameAuthorityRef(result.semanticPayload.compilerDefinitionRef, claimCandidate.semanticPayload.compilerDefinitionRef)) {
-    throw new SourceFaithfulReviewError('COMPILATION_PROVENANCE_MISMATCH', 'ClaimCandidate compiler definition differs from completed compilation result');
+  if (result.semanticPayload.sourceArtifactContentHash !== claimCandidate.semanticPayload.sourceArtifactContentHash) {
+    throw new SourceFaithfulReviewError(
+      'COMPILATION_PROVENANCE_MISMATCH',
+      'SourceArtifact content hash differs between completed compilation result and selected candidate'
+    );
   }
+}
+
+function stripExtractionConfidenceFromContext(contextFamilies) {
+  const normalized = {};
+  for (const [family, familyValue] of Object.entries(contextFamilies ?? {})) {
+    normalized[family] = {
+      status: familyValue.status,
+      dimensions: (familyValue.dimensions ?? []).map((dimension) => {
+        const { confidence: _extractionConfidence, ...sourceFaithfulDimension } = dimension;
+        return cloneCanonicalValue(sourceFaithfulDimension);
+      })
+    };
+  }
+  return deepFreeze(normalized);
 }
 
 function auditEvent(base, suffix, inputRefs) {
@@ -171,11 +195,7 @@ export class SourceFaithfulReviewService {
     });
 
     if (normalizedDisposition === 'REJECT_SOURCE_FAITHFUL') {
-      return deepFreeze({
-        review,
-        claim: null,
-        sourceContext: null
-      });
+      return deepFreeze({ review, claim: null, sourceContext: null });
     }
 
     const claim = this.#ledger.publish({
@@ -209,7 +229,7 @@ export class SourceFaithfulReviewService {
         sourceRef: sourceContextCandidate.semanticPayload.sourceRef,
         sourceArtifactRef: sourceContextCandidate.semanticPayload.sourceArtifactRef,
         sourceArtifactContentHash: sourceContextCandidate.semanticPayload.sourceArtifactContentHash,
-        contextFamilies: cloneCanonicalValue(sourceContextCandidate.semanticPayload.contextFamilies),
+        contextFamilies: stripExtractionConfidenceFromContext(sourceContextCandidate.semanticPayload.contextFamilies),
         sourceContextCandidateRef: sourceContextCandidate.ref,
         compilationResultRef: result.ref,
         sourceFaithfulReviewRef: review.ref,
