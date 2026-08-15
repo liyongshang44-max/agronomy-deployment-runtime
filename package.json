@@ -11,7 +11,7 @@
     "check:constitution": "node scripts/constitution/check.mjs",
     "test:constitution": "node acceptance/constitution/run.mjs",
     "test:authority": "node acceptance/authority/run.mjs",
-    "test:authorization": "node acceptance/authorization/run.mjs && node acceptance/authorization/integrity.mjs",
+    "test:authorization": "node acceptance/authorization/run.mjs && node acceptance/authorization/integrity.mjs && node acceptance/authorization/scoped.mjs",
     "test:source": "node acceptance/source-materialization/run.mjs",
     "test:compiler": "node acceptance/scientific-compiler/run.mjs",
     "test:source-faithful": "node acceptance/source-faithful/run.mjs && node acceptance/source-faithful/integrity.mjs",
