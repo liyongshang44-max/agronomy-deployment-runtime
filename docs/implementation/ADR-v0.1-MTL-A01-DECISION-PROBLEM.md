@@ -52,13 +52,15 @@ decisionDeadline
 
 `targetRef` v1 admits only `organizationId`, optional `tenantId`, `farmId`, `fieldId`, `seasonId`, and `zoneId`. It must not acquire GEOX/customer-specific schema fields.
 
+`decisionHorizon.duration` must be a syntactically valid ISO-8601 duration. Week-form durations are kept distinct and cannot be mixed with date/time components. A01 preserves the exact normalized duration string as decision-scope semantics; it does not silently convert calendar durations into elapsed-hour claims.
+
 `actionSpace` is a non-empty canonical set of action codes. Decision-material action parameters may be represented by explicit constraints and, in later capabilities, governed Policy action contracts. A01 does not create a Policy DSL.
 
-`constraints` is a canonical set of structured constraint objects. A01 preserves them as decision-scope semantics; it does not interpret them as agronomic conclusions.
+`constraints` is a canonical set of structured constraint objects. A01 preserves them as decision-scope semantics; it does not interpret them as agronomic conclusions. Constraint structure is recursively checked so fields that would carry downstream recommendation, applicability, robustness, runtime-result or final-decision authority cannot be hidden inside a constraint object.
 
 ## 4. Semantic identity
 
-Material changes to target scope, logical time, horizon, objective, action space, constraints, use purpose, use class, authority mode, or deadline create a different semantic hash.
+Material changes to decision type, target scope, logical time, horizon, objective, action space, constraints, use purpose, use class, authority mode, or deadline create a different semantic hash.
 
 Action-space and constraint ordering are non-semantic because both are sets. Timestamp representation is normalized to UTC ISO form before hashing.
 
@@ -107,7 +109,7 @@ A generic AuthorityLedger record using kind `DecisionProblem` without the A01 pu
 
 ## 8. Acceptance boundary
 
-A01 acceptance proves positive immutable publication/replay, canonical ordering stability, material identity changes, semantic mutation rejection, exact historical replay, cross-org/tenant fail-closed behavior, audit anti-impersonation, rejection of agronomic result fields, time/action validation, `RUNTIME_ONLY` final-decision denial, ADR/external authority-mode separation, and generic-ledger anti-laundering.
+A01 acceptance proves positive immutable publication/replay, canonical ordering stability, material identity across every frozen decision-scope dimension, semantic mutation rejection, exact historical replay, cross-org/tenant fail-closed behavior, audit anti-impersonation, top-level and nested conclusion/result laundering rejection, strict horizon syntax, time/action validation, `RUNTIME_ONLY` final-decision denial, ADR/external authority-mode separation, and generic-ledger anti-laundering.
 
 ## 9. Explicit nonclaims
 
