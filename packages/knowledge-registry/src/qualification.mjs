@@ -288,6 +288,7 @@ function normalizeDecisionPayload(record) {
   if (!DISPOSITION_SET.has(disposition)) {
     throw new ScientificQualificationError('INVALID_QUALIFICATION_DECISION', `unsupported disposition ${disposition}`);
   }
+  normalizeReasonCodes(record.semanticPayload.reasonCodes ?? [], { required: disposition === 'PROHIBIT_USE' });
   return deepFreeze({
     qualificationTarget: canonicalObject(record.semanticPayload.qualificationTarget, 'qualificationTarget'),
     disposition,
@@ -450,6 +451,10 @@ export class ScientificQualificationService {
         || !sameAuthorityRef(decision.semanticPayload.sourceContextRef, pair.sourceContext.ref)) {
         throw new ScientificQualificationError('QUALIFICATION_DECISION_BUNDLE_MISMATCH', 'all qualification decisions must bind the same exact Claim + SourceContext');
       }
+      if (!sameAuthorityRef(decision.semanticPayload.sourceRef, pair.source.ref)
+        || !sameAuthorityRef(decision.semanticPayload.sourceFaithfulReviewRef, pair.review.ref)) {
+        throw new ScientificQualificationError('INVALID_QUALIFICATION_DECISION', 'qualification decision does not bind the exact source-faithful authority chain');
+      }
       const target = normalized.qualificationTarget;
       const key = targetKey(target);
       if (seenTargets.has(key)) {
@@ -457,16 +462,17 @@ export class ScientificQualificationService {
       }
       seenTargets.set(key, decision.ref);
 
+      const decisionPrincipal = decision.semanticPayload.approverPrincipal;
       const authorization = assertQualificationAuthorization({
         ledger: this.#ledger,
         authorizationDecisionAuditRef: decision.semanticPayload.authorizationDecisionAuditRef,
-        approverPrincipal: decision.semanticPayload.approverPrincipal,
+        approverPrincipal: decisionPrincipal,
         qualificationTarget: target,
         pair,
         audit: {
           eventId: 'k04-validation',
           occurredAt: '1970-01-01T00:00:00.000Z',
-          actor: cloneCanonicalValue(decision.semanticPayload.approverPrincipal)
+          actor: { type: decisionPrincipal.type, id: decisionPrincipal.principalId }
         }
       });
       if (!sameAuthorityRef(authorization.policy.ref, decision.semanticPayload.qualificationPolicyRef)) {
