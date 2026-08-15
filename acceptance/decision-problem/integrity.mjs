@@ -104,6 +104,56 @@ test('DecisionProblem rejects agronomic conclusion/runtime-result fields', () =>
   );
 });
 
+test('constraints cannot launder downstream conclusion or result authority', () => {
+  for (const constraint of [
+    { code: 'CUSTOM', recommendedAction: 'IRRIGATE_NOW' },
+    { code: 'CUSTOM', parameters: { decision_result: { action: 'WAIT' } } },
+    { code: 'CUSTOM', nested: [{ applicabilityAssessment: 'APPLICABLE' }] }
+  ]) {
+    const ledger = new AuthorityLedger();
+    assert.throws(
+      () => publishDecisionProblem({
+        ledger,
+        logicalId: 'dp-constraint-laundering',
+        version: '1',
+        problem: problem({ constraints: [constraint] }),
+        principal,
+        audit: audit(principal, 'constraint-laundering')
+      }),
+      (error) => error?.code === 'DECISION_PROBLEM_CONCLUSION_LAUNDERING_FORBIDDEN'
+    );
+  }
+});
+
+test('malformed ISO-8601 horizons are rejected while valid date/time forms remain legal', () => {
+  for (const duration of ['P1H', 'PT', 'P1W2D', 'P1WT2H', 'P1D2H']) {
+    const ledger = new AuthorityLedger();
+    assert.throws(
+      () => publishDecisionProblem({
+        ledger,
+        logicalId: `dp-bad-horizon-${duration}`,
+        version: '1',
+        problem: problem({ decisionHorizon: { duration } }),
+        principal,
+        audit: audit(principal, 'bad-horizon')
+      }),
+      (error) => error?.code === 'INVALID_DECISION_HORIZON'
+    );
+  }
+  for (const duration of ['P3D', 'PT72H', 'P1DT12H', 'P2W']) {
+    const ledger = new AuthorityLedger();
+    const record = publishDecisionProblem({
+      ledger,
+      logicalId: `dp-good-horizon-${duration}`,
+      version: '1',
+      problem: problem({ decisionHorizon: { duration } }),
+      principal,
+      audit: audit(principal, 'good-horizon')
+    });
+    assert.equal(record.semanticPayload.decisionHorizon.duration, duration);
+  }
+});
+
 test('invalid deadline and duplicate action semantics are rejected', () => {
   const ledger = new AuthorityLedger();
   assert.throws(
@@ -197,4 +247,4 @@ test('generic-ledger DecisionProblem laundering is rejected by A01 authority val
   );
 });
 
-console.log('DecisionProblem integrity acceptance: 7 passed');
+console.log('DecisionProblem integrity acceptance: 9 passed');
