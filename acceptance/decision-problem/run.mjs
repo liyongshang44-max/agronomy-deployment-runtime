@@ -108,11 +108,16 @@ test('canonical set ordering does not perturb DecisionProblem identity', () => {
 });
 
 for (const [label, override] of [
+  ['decision-type', { decisionType: 'NITROGEN_TIMING' }],
+  ['logical-time', { logicalTime: '2026-08-16T02:00:00Z' }],
   ['horizon', { decisionHorizon: { duration: 'PT48H' } }],
   ['objective', { objective: { code: 'MINIMIZE_IRRIGATION_COST' } }],
   ['action-space', { actionSpace: ['WAIT', 'IRRIGATE_NOW'] }],
+  ['constraints', { constraints: [{ code: 'MAX_IRRIGATION_MM', value: '20', unit: 'mm' }] }],
   ['use-purpose', { usePurpose: 'MODEL_PARAMETER_PRIOR' }],
+  ['use-class', { useClass: 'RESEARCH' }],
   ['authority-mode', { decisionAuthorityMode: 'RUNTIME_ONLY' }],
+  ['deadline', { decisionDeadline: '2026-08-16T15:00:00Z' }],
   ['target-scope', { targetRef: { organizationId: 'org-a', tenantId: 'tenant-a', farmId: 'farm-1', fieldId: 'field-2', seasonId: 'season-2026' } }]
 ]) {
   test(`material ${label} change produces a distinct semantic identity`, () => {
@@ -182,4 +187,4 @@ test('historical exact DecisionProblem ref remains replayable after a later vers
   assert.equal(replay.semanticPayload.decisionHorizon.duration, 'PT72H');
 });
 
-console.log('DecisionProblem acceptance: 10 passed');
+console.log('DecisionProblem acceptance: 15 passed');
