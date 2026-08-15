@@ -1,5 +1,5 @@
 import { cloneCanonicalValue, deepFreeze, semanticHash } from '../../canonicalization/src/index.mjs';
-import { sameAuthorityRef } from '../../contracts/src/authority.mjs';
+import { makeAuthorityRef, sameAuthorityRef } from '../../contracts/src/authority.mjs';
 import {
   authorizeKnowledgeQualification,
   samePrincipalIdentity
@@ -7,6 +7,10 @@ import {
 import { validateQualifiedKnowledgeAuthority } from '../../knowledge-registry/src/qualified-authority.mjs';
 import { normalizeScientificUseTarget } from '../../knowledge-registry/src/qualification.mjs';
 import { validateDerivedKnowledgeAuthority } from '../../synthesis-engine/src/authority.mjs';
+import {
+  validateConflictResolutionAuthority,
+  validateKnowledgeConflictAuthority
+} from './authority.mjs';
 
 export const KNOWLEDGE_CONFLICT_RESOLUTIONS = deepFreeze([
   'PRESERVE_ALTERNATIVES',
@@ -66,6 +70,15 @@ function auditEvent(base, suffix, inputRefs) {
   };
 }
 
+function predictedRef(kind, logicalId, version, semanticPayload) {
+  return makeAuthorityRef({
+    kind,
+    logicalId: requiredText(logicalId, `${kind}.logicalId`),
+    version: requiredText(version, `${kind}.version`),
+    semanticHash: semanticHash(kind, semanticPayload)
+  });
+}
+
 export function conflictAssessmentResourceId(semanticRole) {
   return `knowledge-conflict-assessment:${requiredText(semanticRole, 'semanticRole')}`;
 }
@@ -114,6 +127,7 @@ function validateKnowledgeMember({ ledger, knowledgeRef, useTarget, semanticRole
       ownership: validated.knowledge.semanticPayload.ownership,
       originContextRef: validated.sourceContext.ref,
       assertion: validated.claim.semanticPayload.assertion,
+      semanticRoleAuthority: 'CONFLICT_ASSESSMENT',
       semanticRole
     });
   }
@@ -128,6 +142,7 @@ function validateKnowledgeMember({ ledger, knowledgeRef, useTarget, semanticRole
       ownership: validated.knowledge.semanticPayload.ownership,
       originContextRef: validated.context.ref,
       assertion: validated.knowledge.semanticPayload.assertion,
+      semanticRoleAuthority: 'DERIVED_KNOWLEDGE_AUTHORITY',
       semanticRole
     });
   }
@@ -138,6 +153,9 @@ function activeResolutions(ledger, conflictRef) {
   const records = ledger.exportSnapshot().records.filter((record) =>
     record.ref.kind === 'KnowledgeConflictResolutionDecision'
       && sameAuthorityRef(record.semanticPayload?.knowledgeConflictRef, conflictRef));
+  for (const record of records) {
+    validateConflictResolutionAuthority({ ledger, conflictResolutionRef: record.ref });
+  }
   const superseded = new Set();
   for (const record of records) {
     const predecessor = record.semanticPayload.supersedesResolutionRef;
@@ -151,8 +169,8 @@ export class KnowledgeConflictService {
 
   constructor({ ledger }) {
     if (!ledger || typeof ledger.publish !== 'function' || typeof ledger.resolve !== 'function'
-      || typeof ledger.exportSnapshot !== 'function' || typeof ledger.addLineage !== 'function') {
-      throw new KnowledgeConflictError('INVALID_LEDGER', 'KnowledgeConflictService requires shared replayable AuthorityLedger');
+      || typeof ledger.exportSnapshot !== 'function' || typeof ledger.publishBatchWithLineage !== 'function') {
+      throw new KnowledgeConflictError('INVALID_LEDGER', 'KnowledgeConflictService requires shared replayable AuthorityLedger with atomic authority+lineage publication');
     }
     this.#ledger = ledger;
   }
@@ -198,6 +216,7 @@ export class KnowledgeConflictService {
       knowledgeRef: member.record.ref,
       knowledgeKind: member.kind,
       originContextRef: member.originContextRef,
+      semanticRoleAuthority: member.semanticRoleAuthority,
       assertionHash: semanticHash('ADR-K05-CONFLICT-ASSERTION', member.assertion)
     })).sort((a, b) => exactRefKey(a.knowledgeRef).localeCompare(exactRefKey(b.knowledgeRef))));
 
@@ -211,6 +230,7 @@ export class KnowledgeConflictService {
         memberBindings,
         overlapAssessment: requiredObject(overlapAssessment, 'overlapAssessment'),
         incompatibilityAssessment: requiredObject(incompatibilityAssessment, 'incompatibilityAssessment'),
+        assessmentSemantics: 'DECLARATIVE_SCIENTIFIC_JUDGMENT_ONLY',
         limitations: Array.isArray(limitations) ? deepFreeze(limitations.map((item, index) => requiredObject(item, `limitations[${index}]`))) : (() => { throw new KnowledgeConflictError('INVALID_CONFLICT_INPUT', 'limitations must be an array'); })(),
         ownership: cloneCanonicalValue(ownership),
         status: 'UNRESOLVED',
@@ -237,10 +257,8 @@ export class KnowledgeConflictService {
     supersedesResolutionRef,
     audit
   }) {
-    const conflict = resolveKind(this.#ledger, knowledgeConflictRef, 'KnowledgeConflict', 'KNOWLEDGE_CONFLICT_REQUIRED');
-    if (conflict.semanticPayload.authorityClass !== 'KNOWLEDGE_CONFLICT_AUTHORITY') {
-      throw new KnowledgeConflictError('KNOWLEDGE_CONFLICT_INVALID', 'KnowledgeConflict authorityClass is invalid');
-    }
+    const conflictValidation = validateKnowledgeConflictAuthority({ ledger: this.#ledger, knowledgeConflictRef });
+    const conflict = conflictValidation.conflict;
     const type = requiredText(resolutionType, 'resolutionType');
     if (!RESOLUTION_TYPES.has(type)) throw new KnowledgeConflictError('INVALID_CONFLICT_RESOLUTION', `unsupported resolutionType ${type}`);
     const ownership = conflict.semanticPayload.ownership;
@@ -316,42 +334,43 @@ export class KnowledgeConflictService {
       throw new KnowledgeConflictError('INVALID_CONFLICT_RESOLUTION', 'derivedKnowledgeRef is legal only for DERIVED_SYNTHESIS');
     }
 
-    if (type === 'CALIBRATION_REQUIRED') {
-      payload.calibrationDisposition = 'REQUIRE_SEPARATE_CALIBRATION_ARTIFACT';
-    }
-    if (type === 'PRESERVE_ALTERNATIVES') {
-      payload.preservedKnowledgeRefs = deepFreeze([...memberRefs]);
-    }
+    if (type === 'CALIBRATION_REQUIRED') payload.calibrationDisposition = 'REQUIRE_SEPARATE_CALIBRATION_ARTIFACT';
+    if (type === 'PRESERVE_ALTERNATIVES') payload.preservedKnowledgeRefs = deepFreeze([...memberRefs]);
 
-    const resolution = this.#ledger.publish({
-      kind: 'KnowledgeConflictResolutionDecision',
-      logicalId: requiredText(logicalId, 'logicalId'),
-      version: requiredText(version, 'version'),
-      semanticPayload: payload,
-      audit: auditEvent(audit, 'conflict-resolution', [conflict.ref, approval.authAudit.ref, approval.policy.ref, ...(payload.selectedKnowledgeRef ? [payload.selectedKnowledgeRef] : []), ...(payload.derivedKnowledgeRef ? [payload.derivedKnowledgeRef] : []), ...(predecessor ? [predecessor.ref] : [])])
-    });
-    this.#ledger.addLineage({
+    const resolutionRef = predictedRef('KnowledgeConflictResolutionDecision', logicalId, version, payload);
+    const lineages = [{
       relation: 'derived_from',
-      from: resolution.ref,
+      from: resolutionRef,
       to: conflict.ref,
       details: { lineageRole: 'KNOWLEDGE_CONFLICT_RESOLUTION', resolutionType: type },
       audit: auditEvent(audit, 'resolution-lineage', [approval.authAudit.ref])
-    });
+    }];
     if (predecessor) {
-      this.#ledger.addLineage({
+      lineages.push({
         relation: 'supersedes',
-        from: resolution.ref,
+        from: resolutionRef,
         to: predecessor.ref,
         details: { authorityTransition: 'CONFLICT_RESOLUTION_REVISION' },
         audit: auditEvent(audit, 'resolution-supersession', [approval.authAudit.ref])
       });
     }
-    return resolution;
+
+    const publication = this.#ledger.publishBatchWithLineage({
+      entries: [{
+        kind: 'KnowledgeConflictResolutionDecision',
+        logicalId: requiredText(logicalId, 'logicalId'),
+        version: requiredText(version, 'version'),
+        semanticPayload: payload,
+        audit: auditEvent(audit, 'conflict-resolution', [conflict.ref, approval.authAudit.ref, approval.policy.ref, ...(payload.selectedKnowledgeRef ? [payload.selectedKnowledgeRef] : []), ...(payload.derivedKnowledgeRef ? [payload.derivedKnowledgeRef] : []), ...(predecessor ? [predecessor.ref] : [])])
+      }],
+      lineages
+    });
+    return publication.records[0];
   }
 
   currentResolution({ knowledgeConflictRef }) {
-    const conflict = resolveKind(this.#ledger, knowledgeConflictRef, 'KnowledgeConflict', 'KNOWLEDGE_CONFLICT_REQUIRED');
-    const active = activeResolutions(this.#ledger, conflict.ref);
+    const conflictValidation = validateKnowledgeConflictAuthority({ ledger: this.#ledger, knowledgeConflictRef });
+    const active = activeResolutions(this.#ledger, conflictValidation.conflict.ref);
     if (active.length === 0) return deepFreeze({ status: 'UNRESOLVED', resolution: null });
     if (active.length > 1) return deepFreeze({ status: 'UNRESOLVED_BRANCHES', resolution: null, activeResolutionRefs: active.map((item) => item.ref) });
     return deepFreeze({ status: 'RESOLVED', resolution: active[0] });
