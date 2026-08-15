@@ -429,7 +429,7 @@ function assertActiveDecisionForPublication(ledger, pair, decision) {
   const active = activeDecisionsForTarget(ledger, pair, target);
   if (active.length !== 1) {
     throw new ScientificQualificationError(
-      'UNRESOLVED_QUALIFICATION_DECISION_CONFLICT',
+      'CONFLICTING_QUALIFICATION_DECISIONS',
       `scientific use ${target.use} has ${active.length} active qualification decisions; QualifiedKnowledge cannot choose a convenient branch`
     );
   }
