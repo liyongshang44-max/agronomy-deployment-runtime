@@ -77,12 +77,13 @@ function assertApproval({ ledger, authAuditRef, principal, resourceId, target, o
   return { authAudit, policy };
 }
 
-function validateMember({ ledger, binding, useTarget, semanticRole }) {
+function validateMember({ ledger, binding, useTarget, semanticRole, allowHistorical }) {
   if (binding.knowledgeKind === 'QualifiedKnowledge') {
     const validated = validateQualifiedKnowledgeAuthority({
       ledger,
       qualifiedKnowledgeRef: binding.knowledgeRef,
-      requiredUseTarget: useTarget
+      requiredUseTarget: useTarget,
+      allowHistorical
     });
     if (!sameAuthorityRef(binding.originContextRef, validated.sourceContext.ref)) {
       throw new ConflictAuthorityValidationError('CONFLICT_MEMBER_INVALID', 'QualifiedKnowledge conflict member origin context is substituted');
@@ -100,7 +101,8 @@ function validateMember({ ledger, binding, useTarget, semanticRole }) {
     const validated = validateDerivedKnowledgeAuthority({
       ledger,
       derivedKnowledgeRef: binding.knowledgeRef,
-      requiredUseTarget: useTarget
+      requiredUseTarget: useTarget,
+      allowHistorical
     });
     if (validated.knowledge.semanticPayload.semanticRole !== semanticRole) {
       throw new ConflictAuthorityValidationError('CONFLICT_MEMBER_ROLE_INVALID', 'DerivedKnowledge semantic role differs from conflict role');
@@ -117,7 +119,7 @@ function validateMember({ ledger, binding, useTarget, semanticRole }) {
   throw new ConflictAuthorityValidationError('CONFLICT_MEMBER_INVALID', `unsupported conflict member kind ${binding.knowledgeKind}`);
 }
 
-export function validateKnowledgeConflictAuthority({ ledger, knowledgeConflictRef }) {
+export function validateKnowledgeConflictAuthority({ ledger, knowledgeConflictRef, allowHistorical = false }) {
   if (!ledger || typeof ledger.resolve !== 'function' || typeof ledger.auditFor !== 'function') {
     throw new ConflictAuthorityValidationError('INVALID_LEDGER', 'replayable AuthorityLedger is required');
   }
@@ -148,7 +150,8 @@ export function validateKnowledgeConflictAuthority({ ledger, knowledgeConflictRe
     ledger,
     binding,
     useTarget,
-    semanticRole: payload.semanticRole
+    semanticRole: payload.semanticRole,
+    allowHistorical
   }));
   const ownership = members[0].ownership;
   if (!members.every((member) => sameOwnership(member.ownership, ownership)) || !sameOwnership(payload.ownership, ownership)) {
@@ -174,7 +177,7 @@ export function validateKnowledgeConflictAuthority({ ledger, knowledgeConflictRe
   return deepFreeze({ conflict, useTarget, members, approval });
 }
 
-export function validateConflictResolutionAuthority({ ledger, conflictResolutionRef }) {
+export function validateConflictResolutionAuthority({ ledger, conflictResolutionRef, allowHistorical = false }) {
   const resolution = resolveKind(
     ledger,
     conflictResolutionRef,
@@ -185,7 +188,11 @@ export function validateConflictResolutionAuthority({ ledger, conflictResolution
   if (payload.authorityClass !== 'KNOWLEDGE_CONFLICT_RESOLUTION') {
     throw new ConflictAuthorityValidationError('CONFLICT_RESOLUTION_INVALID', 'conflict resolution authorityClass is invalid');
   }
-  const conflictValidation = validateKnowledgeConflictAuthority({ ledger, knowledgeConflictRef: payload.knowledgeConflictRef });
+  const conflictValidation = validateKnowledgeConflictAuthority({
+    ledger,
+    knowledgeConflictRef: payload.knowledgeConflictRef,
+    allowHistorical
+  });
   const conflict = conflictValidation.conflict;
   const members = conflict.semanticPayload.memberBindings.map((binding) => binding.knowledgeRef);
   const requiredResolutionInputs = [conflict.ref];
@@ -227,7 +234,8 @@ export function validateConflictResolutionAuthority({ ledger, conflictResolution
     const derived = validateDerivedKnowledgeAuthority({
       ledger,
       derivedKnowledgeRef: payload.derivedKnowledgeRef,
-      requiredUseTarget: conflict.semanticPayload.scientificUseTarget
+      requiredUseTarget: conflict.semanticPayload.scientificUseTarget,
+      allowHistorical
     });
     if (derived.knowledge.semanticPayload.semanticRole !== conflict.semanticPayload.semanticRole) {
       throw new ConflictAuthorityValidationError('CONFLICT_RESOLUTION_INVALID', 'derived resolution role differs from conflict role');
