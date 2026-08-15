@@ -174,3 +174,33 @@ DecisionResult
 ```
 
 A04 also does not permit later runtime output to retroactively enter the current manifest. New evidence requires a new immutable context world.
+
+## 12. Acceptance authority boundary
+
+A04 closure requires machine evidence for the world-identity and historical-binding properties that are easy to fake with shallow schema tests.
+
+The accepted A04 suite must prove all of the following against exact authority refs:
+
+```text
+changed exact datum membership
+  -> changed ContextManifest semantic hash
+
+changed publication created_at only
+  -> unchanged ContextManifest semantic hash
+
+same DecisionProblem logical id, material v1 -> v2 objective change
+  -> changed ContextManifest semantic hash
+
+same ContextDatum logical id, materially changed later version
+  -> historical manifest still resolves the exact old ContextDatum ref
+
+same reference/datum/receipt logical ids, materially changed later versions
+  -> historical manifest still resolves the exact old receipt and datum refs
+
+hidden extra publication audit input
+  -> invalid ContextManifest authority
+```
+
+Acceptance identities must be deterministic. Random identifiers are not permitted as a substitute for proving immutable authority behavior.
+
+These tests are authority evidence, not examples. A green suite that changes logical ids instead of exercising same-lineage version drift, silently repairs missing authority data in fixtures, or omits the exact historical receipt path is insufficient to close A04.
