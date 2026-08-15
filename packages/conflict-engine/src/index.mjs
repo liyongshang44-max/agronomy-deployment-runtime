@@ -66,10 +66,6 @@ function auditEvent(base, suffix, inputRefs) {
   };
 }
 
-function targetKey(target) {
-  return semanticHash('ADR-ScientificUseTarget-v1', normalizeScientificUseTarget(target));
-}
-
 export function conflictAssessmentResourceId(semanticRole) {
   return `knowledge-conflict-assessment:${requiredText(semanticRole, 'semanticRole')}`;
 }
@@ -335,10 +331,10 @@ export class KnowledgeConflictService {
       audit: auditEvent(audit, 'conflict-resolution', [conflict.ref, approval.authAudit.ref, approval.policy.ref, ...(payload.selectedKnowledgeRef ? [payload.selectedKnowledgeRef] : []), ...(payload.derivedKnowledgeRef ? [payload.derivedKnowledgeRef] : []), ...(predecessor ? [predecessor.ref] : [])])
     });
     this.#ledger.addLineage({
-      relation: 'RESOLVES',
+      relation: 'derived_from',
       from: resolution.ref,
       to: conflict.ref,
-      details: { resolutionType: type },
+      details: { lineageRole: 'KNOWLEDGE_CONFLICT_RESOLUTION', resolutionType: type },
       audit: auditEvent(audit, 'resolution-lineage', [approval.authAudit.ref])
     });
     if (predecessor) {
