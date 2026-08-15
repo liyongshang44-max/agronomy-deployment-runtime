@@ -16,7 +16,7 @@
     "test:compiler": "node acceptance/scientific-compiler/run.mjs",
     "test:source-faithful": "node acceptance/source-faithful/run.mjs && node acceptance/source-faithful/integrity.mjs",
     "test:qualification": "node acceptance/scientific-qualification/run.mjs && node acceptance/scientific-qualification/integrity.mjs && node acceptance/scientific-qualification/lifecycle.mjs",
-    "test:derived-knowledge": "node acceptance/derived-knowledge/run.mjs && node acceptance/derived-knowledge/integrity.mjs",
+    "test:derived-knowledge": "node acceptance/derived-knowledge/run.mjs && node acceptance/derived-knowledge/integrity.mjs && node acceptance/derived-knowledge/lifecycle.mjs",
     "test": "npm run test:constitution && npm run test:authority && npm run test:authorization && npm run test:source && npm run test:compiler && npm run test:source-faithful && npm run test:qualification && npm run test:derived-knowledge"
   }
 }
