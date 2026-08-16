@@ -73,20 +73,32 @@ test('acquisition capability contract rejects embedded evidence/value/reference 
   }
 });
 
-test('acquisition options filter semantic/epistemic/provenance incompatibility instead of widening the requirement', () => {
+test('acquisition options filter semantic and epistemic incompatibility without inventing a provenance restriction', () => {
   const { requirement } = originRequirement('capability-filter');
+  assert.equal(requirement.acceptanceConstraintBasis.provenance, 'NO_ADDITIONAL_RUNTIME_PROFILE_CONSTRAINT');
   const options = buildInformationAcquisitionOptions({
     requirement,
     capabilities: [
       validCapability(),
       validCapability({ capabilityId: 'wrong-semantic', semanticIds: ['crop.stage'] }),
       validCapability({ capabilityId: 'wrong-epistemic', epistemicClasses: ['DERIVED'] }),
-      validCapability({ capabilityId: 'wrong-provenance', provenanceClasses: ['MODEL'], epistemicClasses: ['ASSERTION'] })
+      validCapability({ capabilityId: 'model-provenance', provenanceClasses: ['MODEL'], epistemicClasses: ['ASSERTION'] })
     ]
   });
-  assert.deepEqual(options.map((item) => item.capabilityId), ['cap-customer-api']);
-  assert.deepEqual(options[0].acceptableEpistemicClasses, ['ASSERTION']);
-  assert.deepEqual(options[0].acceptableProvenanceClasses, ['CUSTOMER_SYSTEM']);
+  assert.deepEqual(options.map((item) => item.capabilityId), ['cap-customer-api', 'model-provenance']);
+  const customer = options.find((item) => item.capabilityId === 'cap-customer-api');
+  const model = options.find((item) => item.capabilityId === 'model-provenance');
+  assert.deepEqual(customer.acceptableEpistemicClasses, ['ASSERTION']);
+  assert.deepEqual(customer.acceptableProvenanceClasses, ['CUSTOMER_SYSTEM']);
+  assert.deepEqual(model.acceptableEpistemicClasses, ['ASSERTION']);
+  assert.deepEqual(model.acceptableProvenanceClasses, ['MODEL']);
+});
+
+test('unsupported provenance vocabulary is rejected rather than filtered or guessed', () => {
+  assert.throws(
+    () => normalizeInformationAcquisitionCapability(validCapability({ provenanceClasses: ['MAGIC_PROVIDER'] })),
+    (error) => error?.code === 'INVALID_INFORMATION_REQUIREMENT_VALUE'
+  );
 });
 
 test('adding acquisition options cannot change InformationRequirement semantic identity or OPEN status', () => {
@@ -160,7 +172,7 @@ test('UNSATISFIABLE cannot be claimed when declared-complete catalog still has a
 });
 
 test('R02 planning and status inspection are read-only over AuthorityLedger and do not mutate ContextManifest', () => {
-  const { world, plan, requirement } = originRequirement('read-only');
+  const { world, plan } = originRequirement('read-only');
   const before = world.env.ledger.exportSnapshot();
   const planning = planInformationRequirements({
     ledger: world.env.ledger,
