@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readdir, readFile } from 'node:fs/promises';
 import { extname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   createResultSinkEvent
 } from '../../sdks/typescript/src/index.mjs';
@@ -113,7 +114,10 @@ test('GEOX adapter imports only the public SDK layer and no ADR authority packag
 });
 
 test('ADR core and public SDK remain free of GEOX MCFT CAP KBS T3R1 semantics', async () => {
-  const roots = [new URL('../../packages/', import.meta.url), new URL('../../sdks/typescript/src/', import.meta.url)];
+  const roots = [
+    fileURLToPath(new URL('../../packages/', import.meta.url)),
+    fileURLToPath(new URL('../../sdks/typescript/src/', import.meta.url))
+  ];
   const forbidden = ['geox', 'mcft', 'kbs', 't3r1'];
   for (const root of roots) {
     for (const file of await walkFiles(root)) {
