@@ -222,12 +222,16 @@ function cropTranslationAudit({ normalized, scope }) {
       field_id: scope.geoxFieldId,
       ...(scope.seasonId ? { season_id: scope.seasonId } : {})
     },
+    source_chronology: {
+      occurred_at: normalized.occurredAt,
+      retrieved_at: normalized.retrievedAt
+    },
     target_semantic_id: 'crop.code',
     mappings: [
       { source: 'record_json.payload.crop_code', target: 'value.category', mode: 'EXACT_COPY' },
       { source: 'record_json.payload.source', target: 'epistemic_class/provenance_class', mode: 'EXPLICIT_ENUM_TRANSLATION' },
-      { source: 'occurred_at', target: 'effective_interval', mode: 'EXACT_INSTANT' },
-      { source: 'adapter.retrieved_at', target: 'available_at', mode: 'ACTUAL_RETRIEVAL_TIME' },
+      { source: 'occurred_at', target: 'effective_interval', mode: 'EXACT_INSTANT', mapped_value: normalized.occurredAt },
+      { source: 'adapter.retrieved_at', target: 'available_at', mode: 'ACTUAL_RETRIEVAL_TIME', mapped_value: normalized.retrievedAt },
       { source: 'record_json.payload.field_id', target: 'spatial_support.geometry_ref', mode: 'EXPLICIT_IDENTITY_MAPPING', mapped_value: scope.adrGeometryRef }
     ],
     deliberately_not_mapped: [
@@ -256,6 +260,10 @@ function soilTranslationAudit({ row, scope, metadata, observedAt, retrievedAt, v
       group_id: scope.groupId,
       field_id: scope.geoxFieldId,
       device_id: text(row.device_id, 'observation.device_id')
+    },
+    source_chronology: {
+      observed_at: observedAt,
+      retrieved_at: retrievedAt
     },
     target_semantic_id: 'soil.volumetric_water_content',
     mappings: [
@@ -310,8 +318,8 @@ export function createGeoxTargetContextProvider({ targetScope }) {
     return Object.freeze({ message, translationAudit: cropTranslationAudit({ normalized, scope }) });
   }
 
-  function deviceObservationToMessage({ observation, installation }) {
-    const translated = translateGeoxDeviceObservationV1({ observation, targetScope: scope, installation });
+  function deviceObservationToMessage({ observation, installation, retrievedAt }) {
+    const translated = translateGeoxDeviceObservationV1({ observation, targetScope: scope, installation, retrievedAt });
     return Object.freeze({
       message: createIntegrationMessage({
         role: 'CONTEXT_PROVIDER',
@@ -333,7 +341,7 @@ export function createGeoxTargetContextProvider({ targetScope }) {
   });
 }
 
-export function translateGeoxDeviceObservationV1({ observation, targetScope, installation }) {
+export function translateGeoxDeviceObservationV1({ observation, targetScope, installation, retrievedAt }) {
   const row = object(observation, 'observation');
   const scope = normalizeTargetScope(targetScope);
   if (text(row.tenant_id, 'observation.tenant_id') !== scope.tenantId
@@ -356,9 +364,11 @@ export function translateGeoxDeviceObservationV1({ observation, targetScope, ins
     fromMm: decimal(metadataInput.fromMm, 'installation.fromMm'),
     toMm: decimal(metadataInput.toMm, 'installation.toMm'),
     unit: text(metadataInput.unit, 'installation.unit'),
-    semanticId: text(metadataInput.semanticId, 'installation.semanticId'),
-    retrievedAt: timestamp(metadataInput.retrievedAt, 'installation.retrievedAt')
+    semanticId: text(metadataInput.semanticId, 'installation.semanticId')
   });
+  if (compareDecimal(metadata.fromMm, '0') < 0 || compareDecimal(metadata.toMm, '0') < 0) {
+    throw new GeoxAdapterError('INVALID_GEOX_SOIL_DEPTH', 'installation depth cannot be negative');
+  }
   if (compareDecimal(metadata.fromMm, metadata.toMm) > 0) {
     throw new GeoxAdapterError('INVALID_GEOX_SOIL_DEPTH', 'installation.fromMm cannot exceed installation.toMm');
   }
@@ -372,8 +382,9 @@ export function translateGeoxDeviceObservationV1({ observation, targetScope, ins
     throw new GeoxAdapterError('GEOX_SOIL_UNIT_CONFLICT', 'GEOX observation unit conflicts with explicit installation measurement semantics');
   }
   const observedAt = timestamp(row.observed_at, 'observation.observed_at');
-  if (metadata.retrievedAt < observedAt) {
-    throw new GeoxAdapterError('INVALID_GEOX_CHRONOLOGY', 'installation.retrievedAt cannot precede observation.observed_at');
+  const actualRetrievedAt = timestamp(retrievedAt, 'retrievedAt');
+  if (actualRetrievedAt < observedAt) {
+    throw new GeoxAdapterError('INVALID_GEOX_CHRONOLOGY', 'retrievedAt cannot precede observation.observed_at');
   }
   if (typeof row.value_num !== 'number' || !Number.isFinite(row.value_num)) {
     throw new GeoxAdapterError('INVALID_GEOX_DEVICE_VALUE', 'observation.value_num must be a finite number');
@@ -388,7 +399,7 @@ export function translateGeoxDeviceObservationV1({ observation, targetScope, ins
     epistemic_class: 'OBSERVATION',
     provenance_class: 'SENSOR',
     effective_interval: { start: observedAt, end: observedAt },
-    available_at: metadata.retrievedAt,
+    available_at: actualRetrievedAt,
     spatial_support: { type: 'FIELD', geometry_ref: scope.adrGeometryRef },
     vertical_support: { from_mm: metadata.fromMm, to_mm: metadata.toMm },
     temporal_support: { type: 'INSTANT' },
@@ -406,7 +417,7 @@ export function translateGeoxDeviceObservationV1({ observation, targetScope, ins
       scope,
       metadata,
       observedAt,
-      retrievedAt: metadata.retrievedAt,
+      retrievedAt: actualRetrievedAt,
       valueDecimal,
       fromMm: metadata.fromMm,
       toMm: metadata.toMm
