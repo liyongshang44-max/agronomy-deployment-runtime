@@ -8,8 +8,14 @@ const writeRequest = {
   properties: {
     logical_id: { type: 'string', minLength: 1 },
     version: { type: 'string', minLength: 1 },
-    principal: { $ref: '#/components/schemas/Principal' },
-    authorization_decision_ref: { $ref: '#/components/schemas/AuthorityRef' },
+    principal: {
+      $ref: '#/components/schemas/Principal',
+      description: 'Declared ADR principal. The API gateway MUST derive the authenticated bearer subject and require exact principal identity equality before invoking any backend authority service; this field is never trusted as caller-selected identity.'
+    },
+    authorization_decision_ref: {
+      $ref: '#/components/schemas/AuthorityRef',
+      description: 'Exact AuthorizationDecisionAudit evidence ref. The backend MUST resolve and replay-validate it for the authenticated principal, operation and resource scope. Possessing or supplying a ref never grants authority by itself.'
+    },
     resource: {
       type: 'object',
       required: ['contract_version'],
@@ -41,7 +47,9 @@ function operationPath(operation) {
     'x-adr-backend-authority': operation.backendAuthority,
     'x-adr-resource-contract': operation.resourceContract,
     'x-adr-required-permission': operation.requiredPermission,
-    'x-adr-idempotency-required': operation.idempotencyRequired
+    'x-adr-idempotency-required': operation.idempotencyRequired,
+    'x-adr-authenticated-principal-binding': 'BEARER_SUBJECT_MUST_EQUAL_REQUEST_PRINCIPAL',
+    'x-adr-authorization-ref-semantics': 'REPLAY_VALIDATED_EVIDENCE_NOT_CAPABILITY'
   };
 
   if (operation.mode === 'NON_AUTHORITY_READ_MODEL') {
