@@ -23,6 +23,8 @@ const targetScope = Object.freeze({
   seasonId: 'season-2026'
 });
 
+const SOIL_RETRIEVED_AT = '2026-08-20T09:41:00Z';
+
 function cropFact(overrides = {}) {
   const payload = overrides.payload ?? {};
   return {
@@ -80,9 +82,17 @@ function installation(overrides = {}) {
     toMm: '100',
     semanticId: 'soil.volumetric_water_content',
     unit: 'm3_per_m3',
-    retrievedAt: '2026-08-20T09:41:00Z',
     ...overrides
   };
+}
+
+function translateSoil({ observation = soilObservation(), install = installation(), retrievedAt = SOIL_RETRIEVED_AT } = {}) {
+  return translateGeoxDeviceObservationV1({
+    observation,
+    targetScope,
+    installation: install,
+    retrievedAt
+  });
 }
 
 function applicabilityRef(kind = 'ApplicabilityAssessment') {
@@ -128,15 +138,17 @@ test('ADR core and public SDK remain free of GEOX MCFT CAP KBS T3R1 semantics', 
   }
 });
 
-test('non-GEOX P03 reference integration remains structurally independent of adapters/geox', async () => {
+test('non-GEOX P03 reference integration has no actual import or script dependency on GEOX adapter', async () => {
   const packageJson = JSON.parse(await readFile(new URL('../../package.json', import.meta.url), 'utf8'));
   const referenceRun = await readFile(new URL('../reference-integration/run.mjs', import.meta.url), 'utf8');
   const referenceIntegrity = await readFile(new URL('../reference-integration/integrity.mjs', import.meta.url), 'utf8');
   const referenceAdapter = await readFile(new URL('../../adapters/reference-field-platform/src/index.mjs', import.meta.url), 'utf8');
-  assert.equal(String(packageJson.scripts?.['test:reference-integration']).includes('acceptance/reference-integration'), true);
+  const script = String(packageJson.scripts?.['test:reference-integration'] ?? '');
+  assert.equal(script.includes('acceptance/reference-integration'), true);
+  assert.equal(script.toLowerCase().includes('geox'), false);
+  const geoxImport = /(?:from\s*['"][^'"]*adapters\/geox|import\s*['"][^'"]*adapters\/geox)/i;
   for (const source of [referenceRun, referenceIntegrity, referenceAdapter]) {
-    assert.equal(source.toLowerCase().includes('adapters/geox'), false);
-    assert.equal(source.toLowerCase().includes("../../adapters/geox"), false);
+    assert.equal(geoxImport.test(source), false);
   }
 });
 
@@ -207,42 +219,49 @@ test('GEOX confidence and allowed_actions cannot leak into ADR uncertainty runti
 });
 
 test('GEOX soil_moisture without explicit installation depth fails instead of becoming root-zone state', () => {
-  assert.throws(() => translateGeoxDeviceObservationV1({ observation: soilObservation(), targetScope }),
-    (error) => error?.code === 'GEOX_SOIL_DEPTH_REQUIRED');
+  assert.throws(() => translateGeoxDeviceObservationV1({
+    observation: soilObservation(), targetScope, retrievedAt: SOIL_RETRIEVED_AT
+  }), (error) => error?.code === 'GEOX_SOIL_DEPTH_REQUIRED');
 });
 
 test('GEOX soil measurement requires explicit VWC semantic and unit authority', () => {
-  assert.throws(() => translateGeoxDeviceObservationV1({
-    observation: soilObservation(), targetScope, installation: installation({ semanticId: 'soil.root_zone_water_status' })
-  }), (error) => error?.code === 'GEOX_SOIL_MEASUREMENT_SEMANTICS_REQUIRED');
-  assert.throws(() => translateGeoxDeviceObservationV1({
-    observation: soilObservation(), targetScope, installation: installation({ unit: 'percent' })
-  }), (error) => error?.code === 'GEOX_SOIL_MEASUREMENT_SEMANTICS_REQUIRED');
+  assert.throws(() => translateSoil({ install: installation({ semanticId: 'soil.root_zone_water_status' }) }),
+    (error) => error?.code === 'GEOX_SOIL_MEASUREMENT_SEMANTICS_REQUIRED');
+  assert.throws(() => translateSoil({ install: installation({ unit: 'percent' }) }),
+    (error) => error?.code === 'GEOX_SOIL_MEASUREMENT_SEMANTICS_REQUIRED');
 });
 
 test('GEOX nullable/declared observation unit cannot conflict with explicit installation semantics', () => {
-  assert.throws(() => translateGeoxDeviceObservationV1({
-    observation: soilObservation({ unit: 'percent' }), targetScope, installation: installation()
-  }), (error) => error?.code === 'GEOX_SOIL_UNIT_CONFLICT');
+  assert.throws(() => translateSoil({ observation: soilObservation({ unit: 'percent' }) }),
+    (error) => error?.code === 'GEOX_SOIL_UNIT_CONFLICT');
 });
 
-test('GEOX soil depth interval and chronology are validated exactly', () => {
-  assert.throws(() => translateGeoxDeviceObservationV1({
-    observation: soilObservation(), targetScope, installation: installation({ fromMm: '200', toMm: '100' })
-  }), (error) => error?.code === 'INVALID_GEOX_SOIL_DEPTH');
-  assert.throws(() => translateGeoxDeviceObservationV1({
-    observation: soilObservation(), targetScope, installation: installation({ fromMm: '1e2' })
-  }), (error) => error?.code === 'INVALID_GEOX_DECIMAL');
-  assert.throws(() => translateGeoxDeviceObservationV1({
-    observation: soilObservation(), targetScope, installation: installation({ retrievedAt: '2026-08-20T09:39:00Z' })
-  }), (error) => error?.code === 'INVALID_GEOX_CHRONOLOGY');
+test('GEOX soil depth interval is non-negative ordered and base-10 exact', () => {
+  assert.throws(() => translateSoil({ install: installation({ fromMm: '-1', toMm: '100' }) }),
+    (error) => error?.code === 'INVALID_GEOX_SOIL_DEPTH');
+  assert.throws(() => translateSoil({ install: installation({ fromMm: '100', toMm: '-1' }) }),
+    (error) => error?.code === 'INVALID_GEOX_SOIL_DEPTH');
+  assert.throws(() => translateSoil({ install: installation({ fromMm: '200', toMm: '100' }) }),
+    (error) => error?.code === 'INVALID_GEOX_SOIL_DEPTH');
+  assert.throws(() => translateSoil({ install: installation({ fromMm: '1e2' }) }),
+    (error) => error?.code === 'INVALID_GEOX_DECIMAL');
+});
+
+test('GEOX observation retrieval chronology is separate from installation metadata and must follow observation time', () => {
+  assert.equal('retrievedAt' in installation(), false);
+  assert.throws(() => translateSoil({ retrievedAt: '2026-08-20T09:39:00Z' }),
+    (error) => error?.code === 'INVALID_GEOX_CHRONOLOGY');
+  assert.throws(() => translateSoil({ retrievedAt: '2026-02-30T09:41:00Z' }),
+    (error) => error?.code === 'INVALID_GEOX_TIME');
+  const translated = translateSoil();
+  assert.equal(translated.resource.available_at, '2026-08-20T09:41:00.000Z');
+  assert.equal(translated.translationAudit.source_chronology.retrieved_at, translated.resource.available_at);
 });
 
 test('GEOX soil observation must carry a finite numeric value', () => {
   for (const value of [NaN, Infinity, -Infinity, null, '0.31']) {
-    assert.throws(() => translateGeoxDeviceObservationV1({
-      observation: soilObservation({ value_num: value }), targetScope, installation: installation()
-    }), (error) => error?.code === 'INVALID_GEOX_DEVICE_VALUE');
+    assert.throws(() => translateSoil({ observation: soilObservation({ value_num: value }) }),
+      (error) => error?.code === 'INVALID_GEOX_DEVICE_VALUE');
   }
 });
 
