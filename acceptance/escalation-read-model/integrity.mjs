@@ -59,7 +59,7 @@ test('A10 is a pure read model and publishes no new ledger authority records or 
   project(world, assessment);
   const after = world.env.ledger.exportSnapshot();
   assert.equal(after.records.length, before.records.length);
-  assert.equal(after.auditEvents.length, before.auditEvents.length);
+  assert.equal(after.audit.length, before.audit.length);
   assert.equal(after.lineage.length, before.lineage.length);
 });
 
