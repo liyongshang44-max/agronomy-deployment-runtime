@@ -72,7 +72,7 @@ Therefore P04 does not fabricate a GEOX ingestion timestamp. The adapter read bo
 retrieved_at
 ```
 
-That actual adapter retrieval time becomes ADR `available_at` and is recorded in translation semantics as `adapter.retrieved_at -> available_at`.
+That actual adapter retrieval time becomes ADR `available_at` and is recorded explicitly in translation-audit chronology and mapping evidence.
 
 ### 2.3 Device observation
 
@@ -143,10 +143,10 @@ Every translation produces a deterministic, non-authority audit record containin
 - upstream contract and exact GEOX repository baseline;
 - exact source fact/ref and content snapshot hash;
 - exact source scope;
+- exact source/adapter chronology values;
 - target semantic id;
-- explicit mapping rules;
+- explicit mapping rules and mapped values where chronology/identity matters;
 - deliberately-not-mapped fields;
-- chronology interpretation;
 - deterministic audit hash;
 - `authority_claim = NONE_TRANSLATION_AUDIT_ONLY`.
 
@@ -162,17 +162,24 @@ A GEOX row with:
 metric = soil_moisture
 ```
 
-cannot become ADR VWC unless explicit installation/measurement metadata supplies all of:
+cannot become ADR VWC unless explicit installation/measurement metadata supplies:
 
 ```text
 semanticId = soil.volumetric_water_content
 unit       = m3_per_m3
 fromMm
 toMm
-actual retrievedAt
 ```
 
-The adapter then preserves the exact vertical interval. For example, a sensor declared at 100 mm remains:
+The actual observation retrieval chronology is a **separate adapter-read input**:
+
+```text
+retrievedAt
+```
+
+It is intentionally not stored inside installation metadata. Installation semantics answer what/where the sensor measures; `retrievedAt` answers when this exact source observation became available at the ADR adapter boundary.
+
+The adapter preserves the exact vertical interval. For example, a sensor declared at 100 mm remains:
 
 ```text
 vertical_support = { from_mm: 100, to_mm: 100 }
@@ -183,9 +190,11 @@ It is never rewritten as root-zone state.
 Additional fail-closed rules:
 
 - missing depth metadata -> reject;
+- negative depth -> reject;
+- reversed depth interval -> reject;
+- exponent/noncanonical depth representation -> reject;
 - wrong semantic id/unit -> reject;
 - conflicting non-null GEOX unit -> reject;
-- invalid/reversed depth -> reject;
 - impossible timestamps -> reject;
 - retrieval before observation -> reject;
 - non-finite or non-numeric value -> reject;
@@ -225,10 +234,11 @@ P04 acceptance enforces:
 
 - `adapters/geox` imports the public SDK layer only, not ADR internal authority packages;
 - ADR `packages/*` and public SDK source contain no GEOX/MCFT/CAP/KBS/T3R1 semantics;
-- P03 non-GEOX reference adapter and P03 acceptance contain no dependency on `adapters/geox`;
+- P03 non-GEOX reference integration has no actual import or root-script dependency on `adapters/geox`;
+- repository Constitution independently proves deleting `adapters/geox` does not change standalone core acceptance;
 - P03 remains an independent product proof, while P04 is a removable first-party downstream integration.
 
-Deleting the GEOX adapter would remove P04-specific acceptance but does not alter ADR core or the P03 non-GEOX path.
+P04 does not treat assertion text that merely mentions `adapters/geox` as a dependency edge; dependency regression checks actual imports/scripts plus the Constitution deletion probe.
 
 ## 9. Acceptance
 
@@ -243,25 +253,27 @@ Positive acceptance proves:
 - exact verified GEOX baseline/contract pin;
 - conservative crop source epistemic/provenance mapping;
 - confidence and allowed_actions non-consumption;
+- actual crop retrieval chronology is preserved in ADR `available_at` and translation audit;
 - P02 SDK -> exact ContextDatum authority continuity;
 - exact ContextDatum ref -> ContextManifest -> Gate-A Applicability/Workbench closure;
 - exact ApplicabilityAssessment -> GEOX ResultSink projection;
 - explicit shallow VWC depth is preserved and never promoted to root-zone state;
+- observation retrieval chronology is separate from installation metadata;
 - no RuntimeEligibility/RuntimeBinding/DecisionRobustness/DecisionResult fabrication.
 
 Integrity acceptance attacks:
 
 - core/SDK GEOX coupling;
 - internal authority imports;
-- P03 dependency on GEOX;
+- P03 actual dependency on GEOX;
 - schema-version/type drift;
 - crop status/source drift;
 - cross-scope records;
 - impossible/backwards chronology;
 - confidence/allowed_actions authority laundering;
-- missing soil depth;
+- missing/negative/reversed/noncanonical soil depth;
 - unit/semantic conflicts;
-- reversed/noncanonical depth;
+- observation-retrieval chronology laundering into installation metadata;
 - invalid values;
 - ResultSink projection/wrong-kind substitution;
 - first-party special-authority claims.
