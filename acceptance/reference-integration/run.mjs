@@ -195,7 +195,7 @@ test('reference ContextProvider traverses the P02 SDK contract without losing se
 
 test('a non-GEOX reference provider closes the existing Gate-A applicability/workbench path', async () => {
   const result = await createReferenceGateAWorld('direct');
-  assert.equal(result.providerDatum.semanticPayload.datum.source.providerId, REFERENCE_FIELD_PLATFORM_ID);
+  assert.equal(result.providerDatum.semanticPayload.source.providerId, REFERENCE_FIELD_PLATFORM_ID);
   assert.equal(result.assessment.semanticPayload.transportStatus, 'DIRECTLY_APPLICABLE');
   assert.equal(result.assessment.semanticPayload.scientificUseStatus, 'QUALIFIED');
   assert.equal(result.assessment.semanticPayload.decisionRelevance, 'MATERIAL');
