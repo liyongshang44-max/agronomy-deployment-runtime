@@ -5,6 +5,7 @@ import {
 } from '../../packages/runtime-eligibility/src/index.mjs';
 import {
   directEligibilityWorld,
+  mixedEligibilityWorld,
   multiEligibilityWorld,
   publishEligibility,
   transportEligibilityWorld
@@ -96,6 +97,23 @@ test('multiple structurally complete legal alternatives remain eligible and are 
   assert.equal(result.alternativeEvaluations.length, 2);
   assert.ok(result.alternativeEvaluations.every((path) => path.disposition === 'LEGAL'));
   assert.equal(new Set(result.alternativeEvaluations.map((path) => path.pathId)).size, 2);
+});
+
+test('one legal alternative keeps overall runtime eligible even when a sibling alternative is calibration-blocked', () => {
+  const world = mixedEligibilityWorld('existence-semantics');
+  assert.equal(world.runtimePlan.alternativePaths.length, 2);
+  const result = buildRuntimeEligibility({ ledger: world.env.ledger, runtimePlan: world.runtimePlan });
+  assert.equal(result.runtimeEligibility, 'RUNTIME_ELIGIBLE');
+  assert.equal(result.legalRuntimeCandidateCount, 1);
+  assert.equal(result.hardBlockedCandidateCount, 1);
+  assert.equal(result.informationPendingCandidateCount, 0);
+  assert.equal(result.alternativeEvaluations.filter((path) => path.disposition === 'LEGAL').length, 1);
+  const blocked = result.alternativeEvaluations.find((path) => path.disposition === 'NO_LEGAL_RUNTIME');
+  assert.ok(blocked);
+  assert.deepEqual(blocked.reasonCodes, ['CALIBRATION_AUTHORITY_REQUIRED']);
+  assert.deepEqual(result.reasonCodes, []);
+  assert.deepEqual(result.informationRequirements, []);
+  assert.deepEqual(result.limitations, []);
 });
 
 test('RuntimeEligibility is published as immutable runtime-legality authority by the exact runtime principal and replays', () => {
