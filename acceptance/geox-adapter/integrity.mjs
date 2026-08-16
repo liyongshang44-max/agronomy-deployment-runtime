@@ -28,10 +28,10 @@ const SOIL_RETRIEVED_AT = '2026-08-20T09:41:00Z';
 function cropFact(overrides = {}) {
   const payload = overrides.payload ?? {};
   return {
-    fact_id: 'cropctx-geox-integrity',
+    fact_id: overrides.fact_id ?? 'cropctx-geox-integrity',
     occurred_at: overrides.occurred_at ?? '2026-08-20T09:30:00Z',
     retrieved_at: overrides.retrieved_at ?? '2026-08-20T09:55:00Z',
-    source: 'crop_context_service',
+    source: overrides.source ?? 'crop_context_service',
     record_json: {
       type: overrides.type ?? 'crop_context_v1',
       schema_version: overrides.schema_version ?? '1',
@@ -196,6 +196,23 @@ test('GEOX crop chronology uses actual adapter retrieval time and rejects imposs
     (error) => error?.code === 'INVALID_GEOX_CHRONOLOGY');
   assert.throws(() => provider.cropContextToMessage(cropFact({ retrieved_at: '2026-08-20T09:55:00+14:01' })),
     (error) => error?.code === 'INVALID_GEOX_TIME');
+});
+
+test('source snapshot hash binds exact GEOX row values before timestamp interpretation', () => {
+  const provider = createGeoxTargetContextProvider({ targetScope });
+  const utc = provider.cropContextToMessage(cropFact({
+    fact_id: 'cropctx-snapshot-same-id',
+    occurred_at: '2026-08-20T09:30:00Z'
+  }));
+  const offset = provider.cropContextToMessage(cropFact({
+    fact_id: 'cropctx-snapshot-same-id',
+    occurred_at: '2026-08-20T10:30:00+01:00'
+  }));
+  assert.deepEqual(utc.message.payload.effective_interval, offset.message.payload.effective_interval);
+  assert.notEqual(utc.translationAudit.source_snapshot_hash, offset.translationAudit.source_snapshot_hash);
+  assert.equal(utc.translationAudit.source_chronology.source_occurred_at, '2026-08-20T09:30:00Z');
+  assert.equal(offset.translationAudit.source_chronology.source_occurred_at, '2026-08-20T10:30:00+01:00');
+  assert.equal(utc.translationAudit.source_chronology.interpreted_occurred_at, offset.translationAudit.source_chronology.interpreted_occurred_at);
 });
 
 test('GEOX confidence and allowed_actions cannot leak into ADR uncertainty runtime legality or decision authority', () => {
