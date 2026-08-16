@@ -20,12 +20,15 @@ const writeRequest = {
   }
 };
 
-const exactReadParameters = [
-  { name: 'kind', in: 'path', required: true, schema: { type: 'string', minLength: 1 } },
-  { name: 'logical_id', in: 'path', required: true, schema: { type: 'string', minLength: 1 } },
-  { name: 'version', in: 'path', required: true, schema: { type: 'string', minLength: 1 } },
-  { name: 'semantic_hash', in: 'query', required: true, schema: { type: 'string', pattern: '^sha256:' } }
-];
+function pathParameters(path) {
+  const matches = [...path.matchAll(/\{([^}]+)\}/g)].map((match) => match[1]);
+  return matches.map((name) => ({
+    name,
+    in: 'path',
+    required: true,
+    schema: { type: 'string', minLength: 1 }
+  }));
+}
 
 function operationPath(operation) {
   const path = `${ADR_PUBLIC_API_BASE_PATH}${operation.path}`;
@@ -41,31 +44,13 @@ function operationPath(operation) {
     'x-adr-idempotency-required': operation.idempotencyRequired
   };
 
-  if (operation.operationId === 'getAuthorityResource') {
-    return [path, lowerMethod, {
-      ...common,
-      summary: 'Read one exact immutable ADR authority resource',
-      parameters: exactReadParameters,
-      responses: {
-        200: {
-          description: 'Exact resource',
-          content: { 'application/json': { schema: { $ref: '#/components/schemas/AuthorityResource' } } }
-        },
-        404: { $ref: '#/components/responses/Problem' }
-      }
-    }];
-  }
-
   if (operation.mode === 'NON_AUTHORITY_READ_MODEL') {
-    const parameters = operation.operationId === 'getAgronomistWorkbenchCase'
-      ? [{ name: 'assessment_id', in: 'path', required: true, schema: { type: 'string', minLength: 1 } }]
-      : [];
     return [path, lowerMethod, {
       ...common,
       summary: operation.operationId === 'getAgronomistWorkbenchCase'
         ? 'Project one authority-validated agronomist workbench case'
         : 'List authority-validated agronomist escalation projections',
-      parameters,
+      parameters: pathParameters(operation.path),
       responses: {
         200: {
           description: 'Non-authority projection',
@@ -81,13 +66,16 @@ function operationPath(operation) {
   return [path, lowerMethod, {
     ...common,
     summary: `Create ${operation.authorityKind} through its existing governed authority service`,
-    parameters: [{
-      name: 'Idempotency-Key',
-      in: 'header',
-      required: true,
-      schema: { type: 'string', minLength: 1 },
-      description: 'Transport retry identity. It never substitutes for the ADR logical/version/semantic identity.'
-    }],
+    parameters: [
+      ...pathParameters(operation.path),
+      {
+        name: 'Idempotency-Key',
+        in: 'header',
+        required: true,
+        schema: { type: 'string', minLength: 1 },
+        description: 'Transport retry identity. It never substitutes for the ADR logical/version/semantic identity.'
+      }
+    ],
     requestBody: {
       required: true,
       content: { 'application/json': { schema: { $ref: '#/components/schemas/AuthorityWriteRequest' } } }
@@ -126,7 +114,8 @@ export const ADR_PILOT_OPENAPI = deepFreeze({
     },
     schemas: {
       AuthorityRef: {
-        type: 'object', additionalProperties: false,
+        type: 'object',
+        additionalProperties: false,
         required: ['kind', 'logical_id', 'version', 'semantic_hash'],
         properties: {
           kind: { type: 'string', minLength: 1 },
@@ -136,7 +125,8 @@ export const ADR_PILOT_OPENAPI = deepFreeze({
         }
       },
       Principal: {
-        type: 'object', additionalProperties: false,
+        type: 'object',
+        additionalProperties: false,
         required: ['principal_id', 'type', 'organization_id'],
         properties: {
           principal_id: { type: 'string', minLength: 1 },
@@ -148,7 +138,8 @@ export const ADR_PILOT_OPENAPI = deepFreeze({
       },
       AuthorityWriteRequest: writeRequest,
       AuthorityResource: {
-        type: 'object', additionalProperties: false,
+        type: 'object',
+        additionalProperties: false,
         required: ['ref', 'resource'],
         properties: {
           ref: { $ref: '#/components/schemas/AuthorityRef' },
@@ -162,7 +153,8 @@ export const ADR_PILOT_OPENAPI = deepFreeze({
         }
       },
       WorkbenchCase: {
-        type: 'object', additionalProperties: true,
+        type: 'object',
+        additionalProperties: true,
         required: ['projectionKind', 'projectionHash', 'classification', 'reviewRequired', 'applicability', 'scientificEvidence', 'targetContext', 'why'],
         properties: {
           projectionKind: { const: 'NON_AUTHORITY_AGRONOMIST_WORKBENCH_CASE' },
@@ -179,7 +171,8 @@ export const ADR_PILOT_OPENAPI = deepFreeze({
         }
       },
       Problem: {
-        type: 'object', additionalProperties: false,
+        type: 'object',
+        additionalProperties: false,
         required: ['code', 'message'],
         properties: { code: { type: 'string' }, message: { type: 'string' } }
       }
