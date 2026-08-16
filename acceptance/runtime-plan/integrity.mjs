@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import {
   buildRuntimeCandidates,
-  compileRuntimePlan
+  compileRuntimePlan,
+  validateRuntimePlanDag
 } from '../../packages/runtime-plan/src/index.mjs';
 import {
   directPlanWorld,
@@ -62,7 +63,7 @@ test('duplicate exact applicability refs fail closed', () => {
   })), (error) => error?.code === 'DUPLICATE_RUNTIME_PLAN_REF');
 });
 
-test('missing context remains a structured open requirement and explicit information node', () => {
+test('missing applicability context remains a structured open requirement and explicit information node', () => {
   const world = directPlanWorld('missing-context', { includeCrop: false });
   const candidates = buildRuntimeCandidates(planCompilerInput(world));
   const plan = compileRuntimePlan(planCompilerInput(world));
@@ -71,6 +72,26 @@ test('missing context remains a structured open requirement and explicit informa
     requirement.requirementType === 'MISSING_CONTEXT' && requirement.semanticId === 'crop.code'));
   assert.ok(plan.nodes.some((node) => node.nodeType === 'INFORMATION' && node.semanticInputs.includes('crop.code')));
   assert.equal(JSON.stringify(plan.openRequirements).includes('crop.code'), true);
+});
+
+test('RuntimeProfile-required context missing from an otherwise directly applicable candidate remains an explicit shared plan gap', () => {
+  const world = directPlanWorld('profile-context-gap', { omitProfileSoil: true });
+  assert.equal(world.assessments[0].semanticPayload.transportStatus, 'DIRECTLY_APPLICABLE');
+  assert.equal(world.assessments[0].semanticPayload.runtimeUse, 'ALLOWED');
+  const candidates = buildRuntimeCandidates(planCompilerInput(world));
+  const plan = compileRuntimePlan(planCompilerInput(world));
+  const gap = candidates.sharedOpenRequirements.find((requirement) =>
+    requirement.requirementType === 'RUNTIME_PROFILE_CONTEXT'
+      && requirement.code === 'REQUIRED_SEMANTIC_MISSING'
+      && requirement.semanticId === 'soil.volumetric_water_content');
+  assert.ok(gap);
+  assert.equal(candidates.candidates[0].compilerState, 'OPEN_REQUIREMENTS');
+  assert.ok(plan.openRequirements.some((requirement) =>
+    requirement.requirementType === 'RUNTIME_PROFILE_CONTEXT'
+      && requirement.semanticId === 'soil.volumetric_water_content'));
+  assert.ok(plan.nodes.some((node) =>
+    node.nodeType === 'INFORMATION'
+      && node.semanticInputs.includes('soil.volumetric_water_content')));
 });
 
 test('blocked applicability is represented as compiler state, never silently dropped or called executable', () => {
@@ -82,21 +103,30 @@ test('blocked applicability is represented as compiler state, never silently dro
   assert.equal(JSON.stringify(plan).includes('EXECUTABLE'), false);
 });
 
-test('current RuntimeBinding is not a required compiler input and cannot affect plan identity', () => {
-  const world = directPlanWorld('no-binding');
+test('current RuntimeBinding, RuntimeEligibility and Decision outputs are rejected as compiler predecessors rather than silently ignored', () => {
+  const world = directPlanWorld('no-circular-predecessor');
   const input = planCompilerInput(world);
-  const base = compileRuntimePlan(input);
-  const withIrrelevantCurrentBinding = compileRuntimePlan({
-    ...input,
-    currentRuntimeBindingRef: {
-      kind: 'RuntimeBinding',
-      logicalId: 'binding-that-must-not-be-a-predecessor',
-      version: '1',
-      semanticHash: 'sha256:not-an-input'
-    }
-  });
-  assert.equal(base.planHash, withIrrelevantCurrentBinding.planHash);
-  assert.deepEqual(base.nodes, withIrrelevantCurrentBinding.nodes);
+  for (const [field, value] of [
+    ['currentRuntimeBindingRef', { kind: 'RuntimeBinding' }],
+    ['runtimeEligibilityRef', { kind: 'RuntimeEligibility' }],
+    ['decisionResultRef', { kind: 'DecisionResult' }]
+  ]) {
+    assert.throws(
+      () => compileRuntimePlan({ ...input, [field]: value }),
+      (error) => error?.code === 'INVALID_RUNTIME_PLAN_INPUT_FIELD',
+      field
+    );
+  }
+});
+
+test('RuntimePlan DAG validator rejects unknown dependencies and cycles', () => {
+  assert.throws(() => validateRuntimePlanDag([
+    { nodeId: 'a', dependencyNodes: ['missing'] }
+  ]), (error) => error?.code === 'RUNTIME_PLAN_UNKNOWN_DEPENDENCY');
+  assert.throws(() => validateRuntimePlanDag([
+    { nodeId: 'a', dependencyNodes: ['b'] },
+    { nodeId: 'b', dependencyNodes: ['a'] }
+  ]), (error) => error?.code === 'RUNTIME_PLAN_DEPENDENCY_CYCLE');
 });
 
 test('RuntimePlan compilation is read-only over the AuthorityLedger', () => {
