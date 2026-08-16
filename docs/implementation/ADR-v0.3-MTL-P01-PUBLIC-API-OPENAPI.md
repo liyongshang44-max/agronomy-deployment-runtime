@@ -45,6 +45,17 @@ Bearer authentication
 
 `Idempotency-Key` is transport retry identity only. It does not replace ADR logical id, version, semantic hash or authority idempotence semantics.
 
+The authenticated bearer identity is authoritative for caller identity. The transport/gateway MUST derive the authenticated subject and require exact identity equality with the declared `principal` before invoking any backend service. A caller cannot self-select another ADR Principal merely by placing it in the request body.
+
+`authorization_decision_ref` is replayable authority evidence, not a bearer capability. The backend MUST resolve and replay-validate the exact AuthorizationDecisionAudit against the authenticated principal, operation and resource scope. Possession or submission of an allowed decision ref cannot authorize a different principal/scope/operation.
+
+These rules are exposed machine-readably on every operation as:
+
+```text
+x-adr-authenticated-principal-binding = BEARER_SUBJECT_MUST_EQUAL_REQUEST_PRINCIPAL
+x-adr-authorization-ref-semantics = REPLAY_VALIDATED_EVIDENCE_NOT_CAPABILITY
+```
+
 Each operation freezes an `x-adr-resource-contract` value. P02 may map representation, but it may not reinterpret or flatten the frozen resource semantics.
 
 Authority responses retain an exact authority reference:
@@ -123,6 +134,8 @@ Acceptance proves:
 - every registry operation exists in OpenAPI;
 - every write maps to a known governed backend seam;
 - every write requires bearer authentication and transport idempotency;
+- bearer identity must bind exactly to declared ADR principal;
+- authorization-decision refs are replay-validated evidence, never bearer capabilities;
 - every authority write pins a frozen resource contract version;
 - templated paths declare exact path parameters;
 - exact AuthorityRef preserves kind/logical-id/version/semantic-hash identity;
