@@ -69,7 +69,7 @@ function publishExistingModel(env) {
 }
 
 test('all frozen provider types register executable identity only with matching locator kinds', () => {
-  for (const [index, providerType] of ['INTERNAL', 'HTTP', 'CUSTOMER', 'GEOX', 'WASM', 'BATCH'].entries()) {
+  for (const [index, providerType] of ['INTERNAL', 'HTTP', 'CUSTOMER', 'FIRST_PARTY', 'WASM', 'BATCH'].entries()) {
     const env = makeEnv();
     const record = publish(env, `impl-provider-${providerType.toLowerCase()}`, '1', implementationSpec({
       providerType,
