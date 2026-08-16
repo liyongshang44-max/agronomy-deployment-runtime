@@ -12,6 +12,8 @@ const tests = [];
 function test(name, fn) { tests.push({ name, fn }); }
 
 const mapping = {
+  sourcePlotKey: 'plot-independent-1',
+  sourceMetricCode: 'CUSTOMER_CROP_LABEL',
   semanticId: 'crop.code',
   unit: '1',
   valueType: 'CATEGORY',
@@ -67,6 +69,18 @@ test('reference ContextProvider rejects missing source data rather than defaulti
   const missing = { ...record };
   delete missing.raw_value;
   assert.throws(() => provider.toContextMessage(missing), (error) => error?.code === 'INVALID_REFERENCE_INPUT');
+});
+
+test('reference ContextProvider rejects a record from another configured plot scope', () => {
+  const provider = createReferenceFieldPlatformContextProvider({ contextMapping: mapping });
+  assert.throws(() => provider.toContextMessage({ ...record, plot_key: 'plot-other-9' }),
+    (error) => error?.code === 'REFERENCE_SOURCE_SCOPE_MISMATCH');
+});
+
+test('reference ContextProvider rejects a different source metric from the same plot', () => {
+  const provider = createReferenceFieldPlatformContextProvider({ contextMapping: mapping });
+  assert.throws(() => provider.toContextMessage({ ...record, metric_code: 'CUSTOMER_SOIL_MOISTURE' }),
+    (error) => error?.code === 'REFERENCE_SOURCE_METRIC_MISMATCH');
 });
 
 test('reference ContextProvider rejects ungoverned value-type reinterpretation', () => {
