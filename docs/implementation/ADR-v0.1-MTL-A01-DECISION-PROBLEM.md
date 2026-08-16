@@ -4,6 +4,11 @@ Status: **IMPLEMENTATION CONTRACT — A01**
 
 Baseline: `main @ 4455a23e3c785137ee8da29938484e416768a666`
 
+Implementation extensions after the original A01 slice:
+
+- the A01 independent review established explicit F03 `decision.problem.create` scoped authorization and superseded the earlier identity-only creation seam;
+- the A07 independent review hardened DecisionProblem timestamps against impossible-calendar / JavaScript Date normalization without changing DecisionProblem authority semantics.
+
 ## 1. Frozen authority basis
 
 A01 implements the existing Architecture v1.0 authority set without reopening it:
@@ -52,6 +57,8 @@ decisionDeadline
 
 `targetRef` v1 admits only `organizationId`, optional `tenantId`, `farmId`, `fieldId`, `seasonId`, and `zoneId`. It must not acquire GEOX/customer-specific schema fields.
 
+`logicalTime` and `decisionDeadline` must be explicit RFC3339 timestamps with timezone, at most millisecond fractional precision, real calendar dates/clock values, and timezone offsets within the deterministic RFC3339 bound of ±14:00. Invalid dates such as February 30 are rejected before JavaScript `Date` parsing and may not be silently normalized into a different instant. Valid values are canonicalized to UTC ISO form before hashing.
+
 `decisionHorizon.duration` must be a syntactically valid ISO-8601 duration. Week-form durations are kept distinct and cannot be mixed with date/time components. A01 preserves the exact normalized duration string as decision-scope semantics; it does not silently convert calendar durations into elapsed-hour claims.
 
 `actionSpace` is a non-empty canonical set of action codes. Decision-material action parameters may be represented by explicit constraints and, in later capabilities, governed Policy action contracts. A01 does not create a Policy DSL.
@@ -62,24 +69,31 @@ decisionDeadline
 
 Material changes to decision type, target scope, logical time, horizon, objective, action space, constraints, use purpose, use class, authority mode, or deadline create a different semantic hash.
 
-Action-space and constraint ordering are non-semantic because both are sets. Timestamp representation is normalized to UTC ISO form before hashing.
+Action-space and constraint ordering are non-semantic because both are sets. Timestamp representation is normalized to UTC ISO form before hashing only after strict calendar/time/offset validation.
 
 Published authority remains immutable under the shared AuthorityLedger. A later version cannot rewrite an earlier exact ref/hash.
 
 ## 5. Creation-scope authority
 
-F03 currently has no frozen DecisionProblem-specific mutation permission. A01 therefore does **not** reuse `context.write`, invent a new permission silently, or claim a complete runtime-plane IAM model.
-
-Until a dedicated runtime mutation permission is separately adjudicated, A01 is fail-closed at the existing principal identity boundary:
+The original A01 minimum identity-only creation seam was superseded by the A01 independent-review F03 extension. Current DecisionProblem creation requires the explicit permission:
 
 ```text
-creator.organizationId == target.organizationId
-creator.tenantId       == target.tenantId
+decision.problem.create
 ```
 
-The exact creator principal and target scope are retained in immutable audit authority. Creation audit actor must equal the creator principal.
+with these invariants:
 
-This is an A01 minimum authority seam, not a claim that organization/tenant identity alone is the final production authorization model.
+- no existing built-in role receives the permission implicitly;
+- `context.write` is not interchangeable with it;
+- publication requires an exact content-addressed `AuthorizationDecisionAudit`;
+- the decision must be replayable from exact immutable `RoleAssignment` refs;
+- request scope binds exact organization, optional tenant, `resourceType=DECISION_PROBLEM`, and exact DecisionProblem logical id;
+- creator organization/tenant must still exactly match target organization/tenant;
+- same principal id/type in another tenant contributes no authority;
+- scoped DecisionProblem creation does not fabricate a `KnowledgeGovernancePolicy` / `policyRef`;
+- publication audit actor must equal the exact creator and must directly bind the exact creation authorization.
+
+See also `ADR-v0.1-MTL-A01-F03-SCOPED-AUTHORIZATION-SEAM.md` and the A01 extension notice in the F03 implementation contract.
 
 ## 6. Decision-authority guard
 
@@ -103,13 +117,13 @@ The guard does not create DecisionResult. It only prevents later runtime layers 
 
 ## 7. Replay / anti-laundering
 
-Validation requires exact `DecisionProblem` ref/hash, exact frozen v1 semantic shape, `authorityClass = DECISION_SCOPE`, direct publication audit, exact creator actor, and exact creator organization/tenant against target scope.
+Validation requires exact `DecisionProblem` ref/hash, exact frozen v1 semantic shape, `authorityClass = DECISION_SCOPE`, direct publication audit, exact creator actor, exact creator organization/tenant against target scope, and exact replayable `decision.problem.create` RoleAssignment authorization.
 
-A generic AuthorityLedger record using kind `DecisionProblem` without the A01 publication audit contract is not valid DecisionProblem authority.
+A generic AuthorityLedger record using kind `DecisionProblem`, copied audit vocabulary, or forged AuthorizationDecision without exact RoleAssignment authority is not valid DecisionProblem authority.
 
 ## 8. Acceptance boundary
 
-A01 acceptance proves positive immutable publication/replay, canonical ordering stability, material identity across every frozen decision-scope dimension, semantic mutation rejection, exact historical replay, cross-org/tenant fail-closed behavior, audit anti-impersonation, top-level and nested conclusion/result laundering rejection, strict horizon syntax, time/action validation, `RUNTIME_ONLY` final-decision denial, ADR/external authority-mode separation, and generic-ledger anti-laundering.
+A01 acceptance proves positive immutable publication/replay, canonical ordering stability, material identity across every frozen decision-scope dimension, semantic mutation rejection, exact historical replay, cross-org/tenant fail-closed behavior, audit anti-impersonation, top-level and nested conclusion/result laundering rejection, strict horizon syntax, strict RFC3339/calendar/timezone validation, action validation, `RUNTIME_ONLY` final-decision denial, ADR/external authority-mode separation, scoped authorization replay, and generic-ledger anti-laundering.
 
 ## 9. Explicit nonclaims
 
