@@ -14,7 +14,8 @@ export const PERMISSIONS = deepFreeze({
   AUDIT_READ: 'audit.read',
   CONTEXT_WRITE: 'context.write',
   CANDIDATE_COMPILE: 'compiler.candidate.compile',
-  DECISION_PROBLEM_CREATE: 'decision.problem.create'
+  DECISION_PROBLEM_CREATE: 'decision.problem.create',
+  RUNTIME_PROFILE_MANAGE: 'runtime.profile.manage'
 });
 
 const VALID_PERMISSIONS = new Set(Object.values(PERMISSIONS));
