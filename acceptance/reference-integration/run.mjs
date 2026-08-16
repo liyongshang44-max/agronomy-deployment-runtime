@@ -3,15 +3,16 @@ import {
   createAdrPilotClient,
   createResultSinkEvent
 } from '../../sdks/typescript/src/index.mjs';
+import { publishContextDatum } from '../../packages/context-contract/src/index.mjs';
 import {
   REFERENCE_FIELD_PLATFORM_ID,
   consumeReferenceApplicabilityResult,
   createReferenceFieldPlatformContextProvider
 } from '../../adapters/reference-field-platform/src/index.mjs';
 import {
-  datumInput,
-  publishDatum,
-  publishManifest
+  audit,
+  publishManifest,
+  writeAuthorization
 } from '../context-manifest/fixtures.mjs';
 import {
   assess,
@@ -38,6 +39,8 @@ const customerRecord = Object.freeze({
 });
 
 const cropMapping = Object.freeze({
+  sourcePlotKey: 'north-plot-774',
+  sourceMetricCode: 'CUSTOMER_CROP_LABEL_V2',
   semanticId: 'crop.code',
   unit: '1',
   valueType: 'CATEGORY',
@@ -60,54 +63,21 @@ function referenceProviderMessage() {
   return provider.toContextMessage(customerRecord);
 }
 
-async function passThroughPilotSdk(message) {
-  let request;
-  const client = createAdrPilotClient({
-    principal: {
-      principal_id: 'reference-context-provider',
-      type: 'SERVICE_ACCOUNT',
-      organization_id: 'org-a',
-      tenant_id: 'tenant-a',
-      program_ids: ['pilot-a']
-    },
-    getAccessToken: () => 'reference-provider-test-token',
-    transport: async (value) => {
-      request = value;
-      return {
-        ref: {
-          kind: 'ContextDatum',
-          logical_id: value.body.logical_id,
-          version: value.body.version,
-          semantic_hash: 'sha256:reference-context-datum-1'
-        },
-        resource: value.body.resource
-      };
-    }
-  });
-  const response = await client.createContextDatum({
-    logicalId: 'context-datum.reference.reading-00017',
-    version: '1',
-    authorizationDecisionRef: {
-      kind: 'AuthorizationDecisionAudit',
-      logical_id: 'auth.reference.context-datum-1',
-      version: '1',
-      semantic_hash: 'sha256:reference-context-write-auth-1'
-    },
-    resource: message.payload,
-    idempotencyKey: 'reference-reading-00017'
-  });
-  return { request, response };
+function coreValueFromWire(value) {
+  switch (value.type) {
+    case 'CATEGORY': return { type: value.type, category: value.category };
+    case 'DECIMAL': return { type: value.type, decimal: value.decimal };
+    case 'INTEGER': return { type: value.type, integer: value.integer };
+    case 'STRING': return { type: value.type, string: value.string };
+    default: throw new Error(`unsupported P03 reference value type ${value.type}`);
+  }
 }
 
-async function createReferenceGateAWorld(label = 'reference-direct') {
-  const message = referenceProviderMessage();
-  const sdk = await passThroughPilotSdk(message);
-  const resource = sdk.request.body.resource;
-
-  const base = createApplicabilityWorld(`p03-${label}`, { includeCrop: false });
-  const providerDatum = publishDatum(base.env.ledger, `datum.p03.${label}.crop`, datumInput({
+function coreDatumFromWire(resource) {
+  return {
+    contractVersion: resource.contract_version,
     semanticId: resource.semantic_id,
-    value: { type: resource.value.type, category: resource.value.category },
+    value: coreValueFromWire(resource.value),
     unit: resource.unit,
     epistemicClass: resource.epistemic_class,
     provenanceClass: resource.provenance_class,
@@ -120,7 +90,10 @@ async function createReferenceGateAWorld(label = 'reference-direct') {
       type: resource.spatial_support.type,
       geometryRef: resource.spatial_support.geometry_ref
     },
-    verticalSupport: resource.vertical_support,
+    verticalSupport: resource.vertical_support === null ? null : {
+      fromMm: resource.vertical_support.from_mm,
+      toMm: resource.vertical_support.to_mm
+    },
     temporalSupport: { type: resource.temporal_support.type },
     uncertainty: { type: resource.uncertainty.type },
     source: {
@@ -128,11 +101,78 @@ async function createReferenceGateAWorld(label = 'reference-direct') {
       sourceRef: resource.source.source_ref,
       contentHash: resource.source.content_hash
     }
-  }));
+  };
+}
+
+async function publishReferenceContextThroughSdk(label) {
+  const base = createApplicabilityWorld(`p03-${label}`, { includeCrop: false });
+  const message = referenceProviderMessage();
+  const logicalId = `context-datum.reference.${label}.reading-00017`;
+  const providerPrincipal = {
+    principalId: `reference-context-provider-${label}`,
+    type: 'SERVICE_ACCOUNT',
+    organizationId: 'org-a',
+    tenantId: 'tenant-a',
+    programIds: ['pilot-a']
+  };
+  const contextWrite = writeAuthorization(
+    base.env.ledger,
+    logicalId,
+    'CONTEXT_DATUM',
+    providerPrincipal,
+    { assignmentLogicalId: `role-p03-reference-context-${label}` }
+  );
+  let request;
+  let publishedDatum;
+  const client = createAdrPilotClient({
+    principal: {
+      principal_id: providerPrincipal.principalId,
+      type: providerPrincipal.type,
+      organization_id: providerPrincipal.organizationId,
+      tenant_id: providerPrincipal.tenantId,
+      program_ids: providerPrincipal.programIds
+    },
+    getAccessToken: () => 'reference-provider-test-token',
+    transport: async (value) => {
+      request = value;
+      assert.deepEqual(value.body.authorization_decision_ref, toWireRef(contextWrite.recorded.ref));
+      publishedDatum = publishContextDatum({
+        ledger: base.env.ledger,
+        logicalId: value.body.logical_id,
+        version: value.body.version,
+        target: {
+          organizationId: providerPrincipal.organizationId,
+          tenantId: providerPrincipal.tenantId
+        },
+        datum: coreDatumFromWire(value.body.resource),
+        principal: providerPrincipal,
+        authorizationDecisionAuditRef: contextWrite.recorded.ref,
+        audit: audit(providerPrincipal, `p03-reference-publish-${label}`, '2026-08-20T09:56:00Z')
+      });
+      return {
+        ref: toWireRef(publishedDatum.ref),
+        resource: value.body.resource
+      };
+    }
+  });
+  const response = await client.createContextDatum({
+    logicalId,
+    version: '1',
+    authorizationDecisionRef: toWireRef(contextWrite.recorded.ref),
+    resource: message.payload,
+    idempotencyKey: `reference-reading-00017-${label}`
+  });
+  assert.deepEqual(response.ref, toWireRef(publishedDatum.ref));
+  return { base, message, request, response, publishedDatum, contextWrite, providerPrincipal };
+}
+
+async function createReferenceGateAWorld(label = 'reference-direct') {
+  const sdk = await publishReferenceContextThroughSdk(label);
+  const { base, publishedDatum } = sdk;
   const manifest = publishManifest(base.env.ledger, {
     logicalId: `manifest.p03.${label}`,
     decisionProblem: base.decision,
-    datumRefs: [providerDatum.ref],
+    datumRefs: [publishedDatum.ref],
     evidenceCutoff: '2026-08-20T10:00:00Z',
     auditOccurredAt: '2026-08-20T10:01:00Z'
   });
@@ -154,7 +194,7 @@ async function createReferenceGateAWorld(label = 'reference-direct') {
   }];
   const workbenchCase = projectCase(world);
   world.workbenchCase = workbenchCase;
-  return { world, message, sdk, providerDatum, manifest, assessment, workbenchCase };
+  return { world, sdk, providerDatum: publishedDatum, manifest, assessment, workbenchCase };
 }
 
 test('reference ContextProvider maps a customer-like schema only through explicit representation rules', () => {
@@ -181,16 +221,15 @@ test('customer metric names cannot infer ADR semantic identity', () => {
   assert.equal(first.payload.value.category, second.payload.value.category);
 });
 
-test('reference ContextProvider traverses the P02 SDK contract without losing semantic provenance/time/support fields', async () => {
-  const message = referenceProviderMessage();
-  const { request, response } = await passThroughPilotSdk(message);
-  assert.equal(request.path, '/v1/context-data');
-  assert.equal(request.headers.Authorization, 'Bearer reference-provider-test-token');
-  assert.equal(request.body.principal.principal_id, 'reference-context-provider');
-  assert.deepEqual(request.body.resource, message.payload);
-  assert.deepEqual(response.resource, message.payload);
-  assert.equal(response.ref.kind, 'ContextDatum');
-  assert.equal(response.ref.logical_id, 'context-datum.reference.reading-00017');
+test('reference ContextProvider traverses P02 and publishes the exact ContextDatum authority used downstream', async () => {
+  const result = await publishReferenceContextThroughSdk('sdk-roundtrip');
+  assert.equal(result.request.path, '/v1/context-data');
+  assert.equal(result.request.headers.Authorization, 'Bearer reference-provider-test-token');
+  assert.equal(result.request.body.principal.principal_id, result.providerPrincipal.principalId);
+  assert.deepEqual(result.request.body.resource, result.message.payload);
+  assert.deepEqual(result.response.resource, result.message.payload);
+  assert.deepEqual(result.response.ref, toWireRef(result.publishedDatum.ref));
+  assert.equal(result.publishedDatum.semanticPayload.source.providerId, REFERENCE_FIELD_PLATFORM_ID);
 });
 
 test('a non-GEOX reference provider closes the existing Gate-A applicability/workbench path', async () => {
