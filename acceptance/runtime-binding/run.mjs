@@ -95,7 +95,8 @@ test('published RuntimeBinding replays exact frozen authorities and their histor
     runtimeBindingRef: binding.ref
   });
   assert.deepEqual(validated.record.ref, binding.ref);
-  assert.equal(validated.replayMode, 'EXACT_FROZEN_HISTORICAL_AUTHORITIES_AND_RELATIONS_NO_LATEST_LOOKUP');
+  assert.equal(validated.replayMode, 'EXACT_FROZEN_HISTORICAL_AUTHORITIES_NO_LATEST_LOOKUP');
+  assert.equal(validated.relationReplayMode, 'EXACT_FROZEN_HISTORICAL_RELATIONS_NO_LATEST_LOOKUP');
   assert.equal(validated.selectedHistoricalAlternative.pathId, binding.semanticPayload.selectedAlternativePathId);
   assert.equal(validated.runtimeBindingPrincipal.principalId, world.env.runtimePrincipal.principalId);
   assert.deepEqual(validated.frozenWorldRelations.deployment.ref, binding.semanticPayload.deploymentRef);
