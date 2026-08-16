@@ -11,7 +11,12 @@ function text(value, name) {
 
 function unwrapAggregated(entries) {
   if (!Array.isArray(entries)) return [];
-  return entries.map((entry) => entry?.value ?? entry);
+  return entries.map((entry) => (
+    entry && typeof entry === 'object' && !Array.isArray(entry)
+      && 'qualificationDecisionRef' in entry && 'value' in entry
+      ? entry.value
+      : entry
+  ));
 }
 
 function valueScalar(value) {
@@ -47,7 +52,7 @@ function targetIndex(manifestAuthority) {
 }
 
 function normalizePredicate(raw, source) {
-  const value = raw?.value ?? raw;
+  const value = raw;
   if (!value || typeof value !== 'object' || Array.isArray(value)) return { valid: false, code: `${source}_INVALID_OBJECT` };
   const allowed = source === 'EFFECT_MODIFIER'
     ? new Set(['semanticId', 'operator', 'value', 'unit', 'mismatchDisposition', 'code'])
@@ -163,7 +168,7 @@ function evaluateTransportConstraints(rawConstraints, decisionProblem) {
   const unsupported = [];
   let bounded = false;
   for (const raw of rawConstraints) {
-    const constraint = raw?.value ?? raw;
+    const constraint = raw;
     if (!constraint || typeof constraint !== 'object' || Array.isArray(constraint) || typeof constraint.type !== 'string') {
       unsupported.push('TRANSPORT_CONSTRAINT_INVALID');
       continue;
