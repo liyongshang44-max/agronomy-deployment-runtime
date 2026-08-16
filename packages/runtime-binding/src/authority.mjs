@@ -101,12 +101,7 @@ function exactRuntimePlanPath(eligibility, selected) {
   return planPath;
 }
 
-function bindingPayload({ eligibility, selected }) {
-  const retrieval = eligibility.retrievalAuthority;
-  const manifestRecord = eligibility.runtimePlan.contextManifestRef
-    ? eligibility.recordLedger?.resolve?.(eligibility.runtimePlan.contextManifestRef)
-    : null;
-  void manifestRecord;
+function bindingPayload({ eligibility, selected, manifest }) {
   return {
     contractVersion: RUNTIME_BINDING_CONTRACT_VERSION,
     authorityClass: RUNTIME_BINDING_AUTHORITY_CLASS,
@@ -116,7 +111,7 @@ function bindingPayload({ eligibility, selected }) {
     decisionProblemRef: eligibility.semanticPayload.decisionProblemRef,
     deploymentRef: eligibility.semanticPayload.deploymentRef,
     runtimeProfileRef: eligibility.semanticPayload.runtimeProfileRef,
-    knowledgeReleaseRef: retrieval.semanticPayload.knowledgeReleaseRef,
+    knowledgeReleaseRef: eligibility.retrievalAuthority.semanticPayload.knowledgeReleaseRef,
     contextManifestRef: eligibility.semanticPayload.contextManifestRef,
     knowledgeBindings: [{
       knowledgeRef: selected.knowledgeRef,
@@ -127,8 +122,8 @@ function bindingPayload({ eligibility, selected }) {
     policyBindings: [],
     implementationBindings: [],
     calibrationBindings: [],
-    logicalTime: eligibility.runtimePlan.__bindingLogicalTime,
-    evidenceCutoff: eligibility.runtimePlan.__bindingEvidenceCutoff,
+    logicalTime: manifest.semanticPayload.logicalTime,
+    evidenceCutoff: manifest.semanticPayload.evidenceCutoff,
     limitations: selected.limitations,
     assumptions: [],
     correctnessClaim: 'NONE_BINDING_PROVES_WHAT_WAS_USED_NOT_SCIENTIFIC_CORRECTNESS',
@@ -155,41 +150,55 @@ function buildCurrentBindingWorld({ ledger, runtimeEligibilityRef, selectedAlter
     throw new RuntimeBindingError('RUNTIME_BINDING_CONTEXT_MANIFEST_REQUIRED', 'exact RuntimeEligibility context must resolve to ContextManifest');
   }
   assertRecordHash(manifest, 'RUNTIME_BINDING_CONTEXT_MANIFEST_HASH_MISMATCH');
-  const runtimePlan = deepFreeze({
-    ...eligibility.runtimePlan,
-    __bindingLogicalTime: manifest.semanticPayload.logicalTime,
-    __bindingEvidenceCutoff: manifest.semanticPayload.evidenceCutoff
-  });
-  const enriched = deepFreeze({ ...eligibility, runtimePlan, recordLedger: ledger });
-  const payload = normalizeRuntimeBinding(bindingPayload({ eligibility: enriched, selected }));
+  const payload = normalizeRuntimeBinding(bindingPayload({ eligibility, selected, manifest }));
   return deepFreeze({ eligibility, selected, manifest, payload });
 }
 
-function eligibilityHistoricalAuthorization(ledger, eligibilityRecord) {
-  const events = ledger.auditFor(eligibilityRecord.ref).filter((event) =>
+function expectedEligibilityAuditInputs(payload, runtimeAuthorizationRef) {
+  return canonicalRefs([
+    payload.decisionProblemRef,
+    payload.deploymentRef,
+    payload.runtimeProfileRef,
+    payload.contextManifestRef,
+    payload.knowledgeRetrievalResultRef,
+    ...payload.applicabilityAssessmentRefs,
+    runtimeAuthorizationRef
+  ]);
+}
+
+function eligibilityHistoricalAuthorization(ledger, eligibilityRecord, eligibilityPayload) {
+  const candidates = ledger.auditFor(eligibilityRecord.ref).filter((event) =>
     sameAuthorityRef(event.objectRef, eligibilityRecord.ref)
       && event.action === 'PUBLISH_RUNTIME_ELIGIBILITY'
       && event.details?.runtimeEligibilityPrincipal
       && event.details?.runtimeAuthorizationDecisionAuditRef);
-  if (events.length === 0) {
-    throw new RuntimeBindingError(
-      'RUNTIME_BINDING_ELIGIBILITY_AUDIT_REQUIRED',
-      'historical RuntimeBinding replay requires the exact RuntimeEligibility publication audit'
-    );
+
+  for (const event of candidates) {
+    try {
+      const principal = event.details.runtimeEligibilityPrincipal;
+      if (!principal
+        || event.actor?.id !== principal.principalId
+        || event.actor?.type !== principal.type
+        || canonicalizeSemanticJson(event.details?.planRef) !== canonicalizeSemanticJson(eligibilityPayload.planRef)
+        || event.details?.runtimeEligibility !== eligibilityPayload.runtimeEligibility) {
+        continue;
+      }
+      const runtimeAuthorizationRef = assertAuthorityRef(event.details.runtimeAuthorizationDecisionAuditRef);
+      if (runtimeAuthorizationRef.kind !== 'AuthorizationDecisionAudit') continue;
+      const runtimeAuthorizationRecord = ledger.resolve(runtimeAuthorizationRef);
+      assertRecordHash(runtimeAuthorizationRecord, 'RUNTIME_BINDING_RUNTIME_AUTHORIZATION_HASH_MISMATCH');
+      const expectedInputs = expectedEligibilityAuditInputs(eligibilityPayload, runtimeAuthorizationRef);
+      if (!sameRefSet(event.inputRefs, expectedInputs)) continue;
+      return deepFreeze({ principal, runtimeAuthorizationRef });
+    } catch {
+      continue;
+    }
   }
-  const event = events[0];
-  const runtimeAuthorizationRef = assertAuthorityRef(event.details.runtimeAuthorizationDecisionAuditRef);
-  if (runtimeAuthorizationRef.kind !== 'AuthorizationDecisionAudit') {
-    throw new RuntimeBindingError(
-      'RUNTIME_BINDING_RUNTIME_AUTHORIZATION_REQUIRED',
-      'RuntimeEligibility historical audit must bind exact AuthorizationDecisionAudit'
-    );
-  }
-  ledger.resolve(runtimeAuthorizationRef);
-  return deepFreeze({
-    principal: event.details.runtimeEligibilityPrincipal,
-    runtimeAuthorizationRef
-  });
+
+  throw new RuntimeBindingError(
+    'RUNTIME_BINDING_ELIGIBILITY_AUDIT_REQUIRED',
+    'historical RuntimeBinding replay requires an exact RuntimeEligibility publication audit over its frozen plan world and runtime authorization'
+  );
 }
 
 function expectedAuditInputs(payload, runtimeAuthorizationRef) {
@@ -312,7 +321,7 @@ export function validateRuntimeBinding({ ledger, runtimeBindingRef }) {
     assertRecordHash(exactRecord, 'RUNTIME_BINDING_FROZEN_REF_HASH_MISMATCH');
   }
 
-  const historicalAuthorization = eligibilityHistoricalAuthorization(ledger, eligibilityRecord);
+  const historicalAuthorization = eligibilityHistoricalAuthorization(ledger, eligibilityRecord, eligibilityPayload);
   const expectedInputs = expectedAuditInputs(payload, historicalAuthorization.runtimeAuthorizationRef);
   const validAudit = ledger.auditFor(record.ref).some((event) =>
     sameAuthorityRef(event.objectRef, record.ref)
@@ -323,8 +332,11 @@ export function validateRuntimeBinding({ ledger, runtimeBindingRef }) {
       && event.details?.runtimeBindingPrincipal?.type === historicalAuthorization.principal.type
       && event.details?.runtimeAuthorizationDecisionAuditRef
       && sameAuthorityRef(event.details.runtimeAuthorizationDecisionAuditRef, historicalAuthorization.runtimeAuthorizationRef)
+      && event.details?.runtimeEligibilityRef
+      && sameAuthorityRef(event.details.runtimeEligibilityRef, payload.runtimeEligibilityRef)
       && event.details?.selectedAlternativePathId === payload.selectedAlternativePathId
       && event.details?.selectionAuthorityClass === 'RUNTIME_COMPOSITION_SELECTION_NOT_DECISION'
+      && event.details?.correctnessClaim === payload.correctnessClaim
       && sameRefSet(event.inputRefs, expectedInputs));
   if (!validAudit) {
     throw new RuntimeBindingError(
