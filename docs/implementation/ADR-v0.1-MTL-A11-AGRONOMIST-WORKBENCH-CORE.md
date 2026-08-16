@@ -8,7 +8,7 @@ Upstream authority remains Architecture v1.0, Capability Map 01 + Final Planning
 
 ## 1. Purpose and Gate-A boundary
 
-A11 turns the existing governed authority chain into a usable Agronomist backend/workbench surface. It does not introduce another recommendation engine, another qualification path or another deployment path.
+A11 turns the existing governed authority chain into a usable Agronomist backend/workbench surface. It does not introduce another recommendation engine, qualification path or deployment path.
 
 The non-transform Gate-A path is:
 
@@ -18,31 +18,26 @@ K03/K04/K05
 + A11
 ```
 
-A09 remains conditional on actually exercising a governed transformation and therefore is not fabricated merely to make numbering continuous.
+A09 remains conditional on actually exercising a governed transformation and is not fabricated merely to make numbering continuous.
 
-A11 closes the applicability/escalation endpoint only. Full later Workbench surfaces that depend on RuntimePlan/RuntimeEligibility/DecisionResult/Evaluation retain their own predecessors.
+A11 closes the applicability/escalation endpoint only. Later Workbench surfaces depending on RuntimePlan/RuntimeEligibility/DecisionResult/Evaluation retain their own predecessors.
 
 ## 2. Human evidence access is not runtime entitlement
 
-A07/A08 runtime execution may legally use proprietary Knowledge through runtime/deployment entitlement without granting a human the right to inspect its source text.
+A07/A08 runtime execution may legally use proprietary Knowledge through runtime/deployment entitlement without granting a human the right to inspect source text.
 
 A11 therefore requires existing F03 human read authority before displaying Source/Claim evidence:
 
 ```text
 exact workbench Principal
-+ exact RoleAssignment carrying BOTH:
-    source.read
-    knowledge.inspect
-+ exact KnowledgeGovernancePolicy
-    bound to exact Knowledge ref
-    with matching knowledge ownership
-+ normal KNOWLEDGE_INSPECT AuthorizationDecisionAudit replay
-+ exact Deployment programId frozen into the authorization request scope
++ exact RoleAssignment carrying BOTH source.read + knowledge.inspect
++ exact KnowledgeGovernancePolicy bound to exact Knowledge ref
++ matching Knowledge ownership
++ replayable KNOWLEDGE_INSPECT AuthorizationDecisionAudit
++ exact Deployment programId frozen into authorization request scope
 ```
 
-No new IAM permission is invented.
-
-The workbench principal must also carry the exact Deployment `programId` in its asserted program membership.
+No new IAM permission is invented. The workbench principal must also carry the exact Deployment `programId` in its asserted program membership.
 
 Permanent invariant:
 
@@ -50,11 +45,11 @@ Permanent invariant:
 knowledge.runtime.use ≠ knowledge.inspect ≠ source.read
 ```
 
-A11 v0.1 target-context detail is limited to a workbench principal in the exact DecisionProblem organization/tenant **and** exact validated Deployment program. There is no invented cross-tenant or cross-program `context.read` authority. A later explicit context-sharing/read model may extend this boundary.
+A11 v0.1 target-context detail is limited to a workbench principal in the exact DecisionProblem organization/tenant and exact validated Deployment program. There is no invented cross-tenant or cross-program `context.read` authority.
 
 ## 3. Workbench case projection
 
-`projectAgronomistWorkbenchCase(...)` first validates exact A08 authority and A10 classification, then projects a deterministic non-authority case.
+`projectAgronomistWorkbenchCase(...)` validates exact A08 authority and A10 classification, then projects a deterministic non-authority case.
 
 For QualifiedKnowledge the case exposes, subject to exact human inspection authority:
 
@@ -68,7 +63,7 @@ Source
 → ScientificQualificationDecision(s)
 ```
 
-When an exact `SourceRegistry` with retained bytes is supplied, A11 verifies the SourceArtifact bytes and may produce a bounded textual preview for `WHOLE_ARTIFACT` or `BYTE_RANGE` locators. Without exact retained bytes, it preserves locator/hash identity and explicitly makes no byte-preview claim. `DOCUMENT_COORDINATE` is never fabricated into a byte range.
+When an exact `SourceRegistry` with retained bytes is supplied, A11 verifies SourceArtifact bytes and may produce a bounded text preview for `WHOLE_ARTIFACT` or `BYTE_RANGE`. Without exact retained bytes, it preserves locator/hash identity and explicitly makes no byte-preview claim. `DOCUMENT_COORDINATE` is never fabricated into a byte range.
 
 For DerivedKnowledge the case uses:
 
@@ -82,21 +77,25 @@ DerivedKnowledge
 
 The workbench must hold program-bound inspection authority for the DerivedKnowledge and for each input QualifiedKnowledge whose proprietary evidence is displayed. It never chooses one arbitrary input SourceContext as the derived origin.
 
+Each case freezes the exact inspection AuthorizationDecisionAudit refs used to display its evidence. `validateAgronomistWorkbenchCase(...)` does not trust a case hash as authenticity: it replays A08 plus every embedded human-read authorization and reproduces the complete case projection.
+
 The target side exposes exact DecisionProblem + ContextManifest + ContextDatum/receipt provenance. It never reads an open mutable context pool.
 
 ## 4. Escalation and conflict queues
 
-A11 queue objects are non-authority projections over exact A11 case hashes.
+Case/queue hashes prove deterministic projection only; they are not authority or authenticity tokens.
+
+Public queue entrypoints therefore accept validation inputs and replay every exact case through `validateAgronomistWorkbenchCase(...)` before aggregation. The raw hash-only aggregator remains internal and is not exported from the Workbench package.
 
 Default escalation queue behavior:
 
 - every `reviewRequired=true` case remains visible;
 - only `NO_REVIEW_CANDIDATE` may be omitted by default;
-- including no-review candidates is an explicit read option;
-- a tampered case projection cannot enter the queue;
+- including no-review candidates is explicit;
+- a forged case remains rejected even if an attacker recomputes a syntactically valid deterministic case hash;
 - duplicate exact ApplicabilityAssessment cases are rejected.
 
-The applicability conflict queue is the subset classified `KNOWLEDGE_CONFLICT`. It does not resolve the conflict itself.
+The applicability conflict queue is the validated subset classified `KNOWLEDGE_CONFLICT`. It does not resolve conflicts itself.
 
 ## 5. Authority actions use the same backend
 
@@ -121,7 +120,7 @@ ACCEPT_APPLICABILITY
 SET_SAFE
 ```
 
-Workbench callers must supply the same exact authorization/policy/audit inputs as any other client. Invalid/missing authorization fails in the underlying authority service; A11 never creates a parallel approval semantics.
+Workbench callers must supply the same exact authorization/policy/audit inputs as any other client. Invalid/missing authorization fails in the underlying authority service; A11 never creates parallel approval semantics.
 
 ## 6. Review instrumentation is operational only
 
@@ -144,6 +143,8 @@ AUTHORITY_ACTION_PERFORMED
 DEFERRED
 ```
 
+Measurement start first revalidates the exact ledger-backed A11 case. A deterministic case hash alone cannot create commercial KPI evidence. The start-session `measurementId` is itself replay-validated before completion; summary validates both the embedded session hash and completion hash. Thus recomputing only a downstream completion hash cannot launder a modified classification/session into workload metrics.
+
 A disagreement is an observation requiring a separately governed authority action if science/configuration must change. It does not mutate the case, Knowledge, ApplicabilityAssessment or Deployment.
 
 Permanent invariant:
@@ -158,7 +159,7 @@ These measurements support the commercial hypothesis about agronomist throughput
 
 ## 7. Determinism and replay
 
-Case/queue hashes identify non-authority projections only. They are not published to the authority ledger by A11.
+Case/queue/measurement hashes identify non-authority projections only. They are not published to the authority ledger by A11.
 
 Current case projection uses current K03/K04/K05/A06/A08 validity. Historical case projection uses the existing governed `allowHistorical` replay path and preserves the exact prior evidence/classification world after later revocation/supersession.
 

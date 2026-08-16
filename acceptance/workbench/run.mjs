@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {
-  buildAgronomistEscalationQueue,
-  buildApplicabilityConflictQueue
+  projectAgronomistEscalationQueue,
+  projectApplicabilityConflictQueue
 } from '../../packages/workbench/src/index.mjs';
 import { createWorkbenchWorld, projectCase } from './fixture.mjs';
 
@@ -9,6 +9,9 @@ let passed = 0;
 function test(name, fn) {
   try { fn(); passed += 1; console.log(`PASS ${name}`); }
   catch (error) { console.error(`FAIL ${name}`); throw error; }
+}
+function caseInput(world) {
+  return { ledger: world.env.ledger, workbenchCase: world.workbenchCase, sourceRegistry: world.env.sourceRegistry };
 }
 
 test('A11 case exposes exact source span → claim → origin context → qualification → target context → applicability chain', () => {
@@ -23,6 +26,8 @@ test('A11 case exposes exact source span → claim → origin context → qualif
   assert.deepEqual(c.targetContext.contextManifestRef, world.manifest.ref);
   assert.deepEqual(c.applicability.applicabilityAssessmentRef, world.assessment.ref);
   assert.deepEqual(c.why.knowledgeRetrievalResultRef, world.retrieval.ref);
+  assert.equal(c.targetContext.programId, 'pilot-a');
+  assert.equal(c.evidenceAccess.inspectionAuthorizations.length, 1);
 });
 
 test('exact retained SourceRegistry yields a bounded preview of the exact source bytes at the claim locator', () => {
@@ -66,12 +71,12 @@ test('same exact authority/access world yields deterministic case projection has
   assert.deepEqual(a, b);
 });
 
-test('default escalation queue filters only NO_REVIEW_CANDIDATE and retains every review-required case', () => {
+test('validated escalation queue filters only NO_REVIEW_CANDIDATE and retains every review-required case', () => {
   const direct = createWorkbenchWorld('queue-direct');
   const conflict = createWorkbenchWorld('queue-conflict', { crop: 'wheat' });
   const gap = createWorkbenchWorld('queue-gap', { includeCrop: false });
-  const queue = buildAgronomistEscalationQueue({
-    cases: [direct.workbenchCase, conflict.workbenchCase, gap.workbenchCase]
+  const queue = projectAgronomistEscalationQueue({
+    caseInputs: [caseInput(direct), caseInput(conflict), caseInput(gap)]
   });
   assert.equal(queue.totalInputCases, 3);
   assert.equal(queue.noReviewCandidateCount, 1);
@@ -82,21 +87,21 @@ test('default escalation queue filters only NO_REVIEW_CANDIDATE and retains ever
   assert(queue.items.some((item) => item.classification === 'CONTEXT_GAP'));
 });
 
-test('applicability conflict queue contains only exact KNOWLEDGE_CONFLICT cases', () => {
+test('validated applicability conflict queue contains only exact KNOWLEDGE_CONFLICT cases', () => {
   const direct = createWorkbenchWorld('conflict-queue-direct');
   const conflict = createWorkbenchWorld('conflict-queue-conflict', { crop: 'wheat' });
-  const queue = buildApplicabilityConflictQueue({ cases: [direct.workbenchCase, conflict.workbenchCase] });
+  const queue = projectApplicabilityConflictQueue({ caseInputs: [caseInput(direct), caseInput(conflict)] });
   assert.equal(queue.conflictCount, 1);
   assert.equal(queue.items.length, 1);
   assert.equal(queue.items[0].classification, 'KNOWLEDGE_CONFLICT');
   assert.deepEqual(queue.items[0].applicabilityAssessmentRef, conflict.assessment.ref);
 });
 
-test('queue can include no-review candidates explicitly without reclassifying them', () => {
+test('validated queue can include no-review candidates explicitly without reclassifying them', () => {
   const direct = createWorkbenchWorld('queue-all-direct');
   const conflict = createWorkbenchWorld('queue-all-conflict', { crop: 'wheat' });
-  const queue = buildAgronomistEscalationQueue({
-    cases: [direct.workbenchCase, conflict.workbenchCase],
+  const queue = projectAgronomistEscalationQueue({
+    caseInputs: [caseInput(direct), caseInput(conflict)],
     includeNoReviewCandidates: true
   });
   assert.equal(queue.items.length, 2);

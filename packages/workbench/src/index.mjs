@@ -13,12 +13,13 @@ export {
 export {
   AGRONOMIST_WORKBENCH_CASE_CONTRACT_VERSION,
   AgronomistWorkbenchError,
-  projectAgronomistWorkbenchCase
+  projectAgronomistWorkbenchCase,
+  validateAgronomistWorkbenchCase
 } from './case.mjs';
 export {
   AGRONOMIST_ESCALATION_QUEUE_CONTRACT_VERSION,
-  buildAgronomistEscalationQueue,
-  buildApplicabilityConflictQueue
+  projectAgronomistEscalationQueue,
+  projectApplicabilityConflictQueue
 } from './queue.mjs';
 export {
   WORKBENCH_AUTHORITY_ACTIONS,
