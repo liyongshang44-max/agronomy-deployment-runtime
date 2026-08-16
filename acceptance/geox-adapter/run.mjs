@@ -234,6 +234,8 @@ test('confirmed GEOX crop_context_v1 maps to crop.code without promoting GEOX co
   assert.equal(message.payload.provenance_class, 'USER');
   assert.deepEqual(message.payload.uncertainty, { type: 'UNKNOWN', reason_code: 'GEOX_CONFIDENCE_NOT_ADR_UNCERTAINTY' });
   assert.equal(message.payload.available_at, '2026-08-20T09:55:00.000Z');
+  assert.equal(translationAudit.source_chronology.retrieved_at, message.payload.available_at);
+  assert.ok(translationAudit.mappings.some((entry) => entry.source === 'adapter.retrieved_at' && entry.mapped_value === message.payload.available_at));
   const semanticWire = JSON.stringify(message.payload);
   assert.equal(semanticWire.includes('0.97'), false);
   assert.equal(semanticWire.includes('allowed_actions'), false);
@@ -313,12 +315,14 @@ test('explicit shallow GEOX VWC installation stays shallow and cannot become roo
       fromMm: '100',
       toMm: '100',
       semanticId: 'soil.volumetric_water_content',
-      unit: 'm3_per_m3',
-      retrievedAt: '2026-08-20T09:41:00Z'
-    }
+      unit: 'm3_per_m3'
+    },
+    retrievedAt: '2026-08-20T09:41:00Z'
   });
   assert.equal(translated.message.payload.semantic_id, 'soil.volumetric_water_content');
   assert.deepEqual(translated.message.payload.vertical_support, { from_mm: '100', to_mm: '100' });
+  assert.equal(translated.message.payload.available_at, '2026-08-20T09:41:00.000Z');
+  assert.equal(translated.translationAudit.source_chronology.retrieved_at, translated.message.payload.available_at);
   assert.equal(JSON.stringify(translated.message.payload).toLowerCase().includes('root-zone'), false);
   assert.ok(translated.translationAudit.deliberately_not_mapped.some((entry) => entry.includes('root-zone')));
 });
