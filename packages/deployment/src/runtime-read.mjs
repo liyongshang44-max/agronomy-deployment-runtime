@@ -15,8 +15,19 @@ function resolveKind(ledger, ref, kind, code) {
   return record;
 }
 
-function validateRuntimeReadAuthorization({ ledger, ref, principal, deployment, logicalId }) {
-  const authRecord = resolveKind(ledger, ref, 'AuthorizationDecisionAudit', 'DEPLOYMENT_RUNTIME_AUTHORIZATION_REQUIRED');
+export function validateDeploymentRuntimeReadAuthorization({
+  ledger,
+  authorizationDecisionAuditRef,
+  principal,
+  deployment,
+  logicalId
+}) {
+  const authRecord = resolveKind(
+    ledger,
+    authorizationDecisionAuditRef,
+    'AuthorizationDecisionAudit',
+    'DEPLOYMENT_RUNTIME_AUTHORIZATION_REQUIRED'
+  );
   const stored = authRecord.semanticPayload;
   if (!stored || typeof stored.decisionHash !== 'string') {
     throw new DeploymentError('DEPLOYMENT_RUNTIME_AUTHORIZATION_INVALID', 'runtime read requires a content-addressed AuthorizationDecision');
@@ -74,9 +85,9 @@ export function resolveDeploymentForRuntime({
     throw new DeploymentError('DEPLOYMENT_OUTSIDE_EFFECTIVE_INTERVAL', 'runtime read is outside Deployment effective interval');
   }
   const actor = createPrincipal(principal);
-  const authorization = validateRuntimeReadAuthorization({
+  const authorization = validateDeploymentRuntimeReadAuthorization({
     ledger,
-    ref: authorizationDecisionAuditRef,
+    authorizationDecisionAuditRef,
     principal: actor,
     deployment: state.deploymentAuthority.semanticPayload,
     logicalId: state.deploymentAuthority.record.ref.logicalId
