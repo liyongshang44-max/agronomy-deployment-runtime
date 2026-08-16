@@ -35,6 +35,25 @@ test('write request cannot omit exact principal authorization logical/version id
   assert.ok(schema.properties.resource.required.includes('contract_version'));
 });
 
+test('authenticated bearer subject must bind exactly to request principal and auth ref is replay evidence only', () => {
+  for (const operation of PUBLIC_API_OPERATIONS) {
+    const spec = ADR_PILOT_OPENAPI.paths[`/v1${operation.path}`][operation.method.toLowerCase()];
+    assert.equal(
+      spec['x-adr-authenticated-principal-binding'],
+      'BEARER_SUBJECT_MUST_EQUAL_REQUEST_PRINCIPAL',
+      operation.operationId
+    );
+    assert.equal(
+      spec['x-adr-authorization-ref-semantics'],
+      'REPLAY_VALIDATED_EVIDENCE_NOT_CAPABILITY',
+      operation.operationId
+    );
+  }
+  const request = ADR_PILOT_OPENAPI.components.schemas.AuthorityWriteRequest;
+  assert.match(request.properties.principal.description, /MUST derive the authenticated bearer subject/i);
+  assert.match(request.properties.authorization_decision_ref.description, /never grants authority by itself/i);
+});
+
 test('each public authority write pins an explicit frozen resource contract', () => {
   for (const operation of PUBLIC_API_OPERATIONS.filter((item) => item.mode === 'AUTHORITY_WRITE')) {
     assert.match(operation.resourceContract, /^adr\.[a-z0-9.-]+\.v\d+$/);
