@@ -53,7 +53,7 @@ export function implementationSpec({ providerType = 'INTERNAL', digestChar = 'a'
     INTERNAL: { kind: 'INTERNAL_FUNCTION', value: 'adr.runtime.rootZoneWaterV1' },
     HTTP: { kind: 'HTTPS_ENDPOINT', value: 'https://model.example.test/v1/execute' },
     CUSTOMER: { kind: 'CUSTOMER_RUNTIME', value: 'customer-runtime:model-service-v1' },
-    GEOX: { kind: 'GEOX_RUNTIME', value: 'geox-runtime:model-service-v1' },
+    FIRST_PARTY: { kind: 'FIRST_PARTY_RUNTIME', value: 'first-party-runtime:model-service-v1' },
     WASM: { kind: 'WASM_MODULE', value: 'wasm:sha256-model-module-v1' },
     BATCH: { kind: 'BATCH_JOB', value: 'batch:root-zone-water-v1' }
   }[providerType];
