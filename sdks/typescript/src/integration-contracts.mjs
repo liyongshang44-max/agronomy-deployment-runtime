@@ -47,20 +47,37 @@ export function exactAuthorityRef(value, name = 'authorityRef') {
   return Object.freeze(ref);
 }
 
-export function createIntegrationMessage({ role, messageType, messageId, authorityRefs = [], payload }) {
-  const roleName = text(role, 'role');
-  if (!INTEGRATION_ROLES[roleName]) throw new IntegrationContractError('UNKNOWN_INTEGRATION_ROLE', `unknown role ${roleName}`);
-  const refs = authorityRefs.map((ref, index) => exactAuthorityRef(ref, `authorityRefs[${index}]`));
+export function assertPilotRoleEnabled(role) {
+  const name = text(role, 'role');
+  const contract = INTEGRATION_ROLES[name];
+  if (!contract) throw new IntegrationContractError('UNKNOWN_INTEGRATION_ROLE', `unknown role ${name}`);
+  if (contract.status !== 'ACTIVE_PILOT') {
+    throw new IntegrationContractError('INTEGRATION_ROLE_NOT_EXERCISED', `${name} is reserved but not exercised by v0.3 Gate-A pilot`);
+  }
+  return contract;
+}
+
+function buildIntegrationMessage({ role, messageType, messageId, authorityRefs, payload }, name = 'message') {
+  const roleName = text(role, `${name}.role`);
+  assertPilotRoleEnabled(roleName);
+  if (!Array.isArray(authorityRefs)) {
+    throw new IntegrationContractError('INVALID_INTEGRATION_INPUT', `${name}.authority_refs must be an array`);
+  }
+  const refs = authorityRefs.map((ref, index) => exactAuthorityRef(ref, `${name}.authority_refs[${index}]`));
   const keys = refs.map((ref) => JSON.stringify(ref));
   if (new Set(keys).size !== keys.length) throw new IntegrationContractError('DUPLICATE_AUTHORITY_REF', 'authorityRefs cannot contain duplicates');
   return Object.freeze({
     contract_version: GENERIC_INTEGRATION_MESSAGE_VERSION,
     role: roleName,
-    message_type: text(messageType, 'messageType'),
-    message_id: text(messageId, 'messageId'),
+    message_type: text(messageType, `${name}.message_type`),
+    message_id: text(messageId, `${name}.message_id`),
     authority_refs: Object.freeze(refs),
-    payload: Object.freeze(clone(object(payload, 'payload')))
+    payload: Object.freeze(clone(object(payload, `${name}.payload`)))
   });
+}
+
+export function createIntegrationMessage({ role, messageType, messageId, authorityRefs = [], payload }) {
+  return buildIntegrationMessage({ role, messageType, messageId, authorityRefs, payload });
 }
 
 export function createIntegrationBatch({ batchId, messages }) {
@@ -72,14 +89,20 @@ export function createIntegrationBatch({ batchId, messages }) {
     if (value.contract_version !== GENERIC_INTEGRATION_MESSAGE_VERSION) {
       throw new IntegrationContractError('INVALID_INTEGRATION_BATCH', `messages[${index}] is not an ADR integration message`);
     }
-    return clone(value);
+    return buildIntegrationMessage({
+      role: value.role,
+      messageType: value.message_type,
+      messageId: value.message_id,
+      authorityRefs: value.authority_refs,
+      payload: value.payload
+    }, `messages[${index}]`);
   });
   const ids = normalized.map((message) => message.message_id);
   if (new Set(ids).size !== ids.length) throw new IntegrationContractError('DUPLICATE_INTEGRATION_MESSAGE', 'batch message ids must be unique');
   return Object.freeze({
     contract_version: GENERIC_BATCH_VERSION,
     batch_id: text(batchId, 'batchId'),
-    messages: Object.freeze(normalized.map(Object.freeze))
+    messages: Object.freeze(normalized)
   });
 }
 
@@ -101,6 +124,18 @@ export function createResultSinkEvent({ eventId, eventType, authorityRef, projec
 }
 
 const ALLOWED_MAPPING_MODES = new Set(['EXACT_COPY', 'EXPLICIT_CONSTANT']);
+const UNSAFE_MAPPING_PATH_SEGMENTS = new Set(['__proto__', 'prototype', 'constructor']);
+
+function mappingPathSegments(path) {
+  const normalizedPath = text(path, 'mappingRule.target_field');
+  const parts = normalizedPath.split('.').map((part) => text(part, 'target path segment'));
+  for (const part of parts) {
+    if (UNSAFE_MAPPING_PATH_SEGMENTS.has(part)) {
+      throw new IntegrationContractError('UNSAFE_MAPPING_TARGET_PATH', `target path ${normalizedPath} contains forbidden segment ${part}`);
+    }
+  }
+  return parts;
+}
 
 export function normalizeAdapterMappingRule(rule) {
   const input = object(rule, 'mappingRule');
@@ -112,7 +147,7 @@ export function normalizeAdapterMappingRule(rule) {
   if (!ALLOWED_MAPPING_MODES.has(mode)) {
     throw new IntegrationContractError('HIDDEN_ADAPTER_TRANSFORM_FORBIDDEN', `unsupported mapping mode ${mode}`);
   }
-  const target = text(input.target_field, 'mappingRule.target_field');
+  const target = mappingPathSegments(input.target_field).join('.');
   if (mode === 'EXACT_COPY') {
     if ('constant' in input) throw new IntegrationContractError('INVALID_MAPPING_RULE', 'EXACT_COPY cannot define constant');
     return Object.freeze({ source_field: text(input.source_field, 'mappingRule.source_field'), target_field: target, mode });
@@ -123,14 +158,15 @@ export function normalizeAdapterMappingRule(rule) {
 }
 
 function setPath(target, path, value) {
-  const parts = path.split('.').map((part) => text(part, 'target path segment'));
+  const parts = mappingPathSegments(path);
   let cursor = target;
   for (let i = 0; i < parts.length - 1; i += 1) {
     const part = parts[i];
-    if (Object.prototype.hasOwnProperty.call(cursor, part) && (typeof cursor[part] !== 'object' || Array.isArray(cursor[part]))) {
+    if (!Object.prototype.hasOwnProperty.call(cursor, part)) {
+      cursor[part] = Object.create(null);
+    } else if (!cursor[part] || typeof cursor[part] !== 'object' || Array.isArray(cursor[part])) {
       throw new IntegrationContractError('MAPPING_PATH_CONFLICT', `target path ${path} conflicts at ${part}`);
     }
-    cursor[part] ??= {};
     cursor = cursor[part];
   }
   const leaf = parts.at(-1);
@@ -141,7 +177,7 @@ function setPath(target, path, value) {
 export function applyExplicitAdapterMapping(source, rules) {
   const input = object(source, 'source');
   if (!Array.isArray(rules) || rules.length === 0) throw new IntegrationContractError('MAPPING_RULES_REQUIRED', 'rules must be a non-empty array');
-  const output = {};
+  const output = Object.create(null);
   for (const rawRule of rules) {
     const rule = normalizeAdapterMappingRule(rawRule);
     if (rule.mode === 'EXACT_COPY') {
@@ -154,14 +190,4 @@ export function applyExplicitAdapterMapping(source, rules) {
     }
   }
   return Object.freeze(clone(output));
-}
-
-export function assertPilotRoleEnabled(role) {
-  const name = text(role, 'role');
-  const contract = INTEGRATION_ROLES[name];
-  if (!contract) throw new IntegrationContractError('UNKNOWN_INTEGRATION_ROLE', `unknown role ${name}`);
-  if (contract.status !== 'ACTIVE_PILOT') {
-    throw new IntegrationContractError('INTEGRATION_ROLE_NOT_EXERCISED', `${name} is reserved but not exercised by v0.3 Gate-A pilot`);
-  }
-  return contract;
 }
