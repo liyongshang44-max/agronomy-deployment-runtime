@@ -126,8 +126,11 @@ test('historical exact Implementation remains replayable after a later version e
 
 test('Implementation registration creates no ImplementationConformance authority', () => {
   const env = makeEnv();
+  const before = env.ledger.exportSnapshot().records.filter((record) => record.ref.kind === 'ImplementationConformance').length;
   publish(env, 'impl-no-conformance');
-  assert.equal(env.ledger.list('ImplementationConformance').length, 0);
+  const after = env.ledger.exportSnapshot().records.filter((record) => record.ref.kind === 'ImplementationConformance').length;
+  assert.equal(before, 0);
+  assert.equal(after, 0);
 });
 
 test('two executors can coexist while an existing Model semantic identity remains unchanged', () => {
