@@ -1,13 +1,15 @@
 import assert from 'node:assert/strict';
-import {
-  ESCALATION_CLASSIFICATIONS,
-  projectApplicabilityEscalation
-} from '../../packages/workbench/src/index.mjs';
+import * as Workbench from '../../packages/workbench/src/index.mjs';
 import {
   assess,
   createApplicabilityWorld,
   rebuildWorldWithTransportConstraints
 } from '../applicability/fixture.mjs';
+
+const {
+  ESCALATION_CLASSIFICATIONS,
+  projectApplicabilityEscalation
+} = Workbench;
 
 let passed = 0;
 function test(name, fn) {
@@ -31,6 +33,11 @@ test('A10 freezes the v0.3 product escalation taxonomy without creating runtime-
     'CALIBRATION_NEEDED',
     'GOVERNED_TRANSFORM_NEEDED'
   ]);
+});
+
+test('A10 public workbench entrypoint does not expose a raw unvalidated applicability classifier', () => {
+  assert.equal('classifyApplicabilityPayload' in Workbench, false);
+  assert.equal(typeof Workbench.projectApplicabilityEscalation, 'function');
 });
 
 test('directly applicable qualified material case with no blockers becomes NO_REVIEW_CANDIDATE only', () => {
