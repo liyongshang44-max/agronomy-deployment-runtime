@@ -37,9 +37,12 @@ exact workbench Principal
     bound to exact Knowledge ref
     with matching knowledge ownership
 + normal KNOWLEDGE_INSPECT AuthorizationDecisionAudit replay
++ exact Deployment programId frozen into the authorization request scope
 ```
 
 No new IAM permission is invented.
+
+The workbench principal must also carry the exact Deployment `programId` in its asserted program membership.
 
 Permanent invariant:
 
@@ -47,7 +50,7 @@ Permanent invariant:
 knowledge.runtime.use ≠ knowledge.inspect ≠ source.read
 ```
 
-A11 v0.1 target-context detail is limited to a workbench principal in the exact DecisionProblem organization/tenant. There is no invented cross-tenant `context.read` authority. A later explicit context-sharing/read model may extend this boundary.
+A11 v0.1 target-context detail is limited to a workbench principal in the exact DecisionProblem organization/tenant **and** exact validated Deployment program. There is no invented cross-tenant or cross-program `context.read` authority. A later explicit context-sharing/read model may extend this boundary.
 
 ## 3. Workbench case projection
 
@@ -77,7 +80,7 @@ DerivedKnowledge
 → every input Source/Claim/SourceContext chain
 ```
 
-The workbench must hold inspection authority for the DerivedKnowledge and for each input QualifiedKnowledge whose proprietary evidence is displayed. It never chooses one arbitrary input SourceContext as the derived origin.
+The workbench must hold program-bound inspection authority for the DerivedKnowledge and for each input QualifiedKnowledge whose proprietary evidence is displayed. It never chooses one arbitrary input SourceContext as the derived origin.
 
 The target side exposes exact DecisionProblem + ContextManifest + ContextDatum/receipt provenance. It never reads an open mutable context pool.
 

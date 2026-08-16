@@ -71,6 +71,17 @@ function sourceReadGrantForDecision({ decision, roleAssignments, principal }) {
   });
 }
 
+function assertProgramScope(actor, authorizationScope) {
+  const programId = text(authorizationScope?.programId, 'authorizationScope.programId');
+  if (!(actor.programIds ?? []).includes(programId)) {
+    throw new WorkbenchAccessError(
+      'WORKBENCH_PROGRAM_ACCESS_DENIED',
+      'Agronomist Workbench principal must explicitly belong to the exact Deployment program'
+    );
+  }
+  return programId;
+}
+
 export function authorizeWorkbenchKnowledgeInspection({
   principal,
   policy,
@@ -84,6 +95,7 @@ export function authorizeWorkbenchKnowledgeInspection({
     throw new WorkbenchAccessError('INVALID_WORKBENCH_ROLE_ASSIGNMENTS', 'roleAssignments must be an array');
   }
   assertInspectionPolicy(policy, knowledgeRef, knowledgeOwnership);
+  assertProgramScope(actor, authorizationScope);
   const decision = authorizeKnowledgeInspection({
     principal: actor,
     policy,
@@ -105,12 +117,17 @@ export function validateWorkbenchInspectionAuthorization({
   authorizationDecisionAuditRef,
   principal,
   knowledgeRef,
-  knowledgeOwnership
+  knowledgeOwnership,
+  requiredProgramId
 }) {
   if (!ledger || typeof ledger.resolve !== 'function' || typeof ledger.auditFor !== 'function') {
     throw new WorkbenchAccessError('INVALID_LEDGER', 'Workbench inspection requires a replayable AuthorityLedger');
   }
   const actor = createPrincipal(principal);
+  const programId = text(requiredProgramId, 'requiredProgramId');
+  if (!(actor.programIds ?? []).includes(programId)) {
+    throw new WorkbenchAccessError('WORKBENCH_PROGRAM_ACCESS_DENIED', 'workbench principal is outside the exact Deployment program');
+  }
   const authAudit = resolveKind(
     ledger,
     authorizationDecisionAuditRef,
@@ -120,6 +137,12 @@ export function validateWorkbenchInspectionAuthorization({
   const stored = authAudit.semanticPayload;
   if (stored?.operation !== 'KNOWLEDGE_INSPECT' || stored.allowed !== true || !samePrincipalIdentity(stored.principal, actor)) {
     throw new WorkbenchAccessError('WORKBENCH_INSPECTION_AUTHORIZATION_DENIED', 'allowed exact KNOWLEDGE_INSPECT authorization is required');
+  }
+  if (stored.request?.authorizationScope?.programId !== programId) {
+    throw new WorkbenchAccessError(
+      'WORKBENCH_INSPECTION_PROGRAM_SCOPE_MISMATCH',
+      'stored inspection authorization does not bind the exact Deployment program'
+    );
   }
   const policy = resolveKind(ledger, stored.policyRef, 'KnowledgeGovernancePolicy', 'WORKBENCH_INSPECTION_POLICY_REQUIRED');
   assertInspectionPolicy(policy, knowledgeRef, knowledgeOwnership);
@@ -150,10 +173,12 @@ export function validateWorkbenchInspectionAuthorization({
     policy,
     assignments,
     principal: actor,
+    programId,
     accessHash: semanticHash('AgronomistWorkbenchInspectionAccess', {
       authorizationDecisionAuditRef: authAudit.ref,
       knowledgeRef: assertAuthorityRef(knowledgeRef),
-      principal: actor
+      principal: actor,
+      programId
     })
   });
 }

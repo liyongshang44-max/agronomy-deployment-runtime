@@ -28,9 +28,12 @@ function resolveKind(ledger, ref, kind, code) {
   return record;
 }
 
-function sameTargetTenant(principal, targetRef) {
+function sameTargetAccess(principal, targetRef, deploymentScope) {
   return principal.organizationId === targetRef.organizationId
-    && (principal.tenantId ?? null) === (targetRef.tenantId ?? null);
+    && (principal.tenantId ?? null) === (targetRef.tenantId ?? null)
+    && principal.organizationId === deploymentScope.organizationId
+    && (principal.tenantId ?? null) === (deploymentScope.tenantId ?? null)
+    && (principal.programIds ?? []).includes(deploymentScope.programId);
 }
 
 function accessRefFor(inspectionAuthorizations, knowledgeRef) {
@@ -151,13 +154,21 @@ function projectQualifiedEvidence({
   });
 }
 
-function validateEvidenceAccess({ ledger, principal, inspectionAuthorizations, knowledge, ownership }) {
+function validateEvidenceAccess({
+  ledger,
+  principal,
+  inspectionAuthorizations,
+  knowledge,
+  ownership,
+  programId
+}) {
   return validateWorkbenchInspectionAuthorization({
     ledger,
     authorizationDecisionAuditRef: accessRefFor(inspectionAuthorizations, knowledge.ref),
     principal,
     knowledgeRef: knowledge.ref,
-    knowledgeOwnership: ownership
+    knowledgeOwnership: ownership,
+    requiredProgramId: programId
   });
 }
 
@@ -167,6 +178,7 @@ function projectKnowledgeEvidence({
   principal,
   inspectionAuthorizations,
   usePurpose,
+  programId,
   allowHistorical,
   sourceRegistry,
   maxPreviewBytes
@@ -178,7 +190,8 @@ function projectKnowledgeEvidence({
       principal,
       inspectionAuthorizations,
       knowledge: record,
-      ownership: record.semanticPayload.ownership
+      ownership: record.semanticPayload.ownership,
+      programId
     });
     return projectQualifiedEvidence({
       ledger,
@@ -201,7 +214,8 @@ function projectKnowledgeEvidence({
       principal,
       inspectionAuthorizations,
       knowledge: derived.knowledge,
-      ownership: derived.knowledge.semanticPayload.ownership
+      ownership: derived.knowledge.semanticPayload.ownership,
+      programId
     });
     for (const input of derived.validatedInputs) {
       validateEvidenceAccess({
@@ -209,7 +223,8 @@ function projectKnowledgeEvidence({
         principal,
         inspectionAuthorizations,
         knowledge: input.knowledge,
-        ownership: input.knowledge.semanticPayload.ownership
+        ownership: input.knowledge.semanticPayload.ownership,
+        programId
       });
     }
     return deepFreeze({
@@ -237,13 +252,14 @@ function projectKnowledgeEvidence({
   throw new AgronomistWorkbenchError('UNSUPPORTED_WORKBENCH_KNOWLEDGE_KIND', `unsupported knowledge kind ${record.ref.kind}`);
 }
 
-function targetContextProjection(validatedApplicability) {
+function targetContextProjection(validatedApplicability, deploymentScope) {
   const manifest = validatedApplicability.contextManifestAuthority;
   const decision = validatedApplicability.retrievalAuthority.decisionAuthority;
   return deepFreeze({
     decisionProblemRef: decision.record.ref,
     decisionType: decision.semanticPayload.decisionType,
     targetRef: cloneCanonicalValue(decision.semanticPayload.targetRef),
+    programId: deploymentScope.programId,
     logicalTime: decision.semanticPayload.logicalTime,
     decisionHorizon: cloneCanonicalValue(decision.semanticPayload.decisionHorizon),
     usePurpose: decision.semanticPayload.usePurpose,
@@ -289,10 +305,11 @@ export function projectAgronomistWorkbenchCase({
     allowHistorical
   });
   const decision = applicability.retrievalAuthority.decisionAuthority;
-  if (!sameTargetTenant(principal, decision.semanticPayload.targetRef)) {
+  const deploymentScope = applicability.retrievalAuthority.deploymentAuthority.semanticPayload.deploymentScope;
+  if (!sameTargetAccess(principal, decision.semanticPayload.targetRef, deploymentScope)) {
     throw new WorkbenchAccessError(
       'WORKBENCH_TARGET_CONTEXT_ACCESS_DENIED',
-      'A11 v0.1 exposes target context only to a workbench principal in the exact DecisionProblem organization/tenant'
+      'A11 v0.1 target context requires exact DecisionProblem organization/tenant and exact Deployment program membership'
     );
   }
   const escalation = projectApplicabilityEscalation({
@@ -307,11 +324,12 @@ export function projectAgronomistWorkbenchCase({
     principal,
     inspectionAuthorizations,
     usePurpose: decision.semanticPayload.usePurpose,
+    programId: deploymentScope.programId,
     allowHistorical,
     sourceRegistry,
     maxPreviewBytes: maxSourcePreviewBytes
   });
-  const targetContext = targetContextProjection(applicability);
+  const targetContext = targetContextProjection(applicability, deploymentScope);
   const projection = {
     contractVersion: AGRONOMIST_WORKBENCH_CASE_CONTRACT_VERSION,
     projectionKind: 'NON_AUTHORITY_AGRONOMIST_WORKBENCH_CASE',

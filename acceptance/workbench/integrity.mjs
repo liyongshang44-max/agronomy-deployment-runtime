@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { AuthorityLedger } from '../../packages/provenance/src/index.mjs';
 import {
   PERMISSIONS,
   createPrincipal,
@@ -51,6 +50,19 @@ test('knowledge.inspect without source.read cannot expose Source/Claim evidence 
     principal,
     roleAssignments: [role]
   }), (error) => error?.code === 'WORKBENCH_SOURCE_READ_PERMISSION_DENIED');
+});
+
+test('same-tenant agronomist outside the exact Deployment program cannot mint A11 evidence access', () => {
+  const world = createWorkbenchWorld('wrong-program-base');
+  const { principal, role } = createWorkbenchPrincipal(world, {
+    principalId: 'same-tenant-no-program-a11',
+    programIds: [],
+    permissions: [PERMISSIONS.KNOWLEDGE_INSPECT, PERMISSIONS.SOURCE_READ]
+  });
+  assert.throws(() => createInspectionAuthorization(world, {
+    principal,
+    roleAssignments: [role]
+  }), (error) => error?.code === 'WORKBENCH_PROGRAM_ACCESS_DENIED');
 });
 
 test('inspection policy bound to the wrong knowledge resource cannot be used by A11', () => {

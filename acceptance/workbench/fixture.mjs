@@ -13,7 +13,7 @@ import {
   projectAgronomistWorkbenchCase,
   workbenchKnowledgeInspectionResourceId
 } from '../../packages/workbench/src/index.mjs';
-import { assess, audit, createApplicabilityWorld } from '../applicability/fixture.mjs';
+import { assess, createApplicabilityWorld } from '../applicability/fixture.mjs';
 
 let seq = 0;
 export function workbenchAudit(actor, suffix = 'a11') {
@@ -30,6 +30,7 @@ export function createWorkbenchPrincipal(world, {
   principalId = 'agronomist-workbench',
   organizationId = 'org-a',
   tenantId = 'tenant-a',
+  programIds = ['pilot-a'],
   builtInRole = 'AGRONOMY_REVIEWER',
   permissions
 } = {}) {
@@ -38,7 +39,7 @@ export function createWorkbenchPrincipal(world, {
     type: 'USER',
     organizationId,
     tenantId,
-    programIds: ['pilot-a']
+    programIds
   });
   const scope = { organizationId, tenantId };
   const role = permissions
@@ -71,7 +72,8 @@ export function createInspectionAuthorization(world, {
   roleAssignments = [world.workbenchRole],
   policyResourceId,
   ownership,
-  visibilityPrincipalId
+  visibilityPrincipalId,
+  programId = 'pilot-a'
 } = {}) {
   const knowledge = world.env.ledger.resolve(knowledgeRef);
   const targetOwnership = ownership ?? knowledge.semanticPayload.ownership;
@@ -94,7 +96,8 @@ export function createInspectionAuthorization(world, {
     knowledgeOwnership: targetOwnership,
     authorizationScope: {
       organizationId: targetOwnership.organizationId,
-      ...(targetOwnership.tenantId ? { tenantId: targetOwnership.tenantId } : {})
+      ...(targetOwnership.tenantId ? { tenantId: targetOwnership.tenantId } : {}),
+      programId
     }
   });
   const recorded = recordAuthorizationDecision({
