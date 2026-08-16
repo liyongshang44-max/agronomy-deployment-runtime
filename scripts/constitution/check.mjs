@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 const IMPLEMENTATION_ROOTS = ['packages', 'apps', 'adapters', 'sdks'];
 const SOURCE_EXTENSIONS = new Set(['.js', '.mjs', '.cjs', '.ts', '.tsx', '.mts', '.cts']);
 const INTERNAL_PACKAGE_PREFIXES = ['@adr/', '@agronomy-runtime/', '@agronomy-deployment-runtime/'];
-const ALLOWED_ADAPTER_INTERNAL_IMPORTS = new Set([
+const ALLOWED_EXTERNAL_LAYER_INTERNAL_IMPORTS = new Set([
   '@adr/contracts',
   '@agronomy-runtime/contracts',
   '@agronomy-deployment-runtime/contracts'
@@ -70,12 +70,16 @@ function isAdapterFile(relative) {
   return relative.startsWith('adapters/');
 }
 
+function isSdkFile(relative) {
+  return relative.startsWith('sdks/');
+}
+
 function isInternalPackage(specifier) {
   return INTERNAL_PACKAGE_PREFIXES.some((prefix) => specifier.startsWith(prefix));
 }
 
-function isAllowedAdapterInternalImport(specifier) {
-  return ALLOWED_ADAPTER_INTERNAL_IMPORTS.has(specifier);
+function isAllowedExternalLayerInternalImport(specifier) {
+  return ALLOWED_EXTERNAL_LAYER_INTERNAL_IMPORTS.has(specifier);
 }
 
 function scanCoreSource(root, file, relative, text) {
@@ -127,20 +131,20 @@ function scanCoreSource(root, file, relative, text) {
     }
   }
 
-  // Avoid treating absence of forbidden tokens as proof of scientific correctness.
   void lower;
   return violations;
 }
 
-function scanAdapterSource(root, file, relative, text) {
+function scanExternalLayerSource(root, file, relative, text, layer) {
   const violations = [];
+  const code = layer === 'SDK' ? 'SDK_INTERNAL_AUTHORITY_IMPORT' : 'ADAPTER_INTERNAL_AUTHORITY_IMPORT';
   for (const specifier of importSpecifiers(text)) {
-    if (isInternalPackage(specifier) && !isAllowedAdapterInternalImport(specifier)) {
-      violations.push(violation('ADAPTER_INTERNAL_AUTHORITY_IMPORT', relative, `adapter may only import ADR public contracts internally: ${specifier}`));
+    if (isInternalPackage(specifier) && !isAllowedExternalLayerInternalImport(specifier)) {
+      violations.push(violation(code, relative, `${layer.toLowerCase()} may only import ADR public contracts internally: ${specifier}`));
     }
     const target = relativeTarget(root, file, specifier);
     if (target && target.startsWith('packages/') && !target.startsWith('packages/contracts')) {
-      violations.push(violation('ADAPTER_INTERNAL_AUTHORITY_IMPORT', relative, `relative adapter import reaches non-contract package: ${specifier}`));
+      violations.push(violation(code, relative, `relative ${layer.toLowerCase()} import reaches non-contract package: ${specifier}`));
     }
   }
   return violations;
@@ -156,6 +160,7 @@ function scanPackageManifest(root, file, relative, json) {
   };
   const coreManifest = relative.startsWith('packages/') || relative.startsWith('apps/') || relative === 'package.json';
   const adapterManifest = relative.startsWith('adapters/');
+  const sdkManifest = relative.startsWith('sdks/');
 
   for (const [name, value] of Object.entries(allDeps)) {
     const dep = `${name} ${value}`.toLowerCase();
@@ -165,8 +170,11 @@ function scanPackageManifest(root, file, relative, json) {
     if (coreManifest && (dep.includes('adapters/geox') || dep.includes('/adapters/'))) {
       violations.push(violation('CORE_ADAPTER_MANIFEST_DEPENDENCY', relative, `core manifest depends on adapter: ${name} ${value}`));
     }
-    if (adapterManifest && isInternalPackage(name) && !isAllowedAdapterInternalImport(name)) {
+    if (adapterManifest && isInternalPackage(name) && !isAllowedExternalLayerInternalImport(name)) {
       violations.push(violation('ADAPTER_INTERNAL_AUTHORITY_DEPENDENCY', relative, `adapter manifest depends on non-contract ADR package: ${name}`));
+    }
+    if (sdkManifest && isInternalPackage(name) && !isAllowedExternalLayerInternalImport(name)) {
+      violations.push(violation('SDK_INTERNAL_AUTHORITY_DEPENDENCY', relative, `SDK manifest depends on non-contract ADR package: ${name}`));
     }
   }
 
@@ -210,7 +218,8 @@ export async function checkRepository(repositoryRoot) {
       const relative = path.relative(root, file).replaceAll('\\', '/');
       const text = await readFile(file, 'utf8');
       if (isCoreFile(relative)) violations.push(...scanCoreSource(root, file, relative, text));
-      if (isAdapterFile(relative)) violations.push(...scanAdapterSource(root, file, relative, text));
+      if (isAdapterFile(relative)) violations.push(...scanExternalLayerSource(root, file, relative, text, 'ADAPTER'));
+      if (isSdkFile(relative)) violations.push(...scanExternalLayerSource(root, file, relative, text, 'SDK'));
     }
   }
 
