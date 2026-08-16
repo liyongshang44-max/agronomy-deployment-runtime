@@ -61,6 +61,14 @@ function acquisitionCapabilities() {
   ];
 }
 
+function completeCatalog(capabilities) {
+  return {
+    completeness: 'COMPLETE_FOR_REQUIREMENT',
+    authorityClaim: 'PLANNING_CATALOG_ONLY_NO_RUNTIME_OR_EVIDENCE_AUTHORITY',
+    capabilities
+  };
+}
+
 function successorWithDatum(world, datum, suffix) {
   const manifest = publishManifest(world.env.ledger, {
     logicalId: `manifest.r02.${suffix}`,
@@ -150,12 +158,14 @@ test('requirement is SATISFIED only after a new ContextManifest and recompiled R
   assert.notEqual(successorPlan.planHash, originPlan.planHash);
   const status = deriveInformationRequirementStatus({
     ledger: world.env.ledger,
+    originRuntimePlan: originPlan,
     requirement,
     successorRuntimePlan: successorPlan
   });
   assert.equal(status.status, 'SATISFIED');
   assert.equal(status.satisfyingDatumRefs.length, 1);
   assert.equal(status.basis.type, 'SUCCESSOR_CONTEXT_AND_RECOMPILE');
+  assert.equal(status.runtimeLegalityAuthority, 'NONE_R02_STATUS_IS_NOT_RUNTIME_ELIGIBILITY');
 });
 
 test('requirement remains OPEN across a new compile world when the required semantic is still unresolved', () => {
@@ -174,6 +184,7 @@ test('requirement remains OPEN across a new compile world when the required sema
   const successorPlan = compile(successorWorld);
   const status = deriveInformationRequirementStatus({
     ledger: world.env.ledger,
+    originRuntimePlan: originPlan,
     requirement,
     successorRuntimePlan: successorPlan
   });
@@ -181,7 +192,7 @@ test('requirement remains OPEN across a new compile world when the required sema
   assert.equal(status.satisfyingDatumRefs.length, 0);
 });
 
-test('UNSATISFIABLE is a supported planning status only with a catalog declared complete and no matching option', () => {
+test('UNSATISFIABLE is a supported planning status only with a complete planning-only catalog and no matching option', () => {
   const world = directPlanWorld('r02-unsat', { includeCrop: false });
   const plan = compile(world);
   const requirement = planInformationRequirements({ ledger: world.env.ledger, runtimePlan: plan }).informationRequirements[0];
@@ -189,11 +200,14 @@ test('UNSATISFIABLE is a supported planning status only with a catalog declared 
     'OPEN', 'SATISFIED', 'UNSATISFIABLE', 'NO_LONGER_DECISION_MATERIAL'
   ]);
   const status = deriveUnsatisfiableInformationRequirementStatus({
+    ledger: world.env.ledger,
+    originRuntimePlan: plan,
     requirement,
-    capabilityCatalog: { completeness: 'COMPLETE_FOR_REQUIREMENT', capabilities: [] }
+    capabilityCatalog: completeCatalog([])
   });
   assert.equal(status.status, 'UNSATISFIABLE');
   assert.equal(status.basis.evidenceStatus, 'PLANNING_CAPABILITY_CATALOG_NOT_FIELD_EVIDENCE');
+  assert.equal(status.basis.runtimeLegalityStatus, 'NOT_EVALUATED_BY_R02');
 });
 
 let passed = 0;
