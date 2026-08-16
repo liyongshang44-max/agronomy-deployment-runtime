@@ -1,5 +1,6 @@
 import { semanticHash } from '../../canonicalization/src/index.mjs';
 import { sameAuthorityRef } from '../../contracts/src/authority.mjs';
+import { validateImplementationConformanceHistorical } from '../../implementation-conformance/src/index.mjs';
 import { RuntimeBindingError } from './contract.mjs';
 
 function resolveExact(ledger, ref, kind, code) {
@@ -15,6 +16,55 @@ function resolveExact(ledger, ref, kind, code) {
 
 function exactRefIn(refs, expected) {
   return Array.isArray(refs) && refs.some((ref) => sameAuthorityRef(ref, expected));
+}
+
+function validateHistoricalExecutionBinding({ ledger, payload }) {
+  if (payload.implementationBindings.length === 0) return null;
+  const binding = payload.implementationBindings[0];
+  const conformance = validateImplementationConformanceHistorical({
+    ledger,
+    conformanceRef: binding.implementationConformanceRef
+  });
+  if (!sameAuthorityRef(conformance.semanticPayload.specificationRef, binding.specificationRef)
+    || !sameAuthorityRef(conformance.semanticPayload.implementationRef, binding.implementationRef)
+    || !sameAuthorityRef(conformance.specification.record.ref, binding.specificationRef)
+    || !sameAuthorityRef(conformance.implementation.record.ref, binding.implementationRef)) {
+    throw new RuntimeBindingError(
+      'RUNTIME_BINDING_CONFORMANCE_RELATION_MISMATCH',
+      'frozen S03 execution binding must close exact Specification + Implementation + ImplementationConformance refs'
+    );
+  }
+  const qualified = conformance.semanticPayload.qualifiedExecutionEnvironment;
+  const execution = binding.executionContext;
+  for (const key of ['runtime', 'runtimeVersion', 'platform', 'architecture']) {
+    if (execution[key] !== qualified[key]) {
+      throw new RuntimeBindingError(
+        'RUNTIME_BINDING_HISTORICAL_EXECUTION_ENVIRONMENT_MISMATCH',
+        `frozen executionContext.${key} is outside exact conformance qualification`
+      );
+    }
+  }
+  if (!qualified.runtimeEnvironments.includes(execution.runtimeEnvironment)) {
+    throw new RuntimeBindingError(
+      'RUNTIME_BINDING_HISTORICAL_RUNTIME_ENVIRONMENT_MISMATCH',
+      'frozen runtimeEnvironment was not covered by exact ImplementationConformance'
+    );
+  }
+  const capabilities = new Set(execution.capabilities);
+  for (const required of qualified.requiredCapabilities) {
+    if (!capabilities.has(required)) {
+      throw new RuntimeBindingError(
+        'RUNTIME_BINDING_HISTORICAL_CAPABILITY_MISMATCH',
+        `frozen RuntimeBinding lacks required conformance capability ${required}`
+      );
+    }
+  }
+  return {
+    specification: conformance.specification.record,
+    implementation: conformance.implementation.record,
+    conformance: conformance.record,
+    executionContext: binding.executionContext
+  };
 }
 
 export function validateFrozenBindingWorldRelations({ ledger, payload, eligibilityPayload }) {
@@ -120,6 +170,8 @@ export function validateFrozenBindingWorldRelations({ ledger, payload, eligibili
     );
   }
 
+  const specificationExecution = validateHistoricalExecutionBinding({ ledger, payload });
+
   return {
     decision,
     deployment,
@@ -128,6 +180,7 @@ export function validateFrozenBindingWorldRelations({ ledger, payload, eligibili
     manifest,
     retrieval,
     knowledge,
-    applicability
+    applicability,
+    specificationExecution
   };
 }

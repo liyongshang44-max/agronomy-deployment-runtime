@@ -8,6 +8,8 @@ import {
   normalizeRuntimeEligibility,
   validateRuntimeEligibility
 } from '../../runtime-eligibility/src/index.mjs';
+import { validateImplementationAuthority } from '../../implementation-registry/src/index.mjs';
+import { validateImplementationConformance } from '../../implementation-conformance/src/index.mjs';
 import {
   RUNTIME_BINDING_AUTHORITY_CLASS,
   RUNTIME_BINDING_CONTRACT_VERSION,
@@ -19,7 +21,10 @@ import {
 
 const PUBLISH_KEYS = new Set([
   'ledger', 'logicalId', 'version', 'runtimeEligibilityRef',
-  'selectedAlternativePathId', 'snapshotStore', 'audit'
+  'selectedAlternativePathId', 'snapshotStore', 'specificationExecutionBinding', 'audit'
+]);
+const EXECUTION_BINDING_INPUT_KEYS = new Set([
+  'specificationRef', 'implementationRef', 'implementationConformanceRef', 'availableCapabilities'
 ]);
 
 function assertPublishInput(input) {
@@ -101,7 +106,88 @@ function exactRuntimePlanPath(eligibility, selected) {
   return planPath;
 }
 
-function bindingPayload({ eligibility, selected, manifest }) {
+function normalizeExecutionBindingInput(value) {
+  if (value === null || value === undefined) return null;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new RuntimeBindingError('INVALID_RUNTIME_BINDING_EXECUTION_INPUT', 'specificationExecutionBinding must be an object');
+  }
+  for (const key of Object.keys(value)) {
+    if (!EXECUTION_BINDING_INPUT_KEYS.has(key)) {
+      throw new RuntimeBindingError('INVALID_RUNTIME_BINDING_EXECUTION_INPUT', `unsupported specificationExecutionBinding field ${key}`);
+    }
+  }
+  const specificationRef = assertAuthorityRef(value.specificationRef);
+  if (!['QualifiedTransformation', 'Model', 'Policy'].includes(specificationRef.kind)) {
+    throw new RuntimeBindingError('RUNTIME_BINDING_SPECIFICATION_REQUIRED', 'specificationExecutionBinding.specificationRef must be S01 specification authority');
+  }
+  const implementationRef = assertAuthorityRef(value.implementationRef);
+  if (implementationRef.kind !== 'Implementation') {
+    throw new RuntimeBindingError('RUNTIME_BINDING_IMPLEMENTATION_REQUIRED', 'specificationExecutionBinding.implementationRef must be Implementation');
+  }
+  const implementationConformanceRef = assertAuthorityRef(value.implementationConformanceRef);
+  if (implementationConformanceRef.kind !== 'ImplementationConformance') {
+    throw new RuntimeBindingError('RUNTIME_BINDING_CONFORMANCE_REQUIRED', 'specificationExecutionBinding.implementationConformanceRef must be ImplementationConformance');
+  }
+  if (!Array.isArray(value.availableCapabilities)) {
+    throw new RuntimeBindingError('INVALID_RUNTIME_BINDING_EXECUTION_INPUT', 'availableCapabilities must be an array');
+  }
+  const capabilities = value.availableCapabilities.map((item, index) => text(item, `availableCapabilities[${index}]`));
+  if (new Set(capabilities).size !== capabilities.length) {
+    throw new RuntimeBindingError('DUPLICATE_RUNTIME_BINDING_EXECUTION_CAPABILITY', 'availableCapabilities cannot contain duplicates');
+  }
+  return deepFreeze({
+    specificationRef,
+    implementationRef,
+    implementationConformanceRef,
+    availableCapabilities: deepFreeze([...capabilities].sort())
+  });
+}
+
+function buildCurrentExecutionBinding({ ledger, input, deploymentRef, logicalTime }) {
+  const normalized = normalizeExecutionBindingInput(input);
+  if (!normalized) return null;
+  const implementation = validateImplementationAuthority({
+    ledger,
+    implementationRef: normalized.implementationRef
+  });
+  const deployment = ledger.resolve(deploymentRef);
+  if (deployment.ref.kind !== 'Deployment') {
+    throw new RuntimeBindingError('RUNTIME_BINDING_DEPLOYMENT_RELATION_INVALID', 'execution binding requires exact Deployment');
+  }
+  assertRecordHash(deployment, 'RUNTIME_BINDING_DEPLOYMENT_HASH_MISMATCH');
+  const executionContext = deepFreeze({
+    ...implementation.semanticPayload.runtimeMetadata,
+    runtimeEnvironment: text(deployment.semanticPayload.runtimeEnvironment, 'deployment.runtimeEnvironment'),
+    capabilities: normalized.availableCapabilities
+  });
+  const conformance = validateImplementationConformance({
+    ledger,
+    conformanceRef: normalized.implementationConformanceRef,
+    atTime: logicalTime,
+    executionContext
+  });
+  if (!sameAuthorityRef(conformance.semanticPayload.specificationRef, normalized.specificationRef)
+    || !sameAuthorityRef(conformance.semanticPayload.implementationRef, normalized.implementationRef)) {
+    throw new RuntimeBindingError(
+      'RUNTIME_BINDING_CONFORMANCE_RELATION_MISMATCH',
+      'exact ImplementationConformance must bind the requested exact Specification and Implementation'
+    );
+  }
+  return deepFreeze({
+    specificationRef: normalized.specificationRef,
+    implementationRef: normalized.implementationRef,
+    implementationConformanceRef: normalized.implementationConformanceRef,
+    executionContext
+  });
+}
+
+function bindingPayload({ eligibility, selected, manifest, executionBinding }) {
+  const transformationBindings = executionBinding?.specificationRef.kind === 'QualifiedTransformation'
+    ? [executionBinding.specificationRef] : [];
+  const modelBindings = executionBinding?.specificationRef.kind === 'Model'
+    ? [executionBinding.specificationRef] : [];
+  const policyBindings = executionBinding?.specificationRef.kind === 'Policy'
+    ? [executionBinding.specificationRef] : [];
   return {
     contractVersion: RUNTIME_BINDING_CONTRACT_VERSION,
     authorityClass: RUNTIME_BINDING_AUTHORITY_CLASS,
@@ -117,10 +203,10 @@ function bindingPayload({ eligibility, selected, manifest }) {
       knowledgeRef: selected.knowledgeRef,
       applicabilityAssessmentRef: selected.applicabilityAssessmentRef
     }],
-    transformationBindings: [],
-    modelBindings: [],
-    policyBindings: [],
-    implementationBindings: [],
+    transformationBindings,
+    modelBindings,
+    policyBindings,
+    implementationBindings: executionBinding ? [executionBinding] : [],
     calibrationBindings: [],
     logicalTime: manifest.semanticPayload.logicalTime,
     evidenceCutoff: manifest.semanticPayload.evidenceCutoff,
@@ -131,7 +217,13 @@ function bindingPayload({ eligibility, selected, manifest }) {
   };
 }
 
-function buildCurrentBindingWorld({ ledger, runtimeEligibilityRef, selectedAlternativePathId, snapshotStore }) {
+function buildCurrentBindingWorld({
+  ledger,
+  runtimeEligibilityRef,
+  selectedAlternativePathId,
+  snapshotStore,
+  specificationExecutionBinding
+}) {
   const eligibility = validateRuntimeEligibility({
     ledger,
     runtimeEligibilityRef,
@@ -150,8 +242,14 @@ function buildCurrentBindingWorld({ ledger, runtimeEligibilityRef, selectedAlter
     throw new RuntimeBindingError('RUNTIME_BINDING_CONTEXT_MANIFEST_REQUIRED', 'exact RuntimeEligibility context must resolve to ContextManifest');
   }
   assertRecordHash(manifest, 'RUNTIME_BINDING_CONTEXT_MANIFEST_HASH_MISMATCH');
-  const payload = normalizeRuntimeBinding(bindingPayload({ eligibility, selected, manifest }));
-  return deepFreeze({ eligibility, selected, manifest, payload });
+  const executionBinding = buildCurrentExecutionBinding({
+    ledger,
+    input: specificationExecutionBinding,
+    deploymentRef: eligibility.semanticPayload.deploymentRef,
+    logicalTime: manifest.semanticPayload.logicalTime
+  });
+  const payload = normalizeRuntimeBinding(bindingPayload({ eligibility, selected, manifest, executionBinding }));
+  return deepFreeze({ eligibility, selected, manifest, executionBinding, payload });
 }
 
 function expectedEligibilityAuditInputs(payload, runtimeAuthorizationRef) {
@@ -217,6 +315,7 @@ export function publishRuntimeBinding(input) {
     runtimeEligibilityRef,
     selectedAlternativePathId,
     snapshotStore,
+    specificationExecutionBinding,
     audit
   } = input;
   if (!ledger || typeof ledger.publish !== 'function' || typeof ledger.resolve !== 'function' || typeof ledger.auditFor !== 'function') {
@@ -226,7 +325,8 @@ export function publishRuntimeBinding(input) {
     ledger,
     runtimeEligibilityRef,
     selectedAlternativePathId,
-    snapshotStore
+    snapshotStore,
+    specificationExecutionBinding
   });
   const actor = world.eligibility.runtimeEligibilityPrincipal;
   if (!audit || audit.actor?.id !== actor.principalId || audit.actor?.type !== actor.type) {
@@ -252,6 +352,7 @@ export function publishRuntimeBinding(input) {
         runtimeAuthorizationDecisionAuditRef: runtimeAuthorizationRef,
         runtimeEligibilityRef: world.eligibility.record.ref,
         selectedAlternativePathId: world.selected.pathId,
+        executionBindingCount: world.payload.implementationBindings.length,
         selectionAuthorityClass: 'RUNTIME_COMPOSITION_SELECTION_NOT_DECISION',
         correctnessClaim: world.payload.correctnessClaim
       }
@@ -335,6 +436,7 @@ export function validateRuntimeBinding({ ledger, runtimeBindingRef }) {
       && event.details?.runtimeEligibilityRef
       && sameAuthorityRef(event.details.runtimeEligibilityRef, payload.runtimeEligibilityRef)
       && event.details?.selectedAlternativePathId === payload.selectedAlternativePathId
+      && event.details?.executionBindingCount === payload.implementationBindings.length
       && event.details?.selectionAuthorityClass === 'RUNTIME_COMPOSITION_SELECTION_NOT_DECISION'
       && event.details?.correctnessClaim === payload.correctnessClaim
       && sameRefSet(event.inputRefs, expectedInputs));
