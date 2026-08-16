@@ -6,14 +6,14 @@ function test(name, fn) { tests.push({ name, fn }); }
 
 function serialized() { return JSON.stringify(ADR_PILOT_OPENAPI); }
 
-test('P01 exposes no recommendation RuntimeEligibility Binding DecisionResult or generic authority-mutation shortcut', () => {
+test('P01 exposes no recommendation RuntimeEligibility Binding DecisionResult or generic authority shortcut', () => {
   const forbiddenPathFragments = [
-    '/recommend', '/runtime-eligibility', '/runtime-bindings', '/decision-results', '/qualified-knowledge', '/authority/publish'
+    '/recommend', '/runtime-eligibility', '/runtime-bindings', '/decision-results', '/qualified-knowledge', '/authority/'
   ];
   for (const path of Object.keys(ADR_PILOT_OPENAPI.paths)) {
     for (const fragment of forbiddenPathFragments) assert.equal(path.includes(fragment), false, path);
   }
-  const forbiddenBackends = new Set(['publish', 'ledger.publish', 'mutateAuthority', 'overrideApplicability']);
+  const forbiddenBackends = new Set(['publish', 'ledger.publish', 'resolveExactAuthorityRef', 'mutateAuthority', 'overrideApplicability']);
   for (const operation of PUBLIC_API_OPERATIONS) {
     assert.equal(forbiddenBackends.has(operation.backendAuthority), false, operation.operationId);
   }
@@ -26,12 +26,21 @@ test('public contract is platform-neutral and contains no GEOX or provider-speci
   }
 });
 
-test('write request cannot omit exact principal authorization or logical version identity', () => {
+test('write request cannot omit exact principal authorization logical/version identity or contract version', () => {
   const schema = ADR_PILOT_OPENAPI.components.schemas.AuthorityWriteRequest;
   assert.deepEqual([...schema.required].sort(), [
     'authorization_decision_ref', 'logical_id', 'principal', 'resource', 'version'
   ]);
   assert.equal(schema.additionalProperties, false);
+  assert.ok(schema.properties.resource.required.includes('contract_version'));
+});
+
+test('each public authority write pins an explicit frozen resource contract', () => {
+  for (const operation of PUBLIC_API_OPERATIONS.filter((item) => item.mode === 'AUTHORITY_WRITE')) {
+    assert.match(operation.resourceContract, /^adr\.[a-z0-9.-]+\.v\d+$/);
+    const spec = ADR_PILOT_OPENAPI.paths[`/v1${operation.path}`][operation.method.toLowerCase()];
+    assert.equal(spec['x-adr-resource-contract'], operation.resourceContract);
+  }
 });
 
 test('transport idempotency does not replace immutable authority identity', () => {
