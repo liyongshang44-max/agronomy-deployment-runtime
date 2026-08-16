@@ -29,6 +29,15 @@ These field names have no ADR semantic authority.
 
 The customer `metric_code` is deliberately not used to infer `semantic_id`, unit or value type. Canonical ADR representation is supplied only through an explicit integration mapping configuration.
 
+The integration mapping also freezes the exact source-selection scope:
+
+```text
+sourcePlotKey
+sourceMetricCode
+```
+
+A record from another plot or another metric fails closed before representation mapping. This prevents a valid explicit semantic mapping from being accidentally reused over unrelated customer data.
+
 ## 3. Dependency boundary
 
 The reference adapter lives under:
@@ -54,6 +63,7 @@ EXPLICIT_CONSTANT
 
 For the executable crop-context proof:
 
+- exact source plot and exact source metric must match the configured mapping scope;
 - raw customer value is copied exactly into the configured ADR value field;
 - observation/support/availability times are copied exactly;
 - source reading/content identities are copied exactly;
@@ -62,6 +72,7 @@ For the executable crop-context proof:
 The adapter cannot:
 
 - infer semantic identity from `metric_code` or field names;
+- accept another plot/metric under an unrelated mapping;
 - default missing source readings;
 - perform unit conversion or formulas;
 - synthesize scientific context;
@@ -82,18 +93,23 @@ The proof retains:
 - full context semantic/provenance/time/support/source payload;
 - exact response authority identity checks inherited from P02.
 
+The acceptance gateway resolves the SDK write through the real `publishContextDatum` authority seam on the same ledger and returns the exact resulting ContextDatum authority ref. That exact ref — not a separately republished equivalent datum — is the member subsequently frozen into ContextManifest and consumed by Gate-A applicability/workbench processing.
+
+Therefore P03 proves continuity of one exact authority chain across the public SDK boundary rather than merely proving payload equivalence on two independent paths.
+
 P03 does not claim a production HTTP gateway; P01 is the public contract and P06/P08 own production async/operational/SLO concerns.
 
 ## 6. Standalone Gate-A closure
 
-Executable acceptance takes the customer-originated provider payload and publishes the corresponding governed ContextDatum into an otherwise existing Gate-A authority world, then closes:
+Executable acceptance takes the customer-originated provider payload and publishes the same exact governed ContextDatum through the P02 SDK transport seam into an otherwise existing Gate-A authority world, then closes:
 
 ```text
 customer-like raw record
+  -> exact source plot/metric mapping scope
   -> reference ContextProvider
   -> P02 SDK/P01 write contract
-  -> ContextDatum
-  -> ContextManifest
+  -> exact ContextDatum authority
+  -> ContextManifest containing that exact ref
   -> KnowledgeRetrievalResult
   -> ApplicabilityAssessment
   -> Agronomist Workbench projection
@@ -151,7 +167,9 @@ Positive acceptance proves:
 
 - customer-like schema maps through explicit representation rules;
 - customer metric names do not infer ADR semantic identity;
+- exact source plot/metric scope is configured rather than guessed;
 - full provider payload traverses P02 SDK without semantic flattening;
+- the ContextDatum authority returned by the SDK write is the exact ContextDatum ref used downstream;
 - a non-GEOX provider closes the existing Gate-A applicability/workbench path;
 - exact ApplicabilityAssessment identity reaches the reference consumer;
 - result consumption does not mutate the authority ledger;
@@ -163,6 +181,8 @@ Integrity acceptance proves:
 - no first-party runtime/schema coupling tokens exist in the reference adapter;
 - root P03 test wiring has no dependency on `adapters/geox`;
 - missing source data is not defaulted;
+- wrong source plot fails closed;
+- wrong source metric fails closed;
 - ungoverned value-type inference is rejected;
 - source content identity is explicit;
 - projection-only or wrong-kind result events fail closed;
