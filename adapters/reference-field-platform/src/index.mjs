@@ -51,6 +51,8 @@ function exactWireAuthorityRef(value, name = 'authority_ref') {
 function normalizeContextMapping(mapping) {
   const value = plainObject(mapping, 'contextMapping');
   const output = {
+    sourcePlotKey: text(value.sourcePlotKey, 'contextMapping.sourcePlotKey'),
+    sourceMetricCode: text(value.sourceMetricCode, 'contextMapping.sourceMetricCode'),
     semanticId: text(value.semanticId, 'contextMapping.semanticId'),
     unit: text(value.unit, 'contextMapping.unit'),
     valueType: text(value.valueType, 'contextMapping.valueType'),
@@ -73,7 +75,7 @@ function valueTarget(valueType) {
   }[valueType];
 }
 
-function validateCustomerObservation(record) {
+function validateCustomerObservation(record, mapping) {
   const value = plainObject(record, 'record');
   const required = [
     'plot_key',
@@ -86,6 +88,18 @@ function validateCustomerObservation(record) {
     'content_hash'
   ];
   for (const field of required) text(value[field], `record.${field}`);
+  if (value.plot_key !== mapping.sourcePlotKey) {
+    throw new ReferenceIntegrationError(
+      'REFERENCE_SOURCE_SCOPE_MISMATCH',
+      `record.plot_key ${value.plot_key} does not match configured source plot ${mapping.sourcePlotKey}`
+    );
+  }
+  if (value.metric_code !== mapping.sourceMetricCode) {
+    throw new ReferenceIntegrationError(
+      'REFERENCE_SOURCE_METRIC_MISMATCH',
+      `record.metric_code ${value.metric_code} does not match configured source metric ${mapping.sourceMetricCode}`
+    );
+  }
   if (!value.content_hash.startsWith('sha256:')) {
     throw new ReferenceIntegrationError('INVALID_REFERENCE_CONTENT_HASH', 'record.content_hash must be a sha256 identity');
   }
@@ -96,7 +110,7 @@ export function createReferenceFieldPlatformContextProvider({ contextMapping }) 
   const mapping = normalizeContextMapping(contextMapping);
 
   function toContextMessage(recordInput) {
-    const record = validateCustomerObservation(recordInput);
+    const record = validateCustomerObservation(recordInput, mapping);
     const resource = applyExplicitAdapterMapping(record, [
       { source_field: 'reading_key', target_field: 'datum_id', mode: 'EXACT_COPY' },
       { source_field: 'raw_value', target_field: valueTarget(mapping.valueType), mode: 'EXACT_COPY' },
