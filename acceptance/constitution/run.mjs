@@ -99,6 +99,22 @@ test('allows adapter import of ADR contracts only', async () => {
   });
 });
 
+test('rejects SDK import of internal authority package', async () => {
+  await withFixture('sdk-authority-import', {
+    'sdks/typescript/src/index.ts': `import { assess } from '@adr/applicability';\nexport { assess };\n`
+  }, async (result) => {
+    assert(hasCode(result, 'SDK_INTERNAL_AUTHORITY_IMPORT'), JSON.stringify(result));
+  });
+});
+
+test('allows SDK import of ADR public contracts only', async () => {
+  await withFixture('sdk-contracts', {
+    'sdks/typescript/src/index.ts': `import type { ContextDatum } from '@adr/contracts';\nexport const sdk = true;\n`
+  }, async (result) => {
+    assert(result.ok, JSON.stringify(result));
+  });
+});
+
 test('rejects root build/test scripts coupled to adapters/geox', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'adr-constitution-root-script-'));
   try {
