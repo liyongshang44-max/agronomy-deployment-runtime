@@ -1,12 +1,8 @@
 import assert from 'node:assert/strict';
 import {
-  PERMISSIONS,
-  createPrincipal,
   publishKnowledgeGovernancePolicy,
-  publishRoleAssignment,
   recordAuthorizationDecision
 } from '../../packages/authorization/src/index.mjs';
-import { authorizeRuntimeProfileManage } from '../../packages/authorization/src/runtime-profile-control.mjs';
 import { authorizeKnowledgeRelease } from '../../packages/knowledge-registry/src/release-authorization.mjs';
 import {
   KnowledgeReleaseService,
@@ -34,7 +30,6 @@ import {
   publishDecision
 } from '../knowledge-retrieval/fixture.mjs';
 import {
-  audit as manifestAudit,
   datumInput,
   publishDatum,
   publishManifest
@@ -55,9 +50,48 @@ function audit(actorId, actorType = 'USER') {
   };
 }
 
+function manifestHasSemantic(ledger, manifest, semanticId) {
+  return manifest.semanticPayload.datumRefs.some((ref) =>
+    ledger.resolve(ref).semanticPayload.semanticId === semanticId);
+}
+
+function addProfileSoilIfMissing(world, label) {
+  if (manifestHasSemantic(world.env.ledger, world.manifest, 'soil.volumetric_water_content')) {
+    return world.manifest;
+  }
+  const soil = publishDatum(world.env.ledger, `datum.r01.${label}.profile-soil`, datumInput({
+    semanticId: 'soil.volumetric_water_content',
+    value: { type: 'DECIMAL', decimal: '0.24' },
+    unit: 'm3_per_m3',
+    epistemicClass: 'OBSERVATION',
+    provenanceClass: 'SENSOR',
+    effectiveInterval: { start: '2026-08-20T09:00:00Z', end: '2026-08-20T10:00:00Z' },
+    availableAt: '2026-08-20T09:55:00Z',
+    temporalSupport: { type: 'INTERVAL' },
+    source: { providerId: 'r01-fixture', sourceRef: `profile-soil-${label}` }
+  }));
+  return publishManifest(world.env.ledger, {
+    logicalId: `manifest.r01.${label}.profile-complete`,
+    decisionProblem: world.decision,
+    datumRefs: [...world.manifest.semanticPayload.datumRefs, soil.ref],
+    evidenceCutoff: '2026-08-20T10:00:00Z',
+    auditOccurredAt: '2026-08-20T10:01:00Z'
+  });
+}
+
 export function directPlanWorld(label = 'direct', options = {}) {
-  const world = createApplicabilityWorld(`r01-${label}`, options);
-  const assessment = assess(world, { logicalId: `applicability.r01.${label}` });
+  const { omitProfileSoil = false, ...applicabilityOptions } = options;
+  const base = createApplicabilityWorld(`r01-${label}`, applicabilityOptions);
+  const manifest = omitProfileSoil ? base.manifest : addProfileSoilIfMissing(base, label);
+  const world = {
+    ...base,
+    deployment: base.env.deployment,
+    manifest
+  };
+  const assessment = assess(world, {
+    logicalId: `applicability.r01.${label}`,
+    manifest
+  });
   return { ...world, assessments: [assessment] };
 }
 
