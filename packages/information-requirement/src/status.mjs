@@ -25,6 +25,14 @@ import {
 
 const STATUS_SET = new Set(INFORMATION_REQUIREMENT_STATUSES);
 
+function runtimePlanIdentity(plan) {
+  return normalizePlanRef({
+    planId: plan.planId,
+    planHash: plan.planHash,
+    compilerVersion: plan.compilerVersion
+  });
+}
+
 function matchingContextDatumRefs({ ledger, manifest, requirement }) {
   const matches = [];
   for (const ref of manifest.semanticPayload.datumRefs) {
@@ -50,7 +58,7 @@ function statusView({ requirement, successorPlan, status, satisfyingDatumRefs = 
     requirementId: requirement.requirementId,
     originRequirementSemanticHash: requirement.semanticHash,
     originPlanRef: requirement.planRef,
-    ...(successorPlan ? { successorPlanRef: normalizePlanRef(successorPlan) } : {}),
+    ...(successorPlan ? { successorPlanRef: runtimePlanIdentity(successorPlan) } : {}),
     status,
     satisfyingDatumRefs,
     basis: cloneCanonicalValue(basis),
@@ -86,7 +94,7 @@ export function deriveInformationRequirementStatus({
       'status derivation requires the same exact DecisionProblem/Deployment/RuntimeProfile world'
     );
   }
-  if (samePlanRef(normalizedRequirement.planRef, normalizePlanRef(successorPlan))) {
+  if (samePlanRef(normalizedRequirement.planRef, runtimePlanIdentity(successorPlan))) {
     throw new InformationRequirementError(
       'INFORMATION_REQUIREMENT_SUCCESSOR_PLAN_REQUIRED',
       'status cannot advance against the same RuntimePlan snapshot'
