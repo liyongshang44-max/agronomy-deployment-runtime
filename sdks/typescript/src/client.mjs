@@ -8,6 +8,16 @@ const WRITE_OPERATIONS = Object.freeze({
   createApplicabilityAssessment: Object.freeze({ method: 'POST', path: '/v1/applicability-assessments', contract: 'adr.applicability-assessment.v1' })
 });
 
+const WRITE_AUTHORITY_KINDS = Object.freeze({
+  createDecisionProblem: 'DecisionProblem',
+  createContextDatum: 'ContextDatum',
+  createAuthorizedContextReference: 'AuthorizedContextReference',
+  resolveContextReference: 'ResolvedContextDatumReceipt',
+  createContextManifest: 'ContextManifest',
+  executeKnowledgeRetrieval: 'KnowledgeRetrievalResult',
+  createApplicabilityAssessment: 'ApplicabilityAssessment'
+});
+
 const READ_OPERATIONS = Object.freeze({
   getAgronomistWorkbenchCase: Object.freeze({ method: 'GET', path: '/v1/workbench/cases/{assessment_id}' }),
   listAgronomistEscalations: Object.freeze({ method: 'GET', path: '/v1/workbench/escalations' })
@@ -88,12 +98,18 @@ function bindPath(template, pathParameters = {}) {
   return path;
 }
 
-function validateAuthorityResponse(response, expectedContract) {
+function validateAuthorityResponse(response, { expectedContract, expectedKind, expectedLogicalId, expectedVersion }) {
   const value = plainObject(response, 'response');
   const ref = exactAuthorityRef(value.ref, 'response.ref');
   const resource = plainObject(value.resource, 'response.resource');
   if (resource.contract_version !== expectedContract) {
     throw new AdrSdkError('SDK_RESPONSE_CONTRACT_MISMATCH', `expected ${expectedContract}, received ${resource.contract_version}`);
+  }
+  if (ref.kind !== expectedKind || ref.logical_id !== expectedLogicalId || ref.version !== expectedVersion) {
+    throw new AdrSdkError(
+      'SDK_RESPONSE_IDENTITY_MISMATCH',
+      `expected ${expectedKind}:${expectedLogicalId}@${expectedVersion}, received ${ref.kind}:${ref.logical_id}@${ref.version}`
+    );
   }
   return Object.freeze({ ref, resource: Object.freeze(clone(resource)) });
 }
@@ -138,7 +154,12 @@ export function createAdrPilotClient({ principal: principalInput, getAccessToken
       }
     };
     const response = await transport(Object.freeze(clone(request)));
-    return validateAuthorityResponse(response, operation.contract);
+    return validateAuthorityResponse(response, {
+      expectedContract: operation.contract,
+      expectedKind: WRITE_AUTHORITY_KINDS[operationId],
+      expectedLogicalId: request.body.logical_id,
+      expectedVersion: request.body.version
+    });
   }
 
   async function read(operationId, { pathParameters = {} } = {}) {
