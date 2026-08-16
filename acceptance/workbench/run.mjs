@@ -25,14 +25,14 @@ test('A11 case exposes exact source span → claim → origin context → qualif
   assert.deepEqual(c.why.knowledgeRetrievalResultRef, world.retrieval.ref);
 });
 
-test('exact retained SourceRegistry yields a bounded text preview of the exact claim locator', () => {
+test('exact retained SourceRegistry yields a bounded preview of the exact source bytes at the claim locator', () => {
   const world = createWorkbenchWorld('source-preview');
   const span = world.workbenchCase.scientificEvidence.sourceSpan;
   assert.equal(span.retainedBytesVerified, true);
   assert.equal(span.previewAvailable, true);
   assert.equal(span.previewTruncated, false);
-  assert.match(span.previewText, /maize/i);
-  assert.match(span.previewText, /irrigation/i);
+  assert.match(span.previewText, /Maintain irrigation depletion within the qualified threshold\./);
+  assert.match(span.previewText, /Context: silt loam\./);
   assert.equal(span.sourceArtifactRef.semanticHash, world.env.qualified.artifact.ref.semanticHash);
 });
 
