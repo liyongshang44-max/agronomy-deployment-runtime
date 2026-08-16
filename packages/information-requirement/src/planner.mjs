@@ -24,6 +24,14 @@ import {
 
 const ADDRESSABLE_TYPE_SET = new Set(INFORMATION_ADDRESSABLE_REQUIREMENT_TYPES);
 
+function runtimePlanIdentity(plan) {
+  return normalizePlanRef({
+    planId: plan.planId,
+    planHash: plan.planHash,
+    compilerVersion: plan.compilerVersion
+  });
+}
+
 function runtimePlanReplayInput(ledger, plan, snapshotStore) {
   return {
     ledger,
@@ -136,7 +144,7 @@ function buildRequirement({ plan, decision, profile, semanticId, sourceRequireme
     contractVersion: INFORMATION_REQUIREMENT_CONTRACT_VERSION,
     authorityClass: 'INFORMATION_NEED_ONLY',
     requirementId: stableRequirementId({ plan, semanticId }),
-    planRef: normalizePlanRef(plan),
+    planRef: runtimePlanIdentity(plan),
     decisionProblemRef: plan.decisionProblemRef,
     deploymentRef: plan.deploymentRef,
     runtimeProfileRef: plan.runtimeProfileRef,
@@ -292,7 +300,7 @@ function planningResult({ plan, requirements, nonInformationBlockers, acquisitio
   const payload = {
     contractVersion: INFORMATION_PLANNING_RESULT_CONTRACT_VERSION,
     authorityClass: 'INFORMATION_PLANNING_NON_EVIDENCE',
-    planRef: normalizePlanRef(plan),
+    planRef: runtimePlanIdentity(plan),
     decisionProblemRef: plan.decisionProblemRef,
     deploymentRef: plan.deploymentRef,
     runtimeProfileRef: plan.runtimeProfileRef,
