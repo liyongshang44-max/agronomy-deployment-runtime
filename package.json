@@ -22,7 +22,7 @@
     "test:context-datum": "node acceptance/context-datum/run.mjs && node acceptance/context-datum/integrity.mjs",
     "test:context-reference": "node acceptance/context-reference/run.mjs && node acceptance/context-reference/integrity.mjs && node acceptance/context-reference/hardening.mjs",
     "test:context-manifest": "node acceptance/context-manifest/run.mjs && node acceptance/context-manifest/integrity.mjs && node acceptance/context-manifest/identity.mjs",
-    "test:specification": "node acceptance/specification/run.mjs && node acceptance/specification/integrity.mjs",
+    "test:specification": "node acceptance/specification/run.mjs && node acceptance/specification/integrity.mjs && node acceptance/specification/retry.mjs",
     "test:runtime-profile": "node acceptance/runtime-profile/run.mjs && node acceptance/runtime-profile/integrity.mjs && node acceptance/runtime-profile/lifecycle.mjs",
     "test:deployment": "node acceptance/deployment/run.mjs && node acceptance/deployment/integrity.mjs && node acceptance/deployment/lifecycle.mjs && node acceptance/deployment/time-hardening.mjs && node acceptance/deployment/retry.mjs",
     "test:knowledge-retrieval": "node acceptance/knowledge-retrieval/run.mjs && node acceptance/knowledge-retrieval/integrity.mjs && node acceptance/knowledge-retrieval/lifecycle.mjs && node acceptance/knowledge-retrieval/multi-member.mjs",
