@@ -82,17 +82,6 @@ export const PUBLIC_API_OPERATIONS = deepFreeze([
     idempotencyRequired: true
   },
   {
-    operationId: 'getAuthorityResource',
-    method: 'GET',
-    path: '/authority/{kind}/{logical_id}/versions/{version}',
-    mode: 'EXACT_AUTHORITY_READ',
-    authorityKind: '*',
-    resourceContract: null,
-    backendAuthority: 'resolveExactAuthorityRef',
-    requiredPermission: null,
-    idempotencyRequired: false
-  },
-  {
     operationId: 'getAgronomistWorkbenchCase',
     method: 'GET',
     path: '/workbench/cases/{assessment_id}',
