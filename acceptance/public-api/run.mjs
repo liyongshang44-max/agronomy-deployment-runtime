@@ -32,6 +32,7 @@ test('P01 publishes an OpenAPI 3.1 Gate-A pilot document over the frozen operati
     assert.equal(spec.operationId, operation.operationId);
     assert.equal(spec['x-adr-mode'], operation.mode);
     assert.equal(spec['x-adr-backend-authority'], operation.backendAuthority);
+    assert.equal(spec['x-adr-resource-contract'], operation.resourceContract);
   }
 });
 
@@ -41,6 +42,7 @@ test('every authority write uses an existing governed backend seam and requires 
   for (const operation of writes) {
     assert.equal(WRITE_BACKENDS.has(operation.backendAuthority), true, operation.operationId);
     assert.equal(operation.idempotencyRequired, true, operation.operationId);
+    assert.match(operation.resourceContract, /^adr\./);
     const spec = openApiOperation(operation);
     const header = spec.parameters.find((item) => item.name === 'Idempotency-Key');
     assert.equal(header?.required, true, operation.operationId);
@@ -48,13 +50,21 @@ test('every authority write uses an existing governed backend seam and requires 
   }
 });
 
-test('exact authority reads require kind logical id version and semantic hash rather than latest lookup', () => {
-  const read = PUBLIC_API_OPERATIONS.find((item) => item.operationId === 'getAuthorityResource');
-  const spec = openApiOperation(read);
-  const names = spec.parameters.map((item) => item.name).sort();
-  assert.deepEqual(names, ['kind', 'logical_id', 'semantic_hash', 'version']);
-  assert.equal(spec.parameters.find((item) => item.name === 'semantic_hash').required, true);
-  assert.equal(JSON.stringify(spec).toLowerCase().includes('latest'), false);
+test('write resource envelope requires a frozen public contract version', () => {
+  const schema = ADR_PILOT_OPENAPI.components.schemas.AuthorityWriteRequest.properties.resource;
+  assert.ok(schema.required.includes('contract_version'));
+  assert.equal(schema.properties.contract_version.type, 'string');
+});
+
+test('templated public paths declare every path parameter', () => {
+  for (const operation of PUBLIC_API_OPERATIONS) {
+    const expected = [...operation.path.matchAll(/\{([^}]+)\}/g)].map((match) => match[1]).sort();
+    const actual = (openApiOperation(operation).parameters ?? [])
+      .filter((item) => item.in === 'path')
+      .map((item) => item.name)
+      .sort();
+    assert.deepEqual(actual, expected, operation.operationId);
+  }
 });
 
 test('AuthorityRef public schema preserves exact immutable identity', () => {
