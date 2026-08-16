@@ -39,6 +39,12 @@ import {
   createApplicabilityWorld
 } from '../applicability/fixture.mjs';
 
+const SOURCE_HASHES = Object.freeze({
+  profileSoil: `sha256:${'a'.repeat(64)}`,
+  crop: `sha256:${'b'.repeat(64)}`,
+  soil: `sha256:${'c'.repeat(64)}`
+});
+
 let seq = 0;
 function audit(actorId, actorType = 'USER') {
   seq += 1;
@@ -68,7 +74,11 @@ function addProfileSoilIfMissing(world, label) {
     effectiveInterval: { start: '2026-08-20T09:00:00Z', end: '2026-08-20T10:00:00Z' },
     availableAt: '2026-08-20T09:55:00Z',
     temporalSupport: { type: 'INTERVAL' },
-    source: { providerId: 'r01-fixture', sourceRef: `profile-soil-${label}` }
+    source: {
+      providerId: 'r01-fixture',
+      sourceRef: `profile-soil-${label}`,
+      contentHash: SOURCE_HASHES.profileSoil
+    }
   }));
   return publishManifest(world.env.ledger, {
     logicalId: `manifest.r01.${label}.profile-complete`,
@@ -205,7 +215,11 @@ export function multiCandidatePlanWorld(label = 'alternatives') {
     effectiveInterval: { start: '2026-08-01T00:00:00Z', end: '2026-09-01T00:00:00Z' },
     availableAt: '2026-08-20T09:00:00Z',
     temporalSupport: { type: 'INTERVAL' },
-    source: { providerId: 'r01-fixture', sourceRef: `crop-${label}` }
+    source: {
+      providerId: 'r01-fixture',
+      sourceRef: `crop-${label}`,
+      contentHash: SOURCE_HASHES.crop
+    }
   }));
   const soil = publishDatum(env.ledger, `datum.r01.${label}.soil`, datumInput({
     semanticId: 'soil.volumetric_water_content',
@@ -216,7 +230,11 @@ export function multiCandidatePlanWorld(label = 'alternatives') {
     effectiveInterval: { start: '2026-08-20T09:00:00Z', end: '2026-08-20T10:00:00Z' },
     availableAt: '2026-08-20T09:55:00Z',
     temporalSupport: { type: 'INTERVAL' },
-    source: { providerId: 'r01-fixture', sourceRef: `soil-${label}` }
+    source: {
+      providerId: 'r01-fixture',
+      sourceRef: `soil-${label}`,
+      contentHash: SOURCE_HASHES.soil
+    }
   }));
   const manifest = publishManifest(env.ledger, {
     logicalId: `manifest.r01.${label}`,
