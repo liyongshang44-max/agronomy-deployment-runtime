@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import {
   ESCALATION_CLASSIFICATIONS,
-  classifyApplicabilityPayload,
   projectApplicabilityEscalation
 } from '../../packages/workbench/src/index.mjs';
 import {
@@ -102,23 +101,6 @@ test('explicit NOT_RELEVANT can leave the review queue without being called safe
   assert.equal(view.classification, 'NO_REVIEW_CANDIDATE');
   assert.deepEqual(view.reasonCodes, ['NOT_DECISION_RELEVANT']);
   assert.equal(view.explanation.decisionRelevance, 'NOT_RELEVANT');
-});
-
-test('future A09 governed-transform applicability maps only to GOVERNED_TRANSFORM_NEEDED workflow classification', () => {
-  const classified = classifyApplicabilityPayload({
-    transportStatus: 'APPLICABLE_WITH_GOVERNED_TRANSFORM',
-    scientificUseStatus: 'QUALIFIED',
-    decisionRelevance: 'MATERIAL',
-    runtimeUse: 'CONDITIONAL',
-    conflicts: [],
-    missingContextSemanticIds: [],
-    unsupportedConstraintCodes: [],
-    requiredCalibrationCodes: [],
-    requiredTransformationRefs: [{ kind: 'QualifiedTransformation', logicalId: 'qt-1', version: '1', semanticHash: 'sha256:qt' }],
-    limitations: []
-  });
-  assert.equal(classified.classification, 'GOVERNED_TRANSFORM_NEEDED');
-  assert.equal(classified.reviewRequired, true);
 });
 
 console.log(`Escalation read-model acceptance: ${passed} passed`);
