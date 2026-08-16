@@ -48,11 +48,70 @@ function sha256(value) {
   return `sha256:${createHash('sha256').update(JSON.stringify(canonical(value)), 'utf8').digest('hex')}`;
 }
 
+const RFC3339_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.\d{1,3})?(Z|[+-]\d{2}:\d{2})$/;
+const DECIMAL_RE = /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/;
+
+function daysInMonth(year, month) {
+  if ([1, 3, 5, 7, 8, 10, 12].includes(month)) return 31;
+  if ([4, 6, 9, 11].includes(month)) return 30;
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  return leap ? 29 : 28;
+}
+
 function timestamp(value, name) {
   const input = text(value, name);
+  const match = RFC3339_RE.exec(input);
+  if (!match) {
+    throw new GeoxAdapterError('INVALID_GEOX_TIME', `${name} must be RFC3339 with explicit timezone and <= millisecond precision`);
+  }
+  const [, yearText, monthText, dayText, hourText, minuteText, secondText, , zone] = match;
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+  const second = Number(secondText);
+  if (month < 1 || month > 12 || day < 1 || day > daysInMonth(year, month) || hour > 23 || minute > 59 || second > 59) {
+    throw new GeoxAdapterError('INVALID_GEOX_TIME', `${name} contains an impossible calendar date or clock time`);
+  }
+  if (zone !== 'Z') {
+    const offsetHour = Number(zone.slice(1, 3));
+    const offsetMinute = Number(zone.slice(4, 6));
+    if (offsetHour > 14 || offsetMinute > 59 || (offsetHour === 14 && offsetMinute !== 0)) {
+      throw new GeoxAdapterError('INVALID_GEOX_TIME', `${name} contains an invalid timezone offset`);
+    }
+  }
   const parsed = new Date(input);
-  if (Number.isNaN(parsed.getTime())) throw new GeoxAdapterError('INVALID_GEOX_TIME', `${name} must be a valid timestamp`);
+  if (Number.isNaN(parsed.getTime())) throw new GeoxAdapterError('INVALID_GEOX_TIME', `${name} must be a valid RFC3339 timestamp`);
   return parsed.toISOString();
+}
+
+function decimal(value, name) {
+  const input = typeof value === 'number' ? String(value) : text(value, name);
+  if (!DECIMAL_RE.test(input)) throw new GeoxAdapterError('INVALID_GEOX_DECIMAL', `${name} must be a base-10 decimal without exponent notation`);
+  const negative = input.startsWith('-');
+  const unsigned = negative ? input.slice(1) : input;
+  const [integer, rawFraction = ''] = unsigned.split('.');
+  const fraction = rawFraction.replace(/0+$/, '');
+  const normalized = fraction ? `${integer}.${fraction}` : integer;
+  if (/^0(?:\.0*)?$/.test(normalized)) return '0';
+  return negative ? `-${normalized}` : normalized;
+}
+
+function compareDecimal(left, right) {
+  const parse = (input) => {
+    const normalized = decimal(input, 'decimal');
+    const negative = normalized.startsWith('-');
+    const unsigned = negative ? normalized.slice(1) : normalized;
+    const [integer, fraction = ''] = unsigned.split('.');
+    return { negative, integer, fraction };
+  };
+  const a = parse(left);
+  const b = parse(right);
+  const scale = Math.max(a.fraction.length, b.fraction.length);
+  const ai = BigInt(`${a.negative ? '-' : ''}${a.integer}${a.fraction.padEnd(scale, '0')}`);
+  const bi = BigInt(`${b.negative ? '-' : ''}${b.integer}${b.fraction.padEnd(scale, '0')}`);
+  return ai < bi ? -1 : ai > bi ? 1 : 0;
 }
 
 function exactWireAuthorityRef(value, name = 'authority_ref') {
@@ -91,7 +150,7 @@ function normalizeTargetScope(value) {
   });
 }
 
-function validateScope(payload, scope) {
+function validateCropScope(payload, scope) {
   const checks = [
     ['tenant_id', scope.tenantId],
     ['project_id', scope.projectId],
@@ -113,7 +172,7 @@ function normalizeCropContextFact(factInput, scope) {
     throw new GeoxAdapterError('UNSUPPORTED_GEOX_CROP_CONTEXT_CONTRACT', 'expected crop_context_v1 schema_version 1');
   }
   const payload = object(record.payload, 'cropContextFact.record_json.payload');
-  validateScope(payload, scope);
+  validateCropScope(payload, scope);
   if (text(payload.status, 'crop_context.payload.status') !== 'PLANTED_CONFIRMED') {
     throw new GeoxAdapterError(
       'GEOX_CROP_CONTEXT_NOT_CONFIRMED',
@@ -123,35 +182,39 @@ function normalizeCropContextFact(factInput, scope) {
   const cropCode = text(payload.crop_code, 'crop_context.payload.crop_code');
   const source = text(payload.source, 'crop_context.payload.source');
   const sourceTranslation = CROP_SOURCE_TRANSLATION[source];
-  if (!sourceTranslation) {
-    throw new GeoxAdapterError('UNSUPPORTED_GEOX_CROP_SOURCE', `unsupported crop context source ${source}`);
-  }
+  if (!sourceTranslation) throw new GeoxAdapterError('UNSUPPORTED_GEOX_CROP_SOURCE', `unsupported crop context source ${source}`);
   const occurredAt = timestamp(fact.occurred_at, 'cropContextFact.occurred_at');
-  const ingestedAt = timestamp(fact.ingested_at, 'cropContextFact.ingested_at');
-  if (ingestedAt < occurredAt) {
-    throw new GeoxAdapterError('INVALID_GEOX_CHRONOLOGY', 'cropContextFact.ingested_at cannot precede occurred_at');
+  const retrievedAt = timestamp(fact.retrieved_at, 'cropContextFact.retrieved_at');
+  if (retrievedAt < occurredAt) {
+    throw new GeoxAdapterError('INVALID_GEOX_CHRONOLOGY', 'cropContextFact.retrieved_at cannot precede occurred_at');
   }
+  const sourceSnapshot = {
+    fact_id: text(fact.fact_id, 'cropContextFact.fact_id'),
+    occurred_at: occurredAt,
+    source: text(fact.source, 'cropContextFact.source'),
+    record_json: clone(record)
+  };
   return Object.freeze({
-    factId: text(fact.fact_id, 'cropContextFact.fact_id'),
+    factId: sourceSnapshot.fact_id,
     occurredAt,
-    ingestedAt,
+    retrievedAt,
     record: clone(record),
     payload: clone(payload),
     cropCode,
     source,
     sourceTranslation,
-    snapshotHash: sha256(record)
+    sourceSnapshotHash: sha256(sourceSnapshot)
   });
 }
 
-function translationAudit({ normalized, scope }) {
+function cropTranslationAudit({ normalized, scope }) {
   const auditPayload = {
     contract_version: GEOX_FIRST_PARTY_ADAPTER_VERSION,
     source_system: 'GEOX',
     source_contract: GEOX_CROP_CONTEXT_CONTRACT,
     source_contract_repository_baseline: GEOX_COMPATIBILITY_BASELINE,
     source_ref: `geox:facts/${normalized.factId}`,
-    source_snapshot_hash: normalized.snapshotHash,
+    source_snapshot_hash: normalized.sourceSnapshotHash,
     source_scope: {
       tenant_id: scope.tenantId,
       project_id: scope.projectId,
@@ -164,8 +227,8 @@ function translationAudit({ normalized, scope }) {
       { source: 'record_json.payload.crop_code', target: 'value.category', mode: 'EXACT_COPY' },
       { source: 'record_json.payload.source', target: 'epistemic_class/provenance_class', mode: 'EXPLICIT_ENUM_TRANSLATION' },
       { source: 'occurred_at', target: 'effective_interval', mode: 'EXACT_INSTANT' },
-      { source: 'ingested_at', target: 'available_at', mode: 'EXACT_COPY' },
-      { source: 'field_id', target: 'spatial_support.geometry_ref', mode: 'EXPLICIT_IDENTITY_MAPPING', mapped_value: scope.adrGeometryRef }
+      { source: 'adapter.retrieved_at', target: 'available_at', mode: 'ACTUAL_RETRIEVAL_TIME' },
+      { source: 'record_json.payload.field_id', target: 'spatial_support.geometry_ref', mode: 'EXPLICIT_IDENTITY_MAPPING', mapped_value: scope.adrGeometryRef }
     ],
     deliberately_not_mapped: [
       'record_json.payload.confidence -> ADR uncertainty/scientific qualification',
@@ -173,12 +236,44 @@ function translationAudit({ normalized, scope }) {
       'record_json.payload.variety_code -> crop.code',
       'record_json.payload.crop_stage -> crop.code'
     ],
+    source_chronology_note: 'GEOX facts has no ingested_at column; retrieved_at is supplied by the adapter read boundary and preserved as actual ADR available_at',
     authority_claim: 'NONE_TRANSLATION_AUDIT_ONLY'
   };
-  return Object.freeze({
-    ...auditPayload,
-    audit_hash: sha256(auditPayload)
-  });
+  return Object.freeze({ ...auditPayload, audit_hash: sha256(auditPayload) });
+}
+
+function soilTranslationAudit({ row, scope, metadata, observedAt, retrievedAt, valueDecimal, fromMm, toMm }) {
+  const payload = {
+    contract_version: GEOX_FIRST_PARTY_ADAPTER_VERSION,
+    source_system: 'GEOX',
+    source_contract: GEOX_DEVICE_OBSERVATION_CONTRACT,
+    source_contract_repository_baseline: GEOX_COMPATIBILITY_BASELINE,
+    source_ref: `geox:device-observation/${text(row.fact_id, 'observation.fact_id')}`,
+    source_snapshot_hash: sha256(row),
+    source_scope: {
+      tenant_id: scope.tenantId,
+      project_id: scope.projectId,
+      group_id: scope.groupId,
+      field_id: scope.geoxFieldId,
+      device_id: text(row.device_id, 'observation.device_id')
+    },
+    target_semantic_id: 'soil.volumetric_water_content',
+    mappings: [
+      { source: 'value_num', target: 'value.decimal', mode: 'EXACT_NUMERIC_REPRESENTATION', mapped_value: valueDecimal },
+      { source: 'observed_at', target: 'effective_interval', mode: 'EXACT_INSTANT', mapped_value: observedAt },
+      { source: 'adapter.retrieved_at', target: 'available_at', mode: 'ACTUAL_RETRIEVAL_TIME', mapped_value: retrievedAt },
+      { source: 'installation.depth_mm', target: 'vertical_support', mode: 'EXPLICIT_INSTALLATION_METADATA', mapped_value: { from_mm: fromMm, to_mm: toMm } },
+      { source: 'installation.semantic_id/unit', target: 'semantic_id/unit', mode: 'EXPLICIT_MEASUREMENT_SEMANTICS', mapped_value: { semantic_id: metadata.semanticId, unit: metadata.unit } },
+      { source: 'field_id', target: 'spatial_support.geometry_ref', mode: 'EXPLICIT_IDENTITY_MAPPING', mapped_value: scope.adrGeometryRef }
+    ],
+    deliberately_not_mapped: [
+      'confidence -> ADR uncertainty/scientific qualification',
+      'soil_moisture -> root-zone state',
+      'nullable GEOX unit -> inferred VWC unit'
+    ],
+    authority_claim: 'NONE_TRANSLATION_AUDIT_ONLY'
+  };
+  return Object.freeze({ ...payload, audit_hash: sha256(payload) });
 }
 
 export function createGeoxTargetContextProvider({ targetScope }) {
@@ -200,7 +295,7 @@ export function createGeoxTargetContextProvider({ targetScope }) {
         epistemic_class: normalized.sourceTranslation.epistemicClass,
         provenance_class: normalized.sourceTranslation.provenanceClass,
         effective_interval: { start: normalized.occurredAt, end: normalized.occurredAt },
-        available_at: normalized.ingestedAt,
+        available_at: normalized.retrievedAt,
         spatial_support: { type: 'FIELD', geometry_ref: scope.adrGeometryRef },
         vertical_support: null,
         temporal_support: { type: 'INSTANT' },
@@ -208,18 +303,33 @@ export function createGeoxTargetContextProvider({ targetScope }) {
         source: {
           provider_id: 'GEOX',
           source_ref: `geox:facts/${normalized.factId}`,
-          content_hash: normalized.snapshotHash
+          content_hash: normalized.sourceSnapshotHash
         }
       }
     });
-    return Object.freeze({ message, translationAudit: translationAudit({ normalized, scope }) });
+    return Object.freeze({ message, translationAudit: cropTranslationAudit({ normalized, scope }) });
+  }
+
+  function deviceObservationToMessage({ observation, installation }) {
+    const translated = translateGeoxDeviceObservationV1({ observation, targetScope: scope, installation });
+    return Object.freeze({
+      message: createIntegrationMessage({
+        role: 'CONTEXT_PROVIDER',
+        messageType: 'CONTEXT_DATUM_AVAILABLE',
+        messageId: `geox-device-observation:${text(observation.fact_id, 'observation.fact_id')}`,
+        authorityRefs: [],
+        payload: translated.resource
+      }),
+      translationAudit: translated.translationAudit
+    });
   }
 
   return Object.freeze({
     adapterVersion: GEOX_FIRST_PARTY_ADAPTER_VERSION,
     compatibilityBaseline: GEOX_COMPATIBILITY_BASELINE,
     targetScope: scope,
-    cropContextToMessage
+    cropContextToMessage,
+    deviceObservationToMessage
   });
 }
 
@@ -241,32 +351,46 @@ export function translateGeoxDeviceObservationV1({ observation, targetScope, ins
       'GEOX device_observation_index_v1 does not carry soil depth; explicit installation metadata is required'
     );
   }
-  const metadata = object(installation, 'installation');
-  const fromMm = text(metadata.fromMm, 'installation.fromMm');
-  const toMm = text(metadata.toMm, 'installation.toMm');
-  const unit = text(metadata.unit, 'installation.unit');
-  const semanticId = text(metadata.semanticId, 'installation.semanticId');
-  if (semanticId !== 'soil.volumetric_water_content' || unit !== 'm3_per_m3') {
+  const metadataInput = object(installation, 'installation');
+  const metadata = Object.freeze({
+    fromMm: decimal(metadataInput.fromMm, 'installation.fromMm'),
+    toMm: decimal(metadataInput.toMm, 'installation.toMm'),
+    unit: text(metadataInput.unit, 'installation.unit'),
+    semanticId: text(metadataInput.semanticId, 'installation.semanticId'),
+    retrievedAt: timestamp(metadataInput.retrievedAt, 'installation.retrievedAt')
+  });
+  if (compareDecimal(metadata.fromMm, metadata.toMm) > 0) {
+    throw new GeoxAdapterError('INVALID_GEOX_SOIL_DEPTH', 'installation.fromMm cannot exceed installation.toMm');
+  }
+  if (metadata.semanticId !== 'soil.volumetric_water_content' || metadata.unit !== 'm3_per_m3') {
     throw new GeoxAdapterError(
       'GEOX_SOIL_MEASUREMENT_SEMANTICS_REQUIRED',
       'soil_moisture cannot be silently interpreted as ADR VWC; explicit VWC semantic/unit metadata is required'
     );
   }
-  return Object.freeze({
+  if (row.unit !== undefined && row.unit !== null && text(row.unit, 'observation.unit') !== metadata.unit) {
+    throw new GeoxAdapterError('GEOX_SOIL_UNIT_CONFLICT', 'GEOX observation unit conflicts with explicit installation measurement semantics');
+  }
+  const observedAt = timestamp(row.observed_at, 'observation.observed_at');
+  if (metadata.retrievedAt < observedAt) {
+    throw new GeoxAdapterError('INVALID_GEOX_CHRONOLOGY', 'installation.retrievedAt cannot precede observation.observed_at');
+  }
+  if (typeof row.value_num !== 'number' || !Number.isFinite(row.value_num)) {
+    throw new GeoxAdapterError('INVALID_GEOX_DEVICE_VALUE', 'observation.value_num must be a finite number');
+  }
+  const valueDecimal = decimal(row.value_num, 'observation.value_num');
+  const resource = Object.freeze({
     contract_version: 'adr.context-datum.v1',
     datum_id: `geox:${text(row.fact_id, 'observation.fact_id')}:soil-vwc`,
-    semantic_id: semanticId,
-    value: { type: 'DECIMAL', decimal: String(row.value_num) },
-    unit,
+    semantic_id: metadata.semanticId,
+    value: { type: 'DECIMAL', decimal: valueDecimal },
+    unit: metadata.unit,
     epistemic_class: 'OBSERVATION',
     provenance_class: 'SENSOR',
-    effective_interval: {
-      start: timestamp(row.observed_at, 'observation.observed_at'),
-      end: timestamp(row.observed_at, 'observation.observed_at')
-    },
-    available_at: timestamp(metadata.retrievedAt, 'installation.retrievedAt'),
+    effective_interval: { start: observedAt, end: observedAt },
+    available_at: metadata.retrievedAt,
     spatial_support: { type: 'FIELD', geometry_ref: scope.adrGeometryRef },
-    vertical_support: { from_mm: fromMm, to_mm: toMm },
+    vertical_support: { from_mm: metadata.fromMm, to_mm: metadata.toMm },
     temporal_support: { type: 'INSTANT' },
     uncertainty: { type: 'UNKNOWN', reason_code: 'GEOX_CONFIDENCE_NOT_ADR_UNCERTAINTY' },
     source: {
@@ -274,6 +398,19 @@ export function translateGeoxDeviceObservationV1({ observation, targetScope, ins
       source_ref: `geox:device-observation/${text(row.fact_id, 'observation.fact_id')}`,
       content_hash: sha256(row)
     }
+  });
+  return Object.freeze({
+    resource,
+    translationAudit: soilTranslationAudit({
+      row,
+      scope,
+      metadata,
+      observedAt,
+      retrievedAt: metadata.retrievedAt,
+      valueDecimal,
+      fromMm: metadata.fromMm,
+      toMm: metadata.toMm
+    })
   });
 }
 
