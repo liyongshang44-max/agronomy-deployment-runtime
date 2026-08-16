@@ -19,14 +19,13 @@ const BINDING_KEYS = new Set([
   'correctnessClaim', 'unresolvedAlternativeCount'
 ]);
 const KNOWLEDGE_BINDING_KEYS = new Set(['knowledgeRef', 'applicabilityAssessmentRef']);
+const IMPLEMENTATION_BINDING_KEYS = new Set([
+  'specificationRef', 'implementationRef', 'implementationConformanceRef', 'executionContext'
+]);
+const EXECUTION_CONTEXT_KEYS = new Set([
+  'runtime', 'runtimeVersion', 'platform', 'architecture', 'runtimeEnvironment', 'capabilities'
+]);
 const LIMITATION_KEYS = new Set(['sourceApplicabilityAssessmentRef', 'detail']);
-const EXACT_EMPTY_BINDING_FIELDS = [
-  ['transformationBindings', 'QualifiedTransformation'],
-  ['modelBindings', 'Model'],
-  ['policyBindings', 'Policy'],
-  ['implementationBindings', 'Implementation'],
-  ['calibrationBindings', 'CalibrationArtifact']
-];
 
 export class RuntimeBindingError extends Error {
   constructor(code, message) {
@@ -73,11 +72,22 @@ function refKey(ref) {
   return canonicalizeSemanticJson(assertAuthorityRef(ref));
 }
 
+function canonicalStringSet(values, name) {
+  if (!Array.isArray(values)) {
+    throw new RuntimeBindingError('INVALID_RUNTIME_BINDING_EXECUTION_CONTEXT', `${name} must be an array`);
+  }
+  const normalized = values.map((value, index) => text(value, `${name}[${index}]`));
+  if (new Set(normalized).size !== normalized.length) {
+    throw new RuntimeBindingError('DUPLICATE_RUNTIME_BINDING_EXECUTION_CAPABILITY', `${name} cannot contain duplicates`);
+  }
+  return deepFreeze([...normalized].sort());
+}
+
 function canonicalKnowledgeBindings(values) {
   if (!Array.isArray(values) || values.length !== 1) {
     throw new RuntimeBindingError(
       'RUNTIME_BINDING_SINGLE_SELECTED_KNOWLEDGE_REQUIRED',
-      'D01 minimal RuntimeBinding freezes exactly one selected Knowledge/Applicability pair; unresolved alternatives cannot enter one binding'
+      'D01 RuntimeBinding freezes exactly one selected Knowledge/Applicability pair; unresolved alternatives cannot enter one binding'
     );
   }
   const normalized = values.map((value, index) => {
@@ -99,14 +109,88 @@ function canonicalKnowledgeBindings(values) {
   return deepFreeze(normalized);
 }
 
-function exactEmptyBindings(value, fieldName, authorityKind) {
-  if (!Array.isArray(value)) {
+function canonicalSpecRefs(values, fieldName, kind) {
+  if (!Array.isArray(values)) {
     throw new RuntimeBindingError('INVALID_RUNTIME_BINDING_BINDINGS', `${fieldName} must be an array`);
+  }
+  if (values.length > 1) {
+    throw new RuntimeBindingError(
+      'RUNTIME_BINDING_S03_SINGLE_EXECUTION_BINDING_ONLY',
+      'S03 conditional RuntimeBinding seam permits at most one exact executable specification binding in v1'
+    );
+  }
+  return deepFreeze(values.map((value, index) => exactRef(value, kind, `${fieldName}[${index}]`)));
+}
+
+function canonicalExecutionContext(value, name) {
+  exactObject(value, name, EXECUTION_CONTEXT_KEYS);
+  return deepFreeze({
+    runtime: text(value.runtime, `${name}.runtime`),
+    runtimeVersion: text(value.runtimeVersion, `${name}.runtimeVersion`),
+    platform: text(value.platform, `${name}.platform`),
+    architecture: text(value.architecture, `${name}.architecture`),
+    runtimeEnvironment: text(value.runtimeEnvironment, `${name}.runtimeEnvironment`),
+    capabilities: canonicalStringSet(value.capabilities, `${name}.capabilities`)
+  });
+}
+
+function canonicalImplementationBindings(values, specificationRefs) {
+  if (!Array.isArray(values)) {
+    throw new RuntimeBindingError('INVALID_RUNTIME_BINDING_BINDINGS', 'implementationBindings must be an array');
+  }
+  if (values.length > 1) {
+    throw new RuntimeBindingError(
+      'RUNTIME_BINDING_S03_SINGLE_EXECUTION_BINDING_ONLY',
+      'S03 conditional RuntimeBinding seam permits at most one exact implementation/conformance binding in v1'
+    );
+  }
+  if (specificationRefs.length === 0 && values.length !== 0) {
+    throw new RuntimeBindingError(
+      'RUNTIME_BINDING_IMPLEMENTATION_WITHOUT_SPECIFICATION',
+      'Implementation/Conformance cannot enter RuntimeBinding without one exact S01 specification ref'
+    );
+  }
+  if (specificationRefs.length === 1 && values.length !== 1) {
+    throw new RuntimeBindingError(
+      'RUNTIME_BINDING_SPECIFICATION_WITHOUT_IMPLEMENTATION',
+      'one exact S01 specification ref requires one exact Implementation/ImplementationConformance binding'
+    );
+  }
+  if (values.length === 0) return deepFreeze([]);
+  const value = values[0];
+  exactObject(value, 'implementationBindings[0]', IMPLEMENTATION_BINDING_KEYS);
+  const specificationRef = exactRef(
+    value.specificationRef,
+    null,
+    'implementationBindings[0].specificationRef',
+    ['QualifiedTransformation', 'Model', 'Policy']
+  );
+  if (refKey(specificationRef) !== refKey(specificationRefs[0])) {
+    throw new RuntimeBindingError(
+      'RUNTIME_BINDING_SPECIFICATION_EXECUTION_RELATION_MISMATCH',
+      'implementation binding specificationRef must equal the exact transformation/model/policy binding'
+    );
+  }
+  return deepFreeze([deepFreeze({
+    specificationRef,
+    implementationRef: exactRef(value.implementationRef, 'Implementation', 'implementationBindings[0].implementationRef'),
+    implementationConformanceRef: exactRef(
+      value.implementationConformanceRef,
+      'ImplementationConformance',
+      'implementationBindings[0].implementationConformanceRef'
+    ),
+    executionContext: canonicalExecutionContext(value.executionContext, 'implementationBindings[0].executionContext')
+  })]);
+}
+
+function exactEmptyCalibrationBindings(value) {
+  if (!Array.isArray(value)) {
+    throw new RuntimeBindingError('INVALID_RUNTIME_BINDING_BINDINGS', 'calibrationBindings must be an array');
   }
   if (value.length !== 0) {
     throw new RuntimeBindingError(
-      'D01_CONDITIONAL_SPEC_AUTHORITY_NOT_IMPLEMENTED',
-      `D01 minimal path cannot bind ${authorityKind}; the corresponding conditional spec/conformance/calibration authority must be implemented and exercised first`
+      'D01_CONDITIONAL_CALIBRATION_AUTHORITY_NOT_IMPLEMENTED',
+      'calibrationBindings require MTL-S04 CalibrationArtifact authority and remain unavailable in the S03 seam'
     );
   }
   return deepFreeze([]);
@@ -141,7 +225,7 @@ function canonicalAssumptions(values) {
   if (values.length !== 0) {
     throw new RuntimeBindingError(
       'D01_UNAUTHORIZED_ASSUMPTION',
-      'D01 minimal path has no upstream governed assumption authority; unresolved requirements cannot be hidden as assumptions'
+      'D01 has no upstream governed assumption authority; unresolved requirements cannot be hidden as assumptions'
     );
   }
   return deepFreeze([]);
@@ -172,10 +256,17 @@ export function normalizeRuntimeBinding(value) {
   const logicalTime = text(value.logicalTime, 'logicalTime');
   const evidenceCutoff = text(value.evidenceCutoff, 'evidenceCutoff');
   const knowledgeBindings = canonicalKnowledgeBindings(value.knowledgeBindings);
-  const emptyBindings = Object.fromEntries(EXACT_EMPTY_BINDING_FIELDS.map(([fieldName, kind]) => [
-    fieldName,
-    exactEmptyBindings(value[fieldName], fieldName, kind)
-  ]));
+  const transformationBindings = canonicalSpecRefs(value.transformationBindings, 'transformationBindings', 'QualifiedTransformation');
+  const modelBindings = canonicalSpecRefs(value.modelBindings, 'modelBindings', 'Model');
+  const policyBindings = canonicalSpecRefs(value.policyBindings, 'policyBindings', 'Policy');
+  const specificationRefs = [...transformationBindings, ...modelBindings, ...policyBindings];
+  if (specificationRefs.length > 1) {
+    throw new RuntimeBindingError(
+      'RUNTIME_BINDING_S03_SINGLE_EXECUTION_BINDING_ONLY',
+      'S03 v1 conditional seam permits exactly zero or one executable specification relation per RuntimeBinding'
+    );
+  }
+  const implementationBindings = canonicalImplementationBindings(value.implementationBindings, specificationRefs);
   return deepFreeze({
     contractVersion: RUNTIME_BINDING_CONTRACT_VERSION,
     authorityClass: RUNTIME_BINDING_AUTHORITY_CLASS,
@@ -188,7 +279,11 @@ export function normalizeRuntimeBinding(value) {
     knowledgeReleaseRef,
     contextManifestRef,
     knowledgeBindings,
-    ...emptyBindings,
+    transformationBindings,
+    modelBindings,
+    policyBindings,
+    implementationBindings,
+    calibrationBindings: exactEmptyCalibrationBindings(value.calibrationBindings),
     logicalTime,
     evidenceCutoff,
     limitations: canonicalLimitations(value.limitations),
@@ -211,6 +306,14 @@ export function runtimeBindingExactRefs(value) {
     payload.runtimeProfileRef,
     payload.knowledgeReleaseRef,
     payload.contextManifestRef,
-    ...payload.knowledgeBindings.flatMap((binding) => [binding.knowledgeRef, binding.applicabilityAssessmentRef])
+    ...payload.knowledgeBindings.flatMap((binding) => [binding.knowledgeRef, binding.applicabilityAssessmentRef]),
+    ...payload.transformationBindings,
+    ...payload.modelBindings,
+    ...payload.policyBindings,
+    ...payload.implementationBindings.flatMap((binding) => [
+      binding.specificationRef,
+      binding.implementationRef,
+      binding.implementationConformanceRef
+    ])
   ].sort((left, right) => refKey(left).localeCompare(refKey(right))));
 }

@@ -24,7 +24,7 @@
     "test:context-manifest": "node acceptance/context-manifest/run.mjs && node acceptance/context-manifest/integrity.mjs && node acceptance/context-manifest/identity.mjs",
     "test:specification": "node acceptance/specification/run.mjs && node acceptance/specification/integrity.mjs && node acceptance/specification/retry.mjs",
     "test:implementation-registry": "node acceptance/implementation-registry/run.mjs && node acceptance/implementation-registry/integrity.mjs && node acceptance/implementation-registry/retry.mjs",
-    "test:implementation-conformance": "node acceptance/implementation-conformance/run.mjs && node acceptance/implementation-conformance/integrity.mjs && node acceptance/implementation-conformance/lifecycle.mjs",
+    "test:implementation-conformance": "node acceptance/implementation-conformance/run.mjs && node acceptance/implementation-conformance/integrity.mjs && node acceptance/implementation-conformance/lifecycle.mjs && node acceptance/implementation-conformance/binding.mjs",
     "test:runtime-profile": "node acceptance/runtime-profile/run.mjs && node acceptance/runtime-profile/integrity.mjs && node acceptance/runtime-profile/lifecycle.mjs",
     "test:deployment": "node acceptance/deployment/run.mjs && node acceptance/deployment/integrity.mjs && node acceptance/deployment/lifecycle.mjs && node acceptance/deployment/time-hardening.mjs && node acceptance/deployment/retry.mjs",
     "test:knowledge-retrieval": "node acceptance/knowledge-retrieval/run.mjs && node acceptance/knowledge-retrieval/integrity.mjs && node acceptance/knowledge-retrieval/lifecycle.mjs && node acceptance/knowledge-retrieval/multi-member.mjs",
