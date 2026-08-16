@@ -13,6 +13,10 @@ import {
 export * from './engine.mjs';
 export { authorizeRuntimeProfileManage, RUNTIME_PROFILE_RESOURCE_TYPE } from './runtime-profile-control.mjs';
 export {
+  authorizeSpecificationManage,
+  SPECIFICATION_RESOURCE_TYPES
+} from './specification-control.mjs';
+export {
   authorizeDeploymentControl,
   authorizeDeploymentRuntimeRead,
   DEPLOYMENT_CONTROL_ACTIONS,
