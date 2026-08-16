@@ -12,6 +12,7 @@ export function validateRuntimeBinding({ ledger, runtimeBindingRef }) {
   return deepFreeze({
     ...validated,
     frozenWorldRelations: frozenWorld,
-    replayMode: 'EXACT_FROZEN_HISTORICAL_AUTHORITIES_AND_RELATIONS_NO_LATEST_LOOKUP'
+    replayMode: 'EXACT_FROZEN_HISTORICAL_AUTHORITIES_NO_LATEST_LOOKUP',
+    relationReplayMode: 'EXACT_FROZEN_HISTORICAL_RELATIONS_NO_LATEST_LOOKUP'
   });
 }
