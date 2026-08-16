@@ -22,7 +22,7 @@
     "test:context-datum": "node acceptance/context-datum/run.mjs && node acceptance/context-datum/integrity.mjs",
     "test:context-reference": "node acceptance/context-reference/run.mjs && node acceptance/context-reference/integrity.mjs && node acceptance/context-reference/hardening.mjs",
     "test:context-manifest": "node acceptance/context-manifest/run.mjs && node acceptance/context-manifest/integrity.mjs && node acceptance/context-manifest/identity.mjs",
-    "test:runtime-profile": "node acceptance/runtime-profile/run.mjs && node acceptance/runtime-profile/integrity.mjs",
+    "test:runtime-profile": "node acceptance/runtime-profile/run.mjs && node acceptance/runtime-profile/integrity.mjs && node acceptance/runtime-profile/lifecycle.mjs",
     "test": "npm run test:constitution && npm run test:authority && npm run test:authorization && npm run test:source && npm run test:compiler && npm run test:source-faithful && npm run test:qualification && npm run test:derived-knowledge && npm run test:knowledge-release && npm run test:decision-problem && npm run test:context-datum && npm run test:context-reference && npm run test:context-manifest && npm run test:runtime-profile"
   }
 }
