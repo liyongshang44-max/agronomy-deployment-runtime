@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { semanticHash } from '../../packages/canonicalization/src/index.mjs';
 import {
   buildInformationAcquisitionOptions,
   deriveInformationRequirementStatus,
@@ -39,6 +40,21 @@ function validCapability(overrides = {}) {
   };
 }
 
+function completeCatalog(capabilities) {
+  return {
+    completeness: 'COMPLETE_FOR_REQUIREMENT',
+    authorityClaim: 'PLANNING_CATALOG_ONLY_NO_RUNTIME_OR_EVIDENCE_AUTHORITY',
+    capabilities
+  };
+}
+
+function rehashRequirement(requirement, changes) {
+  const next = structuredClone(requirement);
+  Object.assign(next, changes);
+  delete next.semanticHash;
+  return { ...next, semanticHash: semanticHash('InformationRequirement', next) };
+}
+
 test('tampered RuntimePlan cannot be used to mint InformationRequirements even if planHash text is left unchanged', () => {
   const { world, plan } = originRequirement('tampered-plan');
   const tampered = structuredClone(plan);
@@ -54,6 +70,43 @@ test('self-hashed fake InformationRequirement with unknown top-level authority f
   assert.throws(
     () => normalizeInformationRequirement({ ...requirement, runtimeEligibility: 'RUNTIME_ELIGIBLE' }),
     (error) => error?.code === 'INVALID_INFORMATION_REQUIREMENT_FIELD'
+  );
+});
+
+test('nested requirement provenance vocabulary and resolution shape are closed', () => {
+  const { requirement } = originRequirement('nested-contract');
+  const badRequiredBy = structuredClone(requirement);
+  badRequiredBy.requiredBy[0].sourceType = 'RUNTIME_ELIGIBILITY';
+  delete badRequiredBy.semanticHash;
+  badRequiredBy.semanticHash = semanticHash('InformationRequirement', badRequiredBy);
+  assert.throws(
+    () => normalizeInformationRequirement(badRequiredBy),
+    (error) => error?.code === 'INVALID_INFORMATION_REQUIRED_BY'
+  );
+  const badResolution = structuredClone(requirement);
+  badResolution.requiredResolution.minimumMatchingDatumCount = 0;
+  delete badResolution.semanticHash;
+  badResolution.semanticHash = semanticHash('InformationRequirement', badResolution);
+  assert.throws(
+    () => normalizeInformationRequirement(badResolution),
+    (error) => error?.code === 'INVALID_INFORMATION_REQUIRED_RESOLUTION'
+  );
+});
+
+test('self-hashed widening of acceptable evidence cannot be used downstream because requirement must reproduce from origin RuntimePlan', () => {
+  const { world, plan, requirement } = originRequirement('self-hashed-widening');
+  const widened = rehashRequirement(requirement, {
+    acceptableEpistemicClasses: ['ASSERTION', 'DERIVED', 'OBSERVATION']
+  });
+  assert.deepEqual(normalizeInformationRequirement(widened).acceptableEpistemicClasses, ['ASSERTION', 'DERIVED', 'OBSERVATION']);
+  assert.throws(
+    () => buildInformationAcquisitionOptions({
+      ledger: world.env.ledger,
+      originRuntimePlan: plan,
+      requirement: widened,
+      capabilities: [validCapability({ capabilityId: 'derived', epistemicClasses: ['DERIVED'] })]
+    }),
+    (error) => error?.code === 'INFORMATION_REQUIREMENT_ORIGIN_MISMATCH'
   );
 });
 
@@ -74,9 +127,11 @@ test('acquisition capability contract rejects embedded evidence/value/reference 
 });
 
 test('acquisition options filter semantic and epistemic incompatibility without inventing a provenance restriction', () => {
-  const { requirement } = originRequirement('capability-filter');
+  const { world, plan, requirement } = originRequirement('capability-filter');
   assert.equal(requirement.acceptanceConstraintBasis.provenance, 'NO_ADDITIONAL_RUNTIME_PROFILE_CONSTRAINT');
   const options = buildInformationAcquisitionOptions({
+    ledger: world.env.ledger,
+    originRuntimePlan: plan,
     requirement,
     capabilities: [
       validCapability(),
@@ -130,6 +185,7 @@ test('same RuntimePlan cannot be used as its own satisfaction proof', () => {
   assert.throws(
     () => deriveInformationRequirementStatus({
       ledger: world.env.ledger,
+      originRuntimePlan: plan,
       requirement,
       successorRuntimePlan: plan
     }),
@@ -143,29 +199,51 @@ test('successor world from another exact DecisionProblem/Deployment/Profile cann
   assert.throws(
     () => deriveInformationRequirementStatus({
       ledger: origin.world.env.ledger,
+      originRuntimePlan: origin.plan,
       requirement: origin.requirement,
       successorRuntimePlan: foreign.plan
     })
   );
 });
 
-test('UNSATISFIABLE cannot be claimed from an incomplete capability catalog', () => {
-  const { requirement } = originRequirement('unsat-incomplete');
+test('UNSATISFIABLE cannot be claimed from an incomplete or authority-overclaiming capability catalog', () => {
+  const { world, plan, requirement } = originRequirement('unsat-incomplete');
   assert.throws(
     () => deriveUnsatisfiableInformationRequirementStatus({
+      ledger: world.env.ledger,
+      originRuntimePlan: plan,
       requirement,
-      capabilityCatalog: { completeness: 'PARTIAL', capabilities: [] }
+      capabilityCatalog: {
+        completeness: 'PARTIAL',
+        authorityClaim: 'PLANNING_CATALOG_ONLY_NO_RUNTIME_OR_EVIDENCE_AUTHORITY',
+        capabilities: []
+      }
+    }),
+    (error) => error?.code === 'ACQUISITION_CATALOG_COMPLETENESS_REQUIRED'
+  );
+  assert.throws(
+    () => deriveUnsatisfiableInformationRequirementStatus({
+      ledger: world.env.ledger,
+      originRuntimePlan: plan,
+      requirement,
+      capabilityCatalog: {
+        completeness: 'COMPLETE_FOR_REQUIREMENT',
+        authorityClaim: 'RUNTIME_AUTHORITY',
+        capabilities: []
+      }
     }),
     (error) => error?.code === 'ACQUISITION_CATALOG_COMPLETENESS_REQUIRED'
   );
 });
 
 test('UNSATISFIABLE cannot be claimed when declared-complete catalog still has a matching acquisition option', () => {
-  const { requirement } = originRequirement('unsat-matching');
+  const { world, plan, requirement } = originRequirement('unsat-matching');
   assert.throws(
     () => deriveUnsatisfiableInformationRequirementStatus({
+      ledger: world.env.ledger,
+      originRuntimePlan: plan,
       requirement,
-      capabilityCatalog: { completeness: 'COMPLETE_FOR_REQUIREMENT', capabilities: [validCapability()] }
+      capabilityCatalog: completeCatalog([validCapability()])
     }),
     (error) => error?.code === 'INFORMATION_REQUIREMENT_STILL_SATISFIABLE_BY_CATALOG'
   );
