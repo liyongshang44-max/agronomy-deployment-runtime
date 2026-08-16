@@ -57,7 +57,7 @@ test('review measurement cannot start from a forged case even when its determini
 test('tampered review session measurementId is rejected before completion', () => {
   const world = createWorkbenchWorld('metric-session-tamper');
   const session = start(world);
-  const tampered = { ...session, classificationAtStart: 'NO_REVIEW_CANDIDATE' };
+  const tampered = { ...session, classificationAtStart: 'CONTEXT_GAP' };
   assert.throws(() => completeWorkbenchReviewMeasurement({
     session: tampered,
     completedAt: '2026-08-22T10:01:00Z',
@@ -121,7 +121,7 @@ test('summary also rejects a tampered embedded session even if attacker recomput
   const world = createWorkbenchWorld('metric-session-summary-tamper');
   const measurement = completed(world);
   const { completionHash, ...basis } = measurement;
-  const forgedBasis = { ...basis, classificationAtStart: 'NO_REVIEW_CANDIDATE' };
+  const forgedBasis = { ...basis, classificationAtStart: 'CONTEXT_GAP' };
   const forged = { ...forgedBasis, completionHash: semanticHash('AgronomistWorkbenchReviewCompletion', forgedBasis) };
   assert.throws(() => summarizeWorkbenchReviewMeasurements([forged]),
     (error) => error?.code === 'REVIEW_MEASUREMENT_SESSION_HASH_MISMATCH');
