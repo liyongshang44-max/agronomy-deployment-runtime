@@ -1,2 +1,3 @@
 export * from './contract.mjs';
-export { publishRuntimeBinding, validateRuntimeBinding } from './authority.mjs';
+export { publishRuntimeBinding } from './authority.mjs';
+export { validateRuntimeBinding } from './validation.mjs';
