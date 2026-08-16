@@ -54,7 +54,7 @@ function directNoReviewEligible(payload) {
     && (payload.limitations ?? []).length === 0;
 }
 
-export function classifyApplicabilityPayload(payload) {
+function classifyApplicabilityPayload(payload) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     throw new EscalationReadModelError('INVALID_ESCALATION_INPUT', 'Applicability payload is required');
   }
