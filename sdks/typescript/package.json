@@ -1,0 +1,16 @@
+{
+  "name": "@adr/pilot-sdk",
+  "version": "0.3.0-development",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./src/index.mjs"
+    }
+  },
+  "types": "./index.d.ts",
+  "engines": {
+    "node": ">=24 <25"
+  }
+}
