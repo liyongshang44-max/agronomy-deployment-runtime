@@ -67,7 +67,7 @@ version
 semantic_hash
 ```
 
-Contract drift fails closed.
+Contract drift fails closed. For a write request, the returned `kind`, `logical_id` and `version` must also match the exact operation/request identity; a same-contract response for another authority object is rejected rather than silently rebound.
 
 ## 4. Semantic round-trip
 
@@ -101,6 +101,8 @@ Generic integration messages preserve:
 - message type/id;
 - exact authority refs where applicable;
 - opaque customer/provider payload.
+
+`RESERVED_NOT_EXERCISED_V0_3` roles remain vocabulary only. They cannot be instantiated through the v0.3 pilot message constructor, and a fabricated reserved-role message cannot bypass that gate by being inserted directly into a batch.
 
 Generic batch envelopes preserve message identity and reject duplicate message IDs.
 
@@ -137,6 +139,8 @@ The adapter contract rejects hidden:
 
 A missing source field fails rather than being filled.
 
+Mapping target construction is also a security boundary: prototype-sensitive segments such as `__proto__`, `constructor` and `prototype` are rejected, and intermediate mapping objects are created without inherited prototypes so customer-controlled target paths cannot mutate shared JavaScript object state.
+
 Scientific semantic conversion beyond explicit representation mapping belongs to governed Transformation authority, not the SDK/adapter.
 
 ## 7. Service principal auth
@@ -166,10 +170,12 @@ Acceptance proves:
 - bearer/idempotency headers;
 - exact path encoding;
 - response contract drift fails closed;
+- response authority kind/logical-id/version drift fails closed;
 - generic message/batch identity preservation;
 - ResultSink authority-vs-projection separation;
-- only v0.3 exercised roles are enabled;
+- only v0.3 exercised roles are enabled, including against direct-message and fabricated-batch bypasses;
 - adapter rules reject formula/unit/default/transform shortcuts;
+- adapter target paths cannot perform prototype pollution or mutate shared built-ins;
 - missing source input is not invented;
 - customer field names do not become ADR semantic IDs implicitly;
 - tokens remain outside semantic payload;
