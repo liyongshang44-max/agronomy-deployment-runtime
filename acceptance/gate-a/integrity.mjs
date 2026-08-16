@@ -15,11 +15,12 @@ function walk(value, visit, path = '$') {
 function assertNoDecisionAuthorityVocabulary(value) {
   const forbiddenKeys = new Set([
     'runtimeEligibility', 'runtime_eligibility', 'decisionResult', 'decision_result',
-    'decisionRobustness', 'decision_robustness', 'recommendedAction', 'recommended_action'
+    'decisionRobustness', 'decision_robustness', 'recommendedAction', 'recommended_action',
+    'recommendation', 'isSafe', 'is_safe'
   ]);
   const forbiddenValues = new Set([
     'RUNTIME_ELIGIBLE', 'RUNTIME_ELIGIBLE_WITH_LIMITATIONS', 'INFORMATION_REQUIRED', 'NO_LEGAL_RUNTIME',
-    'ACT', 'WAIT', 'ASK', 'ABSTAIN'
+    'ACT', 'WAIT', 'ASK', 'ABSTAIN', 'SAFE'
   ]);
   walk(value, (item, path) => {
     if (path !== '$') {
@@ -42,9 +43,7 @@ test('Gate A no-review classification remains explicitly non-authority and is no
   const c = world.workbenchCase;
   assert.equal(c.projectionKind, 'NON_AUTHORITY_AGRONOMIST_WORKBENCH_CASE');
   assert.equal(c.classification, 'NO_REVIEW_CANDIDATE');
-  const serialized = JSON.stringify(c).toUpperCase();
-  assert.equal(serialized.includes('SAFE'), false);
-  assert.equal(serialized.includes('RECOMMENDATION'), false);
+  assertNoDecisionAuthorityVocabulary(c);
 });
 
 test('Gate A unknown cannot collapse into a normal no-review case', () => {
