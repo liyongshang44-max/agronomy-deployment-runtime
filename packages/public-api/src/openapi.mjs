@@ -12,7 +12,9 @@ const writeRequest = {
     authorization_decision_ref: { $ref: '#/components/schemas/AuthorityRef' },
     resource: {
       type: 'object',
-      description: 'Exact frozen ADR resource contract payload for this endpoint. The resource contract version remains mandatory; transport may not reinterpret or flatten authority-critical fields.',
+      required: ['contract_version'],
+      properties: { contract_version: { type: 'string', minLength: 1 } },
+      description: 'Exact frozen ADR public resource payload. The endpoint-specific x-adr-resource-contract value is mandatory; transport may map representation but may not reinterpret or flatten authority-critical semantic/provenance/time/support/uncertainty fields.',
       minProperties: 1
     }
   }
@@ -34,6 +36,7 @@ function operationPath(operation) {
     security: [{ bearerAuth: [] }],
     'x-adr-mode': operation.mode,
     'x-adr-backend-authority': operation.backendAuthority,
+    'x-adr-resource-contract': operation.resourceContract,
     'x-adr-required-permission': operation.requiredPermission,
     'x-adr-idempotency-required': operation.idempotencyRequired
   };
@@ -115,7 +118,7 @@ export const ADR_PILOT_OPENAPI = deepFreeze({
     version: ADR_PUBLIC_API_VERSION,
     description: 'Resource-oriented Gate-A pilot API. Applicability is not RuntimeEligibility and this API exposes no /recommend shortcut.'
   },
-  servers: [{ url: ADR_PUBLIC_API_BASE_PATH }],
+  servers: [{ url: '/' }],
   paths,
   components: {
     securitySchemes: {
@@ -151,8 +154,10 @@ export const ADR_PILOT_OPENAPI = deepFreeze({
           ref: { $ref: '#/components/schemas/AuthorityRef' },
           resource: {
             type: 'object',
+            required: ['contract_version'],
+            properties: { contract_version: { type: 'string', minLength: 1 } },
             minProperties: 1,
-            description: 'Exact normalized resource payload. Contract-specific semantic/provenance/time/support/uncertainty fields are preserved rather than flattened.'
+            description: 'Exact normalized public resource payload. Contract-specific semantic/provenance/time/support/uncertainty fields are preserved rather than flattened.'
           }
         }
       },
