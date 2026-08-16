@@ -85,7 +85,7 @@ export function createRuntimeProfileEnvironment(label = 'base') {
     decision: releaseDecision,
     audit: audit('iam-engine', 'SERVICE_ACCOUNT')
   });
-  const release = new KnowledgeReleaseService({ ledger: env.ledger }).publishRelease({
+  const releaseBundle = new KnowledgeReleaseService({ ledger: env.ledger }).publishRelease({
     logicalId: `release.a05.${label}`,
     version: '1',
     memberEntitlements: [{
@@ -97,6 +97,7 @@ export function createRuntimeProfileEnvironment(label = 'base') {
     releaseTarget: RELEASE_TARGET,
     audit: audit(releaseManager.principalId)
   });
+  const release = releaseBundle.release;
 
   const profileManager = createPrincipal({
     principalId: `profile-manager-${label}`,
@@ -123,6 +124,7 @@ export function createRuntimeProfileEnvironment(label = 'base') {
     releaseManager,
     releaseManagerRole,
     release,
+    releaseBundle,
     profileManager,
     profileManagerRole
   };
