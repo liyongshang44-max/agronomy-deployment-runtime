@@ -11,4 +11,7 @@ export {
   currentDeploymentState,
   publishDeploymentControlDecision
 } from './lifecycle.mjs';
-export { resolveDeploymentForRuntime } from './runtime-read.mjs';
+export {
+  validateDeploymentRuntimeReadAuthorization,
+  resolveDeploymentForRuntime
+} from './runtime-read.mjs';

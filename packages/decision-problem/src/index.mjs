@@ -5,6 +5,7 @@ import {
   createPrincipal,
   samePrincipalIdentity
 } from '../../authorization/src/index.mjs';
+import { normalizeDecisionTimestamp } from './time.mjs';
 
 export const DECISION_PROBLEM_CONTRACT_VERSION = 'adr.decision-problem.v1';
 export const DECISION_AUTHORITY_MODES = deepFreeze(['ADR_POLICY', 'EXTERNAL_POLICY', 'RUNTIME_ONLY']);
@@ -55,12 +56,7 @@ function requiredText(value, name) {
 }
 
 function normalizeTimestamp(value, name) {
-  const text = requiredText(value, name);
-  const parsed = new Date(text);
-  if (Number.isNaN(parsed.getTime())) {
-    throw new DecisionProblemError('INVALID_DECISION_PROBLEM_TIME', `${name} must be a valid timestamp`);
-  }
-  return parsed.toISOString();
+  return normalizeDecisionTimestamp(value, name, DecisionProblemError);
 }
 
 function exactObject(value, name, allowedKeys) {
