@@ -153,6 +153,29 @@ test('SDK rejects response contract drift instead of silently accepting another 
   }), (error) => error?.code === 'SDK_RESPONSE_CONTRACT_MISMATCH');
 });
 
+test('SDK rejects response authority kind logical-id or version drift', async () => {
+  const variants = [
+    { kind: 'DecisionProblem', logical_id: 'cd-1', version: '1' },
+    { kind: 'ContextDatum', logical_id: 'cd-other', version: '1' },
+    { kind: 'ContextDatum', logical_id: 'cd-1', version: '2' }
+  ];
+  for (const ref of variants) {
+    const client = createAdrPilotClient({
+      principal,
+      getAccessToken: () => 'token-a',
+      transport: async () => ({
+        ref: { ...ref, semantic_hash: 'sha256:response-identity' },
+        resource: { contract_version: 'adr.context-datum.v1', semantic_id: 'crop.code' }
+      })
+    });
+    await assert.rejects(() => client.createContextDatum({
+      logicalId: 'cd-1', version: '1', authorizationDecisionRef: authRef,
+      resource: { contract_version: 'adr.context-datum.v1', semantic_id: 'crop.code' },
+      idempotencyKey: 'idem-cd-identity'
+    }), (error) => error?.code === 'SDK_RESPONSE_IDENTITY_MISMATCH');
+  }
+});
+
 test('generic integration batch preserves exact authority refs message identity and payload', () => {
   const message = createIntegrationMessage({
     role: 'CONTEXT_PROVIDER',
