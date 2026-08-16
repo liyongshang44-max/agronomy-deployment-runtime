@@ -84,13 +84,14 @@ test('unknown alternative path cannot be selected', () => {
   );
 });
 
-test('caller cannot override frozen refs, bindings, assumptions or downstream outputs during publication', () => {
+test('caller cannot override frozen refs, normalized bindings, assumptions or downstream outputs during publication', () => {
   const world = directBindingWorld('closed-publication');
   const selected = legalPath(world);
   for (const [key, value] of [
     ['knowledgeReleaseRef', world.retrieval.semanticPayload.knowledgeReleaseRef],
     ['knowledgeBindings', []],
     ['modelBindings', []],
+    ['implementationBindings', []],
     ['assumptions', [{ code: 'pretend-evidence' }]],
     ['runtimeBindingRef', { kind: 'RuntimeBinding' }],
     ['selectedAction', 'IRRIGATE_NOW'],
@@ -112,15 +113,15 @@ test('caller cannot override frozen refs, bindings, assumptions or downstream ou
   }
 });
 
-test('minimal RuntimeBinding contract forbids fake spec/calibration bindings and invented assumptions', () => {
+test('RuntimeBinding contract rejects unproven spec/implementation relations, calibration before S04, and invented assumptions', () => {
   const world = directBindingWorld('contract-boundary');
   const binding = publishBinding(world, 'contract-boundary');
   for (const [field, value, expected] of [
-    ['transformationBindings', [{ transformationRef: world.qualified?.knowledge?.ref }], 'D01_CONDITIONAL_SPEC_AUTHORITY_NOT_IMPLEMENTED'],
-    ['modelBindings', [{ modelRef: world.decision.ref }], 'D01_CONDITIONAL_SPEC_AUTHORITY_NOT_IMPLEMENTED'],
-    ['policyBindings', [{ policyRef: world.decision.ref }], 'D01_CONDITIONAL_SPEC_AUTHORITY_NOT_IMPLEMENTED'],
-    ['implementationBindings', [{ implementationRef: world.decision.ref }], 'D01_CONDITIONAL_SPEC_AUTHORITY_NOT_IMPLEMENTED'],
-    ['calibrationBindings', [{ calibrationRef: world.decision.ref }], 'D01_CONDITIONAL_SPEC_AUTHORITY_NOT_IMPLEMENTED'],
+    ['transformationBindings', [world.decision.ref], 'INVALID_RUNTIME_BINDING_REF'],
+    ['modelBindings', [world.decision.ref], 'INVALID_RUNTIME_BINDING_REF'],
+    ['policyBindings', [world.decision.ref], 'INVALID_RUNTIME_BINDING_REF'],
+    ['implementationBindings', [{ specificationRef: world.decision.ref, implementationRef: world.decision.ref, implementationConformanceRef: world.decision.ref, executionContext: {} }], 'RUNTIME_BINDING_IMPLEMENTATION_WITHOUT_SPECIFICATION'],
+    ['calibrationBindings', [{ calibrationRef: world.decision.ref }], 'D01_CONDITIONAL_CALIBRATION_AUTHORITY_NOT_IMPLEMENTED'],
     ['assumptions', [{ code: 'MISSING_INFORMATION_IS_FINE' }], 'D01_UNAUTHORIZED_ASSUMPTION']
   ]) {
     assert.throws(
@@ -129,6 +130,21 @@ test('minimal RuntimeBinding contract forbids fake spec/calibration bindings and
       field
     );
   }
+});
+
+test('RuntimeBinding contract rejects specification without one exact ImplementationConformance relation', () => {
+  const world = directBindingWorld('spec-without-conformance');
+  const binding = publishBinding(world, 'spec-without-conformance');
+  const fakeModel = {
+    kind: 'Model',
+    logicalId: 'model-not-resolved-by-contract-only-test',
+    version: '1',
+    semanticHash: `sha256:${'a'.repeat(64)}`
+  };
+  assert.throws(
+    () => normalizeRuntimeBinding({ ...binding.semanticPayload, modelBindings: [fakeModel] }),
+    (error) => error?.code === 'RUNTIME_BINDING_SPECIFICATION_WITHOUT_IMPLEMENTATION'
+  );
 });
 
 test('RuntimeBinding contract rejects unresolved alternatives and correctness/decision laundering', () => {
@@ -204,6 +220,7 @@ test('RuntimeBinding publication audit is exact and validation rejects wrong-kin
   assert.equal(events.length, 1);
   const event = events[0];
   assert.equal(event.details.selectedAlternativePathId, binding.semanticPayload.selectedAlternativePathId);
+  assert.equal(event.details.executionBindingCount, 0);
   assert.equal(event.details.selectionAuthorityClass, 'RUNTIME_COMPOSITION_SELECTION_NOT_DECISION');
   assert.equal(event.actor.id, validated.runtimeBindingPrincipal.principalId);
   assert.ok(event.inputRefs.some((ref) => ref.kind === 'RuntimeEligibility'));

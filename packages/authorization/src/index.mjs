@@ -21,6 +21,12 @@ export {
   IMPLEMENTATION_RESOURCE_TYPE
 } from './implementation-control.mjs';
 export {
+  authorizeImplementationConformanceQualification,
+  authorizeImplementationConformanceControl,
+  IMPLEMENTATION_CONFORMANCE_RESOURCE_TYPE,
+  IMPLEMENTATION_CONFORMANCE_CONTROL_ACTIONS
+} from './implementation-conformance-control.mjs';
+export {
   authorizeDeploymentControl,
   authorizeDeploymentRuntimeRead,
   DEPLOYMENT_CONTROL_ACTIONS,
