@@ -10,6 +10,7 @@ export const PUBLIC_API_OPERATIONS = deepFreeze([
     path: '/decision-problems',
     mode: 'AUTHORITY_WRITE',
     authorityKind: 'DecisionProblem',
+    resourceContract: 'adr.decision-problem.v1',
     backendAuthority: 'publishDecisionProblem',
     requiredPermission: 'decision.problem.create',
     idempotencyRequired: true
@@ -20,6 +21,7 @@ export const PUBLIC_API_OPERATIONS = deepFreeze([
     path: '/context-data',
     mode: 'AUTHORITY_WRITE',
     authorityKind: 'ContextDatum',
+    resourceContract: 'adr.context-datum.v1',
     backendAuthority: 'publishContextDatum',
     requiredPermission: 'context.write',
     idempotencyRequired: true
@@ -30,6 +32,7 @@ export const PUBLIC_API_OPERATIONS = deepFreeze([
     path: '/context-references',
     mode: 'AUTHORITY_WRITE',
     authorityKind: 'AuthorizedContextReference',
+    resourceContract: 'adr.authorized-context-reference.v1',
     backendAuthority: 'publishAuthorizedContextReference',
     requiredPermission: 'context.write',
     idempotencyRequired: true
@@ -40,6 +43,7 @@ export const PUBLIC_API_OPERATIONS = deepFreeze([
     path: '/context-references/{reference_id}/resolutions',
     mode: 'AUTHORITY_WRITE',
     authorityKind: 'ResolvedContextDatumReceipt',
+    resourceContract: 'adr.context-receipt.v1',
     backendAuthority: 'publishResolvedContextDatumReceipt',
     requiredPermission: 'context.write',
     idempotencyRequired: true
@@ -50,6 +54,7 @@ export const PUBLIC_API_OPERATIONS = deepFreeze([
     path: '/context-manifests',
     mode: 'AUTHORITY_WRITE',
     authorityKind: 'ContextManifest',
+    resourceContract: 'adr.context-manifest.v1',
     backendAuthority: 'publishContextManifest',
     requiredPermission: 'context.write',
     idempotencyRequired: true
@@ -60,6 +65,7 @@ export const PUBLIC_API_OPERATIONS = deepFreeze([
     path: '/knowledge-retrieval-results',
     mode: 'AUTHORITY_WRITE',
     authorityKind: 'KnowledgeRetrievalResult',
+    resourceContract: 'adr.knowledge-retrieval-result.v1',
     backendAuthority: 'executeKnowledgeRetrieval',
     requiredPermission: 'knowledge.runtime.use',
     idempotencyRequired: true
@@ -70,6 +76,7 @@ export const PUBLIC_API_OPERATIONS = deepFreeze([
     path: '/applicability-assessments',
     mode: 'AUTHORITY_WRITE',
     authorityKind: 'ApplicabilityAssessment',
+    resourceContract: 'adr.applicability-assessment.v1',
     backendAuthority: 'assessApplicability',
     requiredPermission: 'knowledge.runtime.use',
     idempotencyRequired: true
@@ -80,6 +87,7 @@ export const PUBLIC_API_OPERATIONS = deepFreeze([
     path: '/authority/{kind}/{logical_id}/versions/{version}',
     mode: 'EXACT_AUTHORITY_READ',
     authorityKind: '*',
+    resourceContract: null,
     backendAuthority: 'resolveExactAuthorityRef',
     requiredPermission: null,
     idempotencyRequired: false
@@ -90,6 +98,7 @@ export const PUBLIC_API_OPERATIONS = deepFreeze([
     path: '/workbench/cases/{assessment_id}',
     mode: 'NON_AUTHORITY_READ_MODEL',
     authorityKind: null,
+    resourceContract: 'adr.workbench-case.pilot-v0.3',
     backendAuthority: 'projectAgronomistWorkbenchCase',
     requiredPermission: 'knowledge.inspect+source.read',
     idempotencyRequired: false
@@ -100,6 +109,7 @@ export const PUBLIC_API_OPERATIONS = deepFreeze([
     path: '/workbench/escalations',
     mode: 'NON_AUTHORITY_READ_MODEL',
     authorityKind: null,
+    resourceContract: 'adr.workbench-case.pilot-v0.3',
     backendAuthority: 'projectAgronomistEscalationQueue',
     requiredPermission: 'knowledge.inspect+source.read',
     idempotencyRequired: false
