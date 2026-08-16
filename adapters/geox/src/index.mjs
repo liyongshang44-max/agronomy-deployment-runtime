@@ -167,6 +167,9 @@ function validateCropScope(payload, scope) {
 
 function normalizeCropContextFact(factInput, scope) {
   const fact = object(factInput, 'cropContextFact');
+  const rawFactId = text(fact.fact_id, 'cropContextFact.fact_id');
+  const rawOccurredAt = text(fact.occurred_at, 'cropContextFact.occurred_at');
+  const rawSource = text(fact.source, 'cropContextFact.source');
   const record = object(fact.record_json, 'cropContextFact.record_json');
   if (record.type !== 'crop_context_v1' || String(record.schema_version) !== '1') {
     throw new GeoxAdapterError('UNSUPPORTED_GEOX_CROP_CONTEXT_CONTRACT', 'expected crop_context_v1 schema_version 1');
@@ -183,19 +186,21 @@ function normalizeCropContextFact(factInput, scope) {
   const source = text(payload.source, 'crop_context.payload.source');
   const sourceTranslation = CROP_SOURCE_TRANSLATION[source];
   if (!sourceTranslation) throw new GeoxAdapterError('UNSUPPORTED_GEOX_CROP_SOURCE', `unsupported crop context source ${source}`);
-  const occurredAt = timestamp(fact.occurred_at, 'cropContextFact.occurred_at');
+  const occurredAt = timestamp(rawOccurredAt, 'cropContextFact.occurred_at');
   const retrievedAt = timestamp(fact.retrieved_at, 'cropContextFact.retrieved_at');
   if (retrievedAt < occurredAt) {
     throw new GeoxAdapterError('INVALID_GEOX_CHRONOLOGY', 'cropContextFact.retrieved_at cannot precede occurred_at');
   }
-  const sourceSnapshot = {
-    fact_id: text(fact.fact_id, 'cropContextFact.fact_id'),
-    occurred_at: occurredAt,
-    source: text(fact.source, 'cropContextFact.source'),
+  const exactSourceRow = {
+    fact_id: fact.fact_id,
+    occurred_at: fact.occurred_at,
+    source: fact.source,
     record_json: clone(record)
   };
   return Object.freeze({
-    factId: sourceSnapshot.fact_id,
+    factId: rawFactId,
+    rawOccurredAt,
+    rawSource,
     occurredAt,
     retrievedAt,
     record: clone(record),
@@ -203,7 +208,7 @@ function normalizeCropContextFact(factInput, scope) {
     cropCode,
     source,
     sourceTranslation,
-    sourceSnapshotHash: sha256(sourceSnapshot)
+    sourceSnapshotHash: sha256(exactSourceRow)
   });
 }
 
@@ -223,14 +228,15 @@ function cropTranslationAudit({ normalized, scope }) {
       ...(scope.seasonId ? { season_id: scope.seasonId } : {})
     },
     source_chronology: {
-      occurred_at: normalized.occurredAt,
+      source_occurred_at: normalized.rawOccurredAt,
+      interpreted_occurred_at: normalized.occurredAt,
       retrieved_at: normalized.retrievedAt
     },
     target_semantic_id: 'crop.code',
     mappings: [
       { source: 'record_json.payload.crop_code', target: 'value.category', mode: 'EXACT_COPY' },
       { source: 'record_json.payload.source', target: 'epistemic_class/provenance_class', mode: 'EXPLICIT_ENUM_TRANSLATION' },
-      { source: 'occurred_at', target: 'effective_interval', mode: 'EXACT_INSTANT', mapped_value: normalized.occurredAt },
+      { source: 'occurred_at', target: 'effective_interval', mode: 'RFC3339_INSTANT_INTERPRETATION', source_value: normalized.rawOccurredAt, mapped_value: normalized.occurredAt },
       { source: 'adapter.retrieved_at', target: 'available_at', mode: 'ACTUAL_RETRIEVAL_TIME', mapped_value: normalized.retrievedAt },
       { source: 'record_json.payload.field_id', target: 'spatial_support.geometry_ref', mode: 'EXPLICIT_IDENTITY_MAPPING', mapped_value: scope.adrGeometryRef }
     ],
@@ -240,7 +246,7 @@ function cropTranslationAudit({ normalized, scope }) {
       'record_json.payload.variety_code -> crop.code',
       'record_json.payload.crop_stage -> crop.code'
     ],
-    source_chronology_note: 'GEOX facts has no ingested_at column; retrieved_at is supplied by the adapter read boundary and preserved as actual ADR available_at',
+    source_chronology_note: 'source_snapshot_hash binds the exact GEOX row values before timestamp interpretation; GEOX facts has no ingested_at column; retrieved_at is supplied by the adapter read boundary and preserved as actual ADR available_at',
     authority_claim: 'NONE_TRANSLATION_AUDIT_ONLY'
   };
   return Object.freeze({ ...auditPayload, audit_hash: sha256(auditPayload) });
@@ -262,13 +268,14 @@ function soilTranslationAudit({ row, scope, metadata, observedAt, retrievedAt, v
       device_id: text(row.device_id, 'observation.device_id')
     },
     source_chronology: {
-      observed_at: observedAt,
+      source_observed_at: text(row.observed_at, 'observation.observed_at'),
+      interpreted_observed_at: observedAt,
       retrieved_at: retrievedAt
     },
     target_semantic_id: 'soil.volumetric_water_content',
     mappings: [
       { source: 'value_num', target: 'value.decimal', mode: 'EXACT_NUMERIC_REPRESENTATION', mapped_value: valueDecimal },
-      { source: 'observed_at', target: 'effective_interval', mode: 'EXACT_INSTANT', mapped_value: observedAt },
+      { source: 'observed_at', target: 'effective_interval', mode: 'RFC3339_INSTANT_INTERPRETATION', source_value: row.observed_at, mapped_value: observedAt },
       { source: 'adapter.retrieved_at', target: 'available_at', mode: 'ACTUAL_RETRIEVAL_TIME', mapped_value: retrievedAt },
       { source: 'installation.depth_mm', target: 'vertical_support', mode: 'EXPLICIT_INSTALLATION_METADATA', mapped_value: { from_mm: fromMm, to_mm: toMm } },
       { source: 'installation.semantic_id/unit', target: 'semantic_id/unit', mode: 'EXPLICIT_MEASUREMENT_SEMANTICS', mapped_value: { semantic_id: metadata.semanticId, unit: metadata.unit } },
