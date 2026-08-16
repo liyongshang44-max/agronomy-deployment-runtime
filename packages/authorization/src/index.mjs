@@ -17,6 +17,10 @@ export {
   SPECIFICATION_RESOURCE_TYPES
 } from './specification-control.mjs';
 export {
+  authorizeImplementationManage,
+  IMPLEMENTATION_RESOURCE_TYPE
+} from './implementation-control.mjs';
+export {
   authorizeDeploymentControl,
   authorizeDeploymentRuntimeRead,
   DEPLOYMENT_CONTROL_ACTIONS,
