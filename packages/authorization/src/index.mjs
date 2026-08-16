@@ -12,6 +12,12 @@ import {
 
 export * from './engine.mjs';
 export { authorizeRuntimeProfileManage, RUNTIME_PROFILE_RESOURCE_TYPE } from './runtime-profile-control.mjs';
+export {
+  authorizeDeploymentControl,
+  authorizeDeploymentRuntimeRead,
+  DEPLOYMENT_CONTROL_ACTIONS,
+  DEPLOYMENT_RESOURCE_TYPE
+} from './deployment-control.mjs';
 
 // Principal identity is the stable actor identity and organizational tenancy assertion.
 // Program memberships are contextual claims and are deliberately not part of identity equality.
