@@ -135,7 +135,7 @@ crop_stage      -> crop.code
 
 GEOX confidence is an upstream field, not an ADR scientific-authority score.
 
-## 4. Translation audit
+## 4. Translation audit and source identity
 
 Every translation produces a deterministic, non-authority audit record containing:
 
@@ -149,6 +149,19 @@ Every translation produces a deterministic, non-authority audit record containin
 - deliberately-not-mapped fields;
 - deterministic audit hash;
 - `authority_claim = NONE_TRANSLATION_AUDIT_ONLY`.
+
+For `facts`, `source_snapshot_hash` binds the exact retrieved source-row values:
+
+```text
+fact_id
+occurred_at
+source
+record_json
+```
+
+before timestamp interpretation. The adapter separately records the source timestamp representation and its canonical RFC3339 instant. Two source rows that express the same instant with different timestamp text therefore may map to the same ADR effective instant but retain different source snapshot identities. This prevents interpretation/canonicalization from silently rewriting source evidence identity.
+
+For device observations, the source snapshot likewise excludes the separate adapter `retrievedAt` chronology; retrieval time is recorded as availability chronology, not retroactively inserted into the upstream observation snapshot.
 
 The translation audit is evidence of mapping behavior only. It is not ContextDatum, ApplicabilityAssessment or any other ADR authority object.
 
@@ -270,6 +283,7 @@ Integrity acceptance attacks:
 - crop status/source drift;
 - cross-scope records;
 - impossible/backwards chronology;
+- source-row snapshot identity collapse during timestamp interpretation;
 - confidence/allowed_actions authority laundering;
 - missing/negative/reversed/noncanonical soil depth;
 - unit/semantic conflicts;
