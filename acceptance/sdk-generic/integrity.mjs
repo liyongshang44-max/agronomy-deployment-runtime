@@ -4,6 +4,7 @@ import {
   applyExplicitAdapterMapping,
   assertPilotRoleEnabled,
   createAdrPilotClient,
+  createIntegrationBatch,
   createIntegrationMessage,
   normalizeAdapterMappingRule
 } from '../../sdks/typescript/src/index.mjs';
@@ -47,6 +48,24 @@ test('adapter cannot hide unit conversion formula default inference or agronomic
   ]) {
     assert.throws(() => normalizeAdapterMappingRule(rule), (error) => error?.code === 'HIDDEN_ADAPTER_TRANSFORM_FORBIDDEN');
   }
+});
+
+test('adapter target paths cannot mutate object prototypes or shared built-ins', () => {
+  assert.equal(Object.prototype.polluted, undefined);
+  for (const targetField of ['__proto__.polluted', 'constructor.prototype.polluted', 'safe.prototype.polluted']) {
+    assert.throws(() => applyExplicitAdapterMapping(
+      { x: 'owned' },
+      [{ source_field: 'x', target_field: targetField, mode: 'EXACT_COPY' }]
+    ), (error) => error?.code === 'UNSAFE_MAPPING_TARGET_PATH');
+  }
+  assert.equal(Object.prototype.polluted, undefined);
+
+  const mapped = applyExplicitAdapterMapping(
+    { x: 'owned' },
+    [{ source_field: 'x', target_field: 'toString.value', mode: 'EXACT_COPY' }]
+  );
+  assert.deepEqual(mapped, { toString: { value: 'owned' } });
+  assert.equal(typeof Object.prototype.toString, 'function');
 });
 
 test('missing customer source field fails rather than inventing a default', () => {
@@ -125,6 +144,20 @@ test('transport receives a defensive request copy and cannot mutate caller-owned
 test('reserved ModelExecutor and OutcomeProvider cannot be presented as active pilot integrations', () => {
   assert.throws(() => assertPilotRoleEnabled('MODEL_EXECUTOR'), (error) => error?.code === 'INTEGRATION_ROLE_NOT_EXERCISED');
   assert.throws(() => assertPilotRoleEnabled('OUTCOME_PROVIDER'), (error) => error?.code === 'INTEGRATION_ROLE_NOT_EXERCISED');
+  assert.throws(() => createIntegrationMessage({
+    role: 'MODEL_EXECUTOR', messageType: 'MODEL_RUN', messageId: 'reserved-message', payload: {}
+  }), (error) => error?.code === 'INTEGRATION_ROLE_NOT_EXERCISED');
+  assert.throws(() => createIntegrationBatch({
+    batchId: 'reserved-batch',
+    messages: [{
+      contract_version: 'adr.integration-message.v1',
+      role: 'OUTCOME_PROVIDER',
+      message_type: 'OUTCOME',
+      message_id: 'reserved-outcome',
+      authority_refs: [],
+      payload: {}
+    }]
+  }), (error) => error?.code === 'INTEGRATION_ROLE_NOT_EXERCISED');
 });
 
 let passed = 0;
