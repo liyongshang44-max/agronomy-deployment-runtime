@@ -122,6 +122,28 @@ function sourceArtifactRecord(record) {
   return record;
 }
 
+function hasLegacyArtifactStoreContract(store) {
+  return typeof store?.put === 'function' && typeof store?.get === 'function';
+}
+
+function hasScopedArtifactStoreContract(store) {
+  return typeof store?.putForScope === 'function' && typeof store?.getForScope === 'function';
+}
+
+function putArtifactBytes(store, ownership, bytes) {
+  if (hasScopedArtifactStoreContract(store)) {
+    return store.putForScope(normalizeOwnership(ownership), bytes);
+  }
+  return store.put(bytes);
+}
+
+function getArtifactBytes(store, ownership, contentHash) {
+  if (hasScopedArtifactStoreContract(store)) {
+    return store.getForScope(normalizeOwnership(ownership), contentHash);
+  }
+  return store.get(contentHash);
+}
+
 export class SourceRegistry {
   #ledger;
   #artifactStore;
@@ -130,8 +152,11 @@ export class SourceRegistry {
     if (!ledger || typeof ledger.publish !== 'function' || typeof ledger.resolve !== 'function') {
       throw new SourceRegistryError('INVALID_LEDGER', 'SourceRegistry requires the shared AuthorityLedger contract');
     }
-    if (!artifactStore || typeof artifactStore.put !== 'function' || typeof artifactStore.get !== 'function') {
-      throw new SourceRegistryError('INVALID_ARTIFACT_STORE', 'SourceRegistry requires an exact artifact store');
+    if (!artifactStore || (!hasLegacyArtifactStoreContract(artifactStore) && !hasScopedArtifactStoreContract(artifactStore))) {
+      throw new SourceRegistryError(
+        'INVALID_ARTIFACT_STORE',
+        'SourceRegistry requires either legacy put/get or tenant-scoped putForScope/getForScope exact artifact storage'
+      );
     }
     this.#ledger = ledger;
     this.#artifactStore = artifactStore;
@@ -198,7 +223,7 @@ export class SourceRegistry {
   }) {
     const exactSource = sourceRecord(this.#ledger.resolve(assertAuthorityRef(sourceRef)));
     const exactBytes = normalizeBytes(bytes);
-    const retention = this.#artifactStore.put(exactBytes);
+    const retention = putArtifactBytes(this.#artifactStore, exactSource.semanticPayload.ownership, exactBytes);
 
     if (!acquisition || typeof acquisition !== 'object' || Array.isArray(acquisition)) {
       throw new SourceRegistryError('INVALID_ACQUISITION', 'SourceArtifact acquisition metadata is required');
@@ -247,7 +272,12 @@ export class SourceRegistry {
 
   readArtifactBytes(ref) {
     const artifact = this.resolveArtifact(ref);
-    const bytes = this.#artifactStore.get(artifact.semanticPayload.contentHash);
+    const source = this.resolveSource(artifact.semanticPayload.sourceRef);
+    const bytes = getArtifactBytes(
+      this.#artifactStore,
+      source.semanticPayload.ownership,
+      artifact.semanticPayload.contentHash
+    );
     const actualHash = sourceContentHash(bytes);
     if (actualHash !== artifact.semanticPayload.contentHash) {
       throw new SourceRegistryError('ARTIFACT_CONTENT_HASH_MISMATCH', 'retained bytes no longer match SourceArtifact contentHash');
