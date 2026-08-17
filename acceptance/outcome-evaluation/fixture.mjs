@@ -34,8 +34,7 @@ export function evaluatorPrincipal(label = 'base', tenantId = 'tenant-a') {
     principalId: `outcome-evaluator-${label}`,
     type: 'SERVICE_ACCOUNT',
     organizationId: 'org-a',
-    tenantId,
-    programIds: []
+    tenantId
   };
 }
 
