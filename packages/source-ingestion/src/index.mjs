@@ -5,14 +5,12 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
-  renameSync,
   statSync,
-  unlinkSync,
   writeFileSync
 } from 'node:fs';
 import { mkdir, rename, stat, unlink } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import { Transform } from 'node:stream';
+import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { deepFreeze } from '../../canonicalization/src/index.mjs';
 
@@ -88,20 +86,42 @@ function retentionReceipt(scopeInput, contentHashInput, byteLength) {
   });
 }
 
-function safeUnlink(path) {
-  try {
-    unlinkSync(path);
-  } catch (error) {
-    if (error?.code !== 'ENOENT') throw error;
-  }
-}
-
 async function safeUnlinkAsync(path) {
   try {
     await unlink(path);
   } catch (error) {
     if (error?.code !== 'ENOENT') throw error;
   }
+}
+
+function pdfValidatedReadable(readable) {
+  if (!readable || typeof readable[Symbol.asyncIterator] !== 'function') {
+    throw new SourceIngestionError('READABLE_STREAM_REQUIRED', 'PDF upload requires an async-iterable readable stream');
+  }
+
+  async function* validate() {
+    let prefix = Buffer.alloc(0);
+    let signatureValidated = false;
+    for await (const chunk of readable) {
+      const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      if (!signatureValidated && prefix.byteLength < PDF_MAGIC.byteLength) {
+        const needed = PDF_MAGIC.byteLength - prefix.byteLength;
+        prefix = Buffer.concat([prefix, bytes.subarray(0, needed)]);
+        if (prefix.byteLength === PDF_MAGIC.byteLength) {
+          if (!prefix.equals(PDF_MAGIC)) {
+            throw new SourceIngestionError('PDF_SIGNATURE_INVALID', 'uploaded source does not begin with %PDF-');
+          }
+          signatureValidated = true;
+        }
+      }
+      yield bytes;
+    }
+    if (!signatureValidated) {
+      throw new SourceIngestionError('PDF_SIGNATURE_INVALID', 'uploaded source does not begin with %PDF-');
+    }
+  }
+
+  return Readable.from(validate());
 }
 
 export class FileSystemScopedArtifactStore {
@@ -359,30 +379,10 @@ export class PilotSourceIngestionService {
     }
     session.state = 'UPLOADING';
 
-    let prefix = Buffer.alloc(0);
-    const signatureCheck = new Transform({
-      transform(chunk, encoding, callback) {
-        const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, encoding);
-        if (prefix.byteLength < PDF_MAGIC.byteLength) {
-          const needed = PDF_MAGIC.byteLength - prefix.byteLength;
-          prefix = Buffer.concat([prefix, bytes.subarray(0, needed)]);
-        }
-        callback(null, bytes);
-      },
-      flush(callback) {
-        if (prefix.byteLength < PDF_MAGIC.byteLength || !prefix.equals(PDF_MAGIC)) {
-          callback(new SourceIngestionError('PDF_SIGNATURE_INVALID', 'uploaded source does not begin with %PDF-'));
-          return;
-        }
-        callback();
-      }
-    });
-
     try {
-      readable.on('error', (error) => signatureCheck.destroy(error));
       const retention = await this.#artifactStore.putStreamForScope(
         session.scope,
-        readable.pipe(signatureCheck),
+        pdfValidatedReadable(readable),
         { maxBytes: this.#maxUploadBytes }
       );
       session.retentionReceipt = retention;
