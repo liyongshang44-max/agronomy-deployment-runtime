@@ -20,21 +20,28 @@ import {
   runtimeExecutionNodeId,
   runtimeExecutionRawOutputHash
 } from './contract.mjs';
+import {
+  RUNTIME_EXECUTION_MIXED_INPUT_CONTRACT_VERSION,
+  normalizeRuntimeExecutionMixedInputEnvelope,
+  runtimeExecutionMixedInputHash
+} from './mixed-input.mjs';
+import { PREPARED_RUNTIME_INPUT_EXECUTE } from './prepared-input.mjs';
 import { RuntimeExecutionIdempotencyStore } from './idempotency.mjs';
 import { ImplementationExecutorRegistry } from './registry.mjs';
 
 const EXECUTE_KEYS = new Set(['ledger', 'runtimeBindingRef', 'inputDatumRefs']);
+const PREPARED_EXECUTE_KEYS = new Set(['ledger', 'runtimeBindingRef', 'inputEnvelope']);
 
-function assertExecuteInput(input) {
+function assertExactInput(input, allowed, label) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
-    throw new RuntimeExecutionError('INVALID_RUNTIME_EXECUTION_INPUT', 'broker execute input must be an object');
+    throw new RuntimeExecutionError('INVALID_RUNTIME_EXECUTION_INPUT', `${label} must be an object`);
   }
   const prototype = Object.getPrototypeOf(input);
   if (prototype !== Object.prototype && prototype !== null) {
-    throw new RuntimeExecutionError('INVALID_RUNTIME_EXECUTION_INPUT', 'broker execute input must be a plain object');
+    throw new RuntimeExecutionError('INVALID_RUNTIME_EXECUTION_INPUT', `${label} must be a plain object`);
   }
   for (const key of Object.keys(input)) {
-    if (!EXECUTE_KEYS.has(key)) {
+    if (!allowed.has(key)) {
       throw new RuntimeExecutionError(
         'INVALID_RUNTIME_EXECUTION_FIELD',
         `${key} cannot override frozen RuntimeBinding/Implementation/Conformance execution authority`
@@ -47,63 +54,74 @@ function manifestContains(manifest, ref) {
   return manifest.semanticPayload.datumRefs.some((candidate) => sameAuthorityRef(candidate, ref));
 }
 
+function specificationKind(specification) {
+  const kind = specification?.record?.ref?.kind ?? specification?.ref?.kind;
+  if (!kind) {
+    throw new RuntimeExecutionError(
+      'RUNTIME_EXECUTION_SPECIFICATION_UNSUPPORTED',
+      'executable specification relation lacks an exact authority kind'
+    );
+  }
+  return kind;
+}
+
 function requiredContextPorts(specification) {
-  const kind = specification.record.ref.kind;
+  const kind = specificationKind(specification);
   const payload = specification.semanticPayload;
   if (kind === 'QualifiedTransformation') return [payload.inputContract];
   if (kind === 'Model') {
     if (payload.parameterSlots.some((slot) => slot.required)) {
       throw new RuntimeExecutionError(
         'RUNTIME_EXECUTION_PARAMETER_BINDING_REQUIRED',
-        'D02 v1 cannot execute a Model with required parameter slots until exact parameter/calibration binding authority exists'
+        'D02 cannot execute a Model with required parameter slots until exact parameter/calibration binding authority exists'
       );
     }
     return payload.inputs;
   }
-  if (kind === 'Policy') {
-    if (payload.requiredRuntimeOutputs.length > 0) {
-      throw new RuntimeExecutionError(
-        'RUNTIME_EXECUTION_POLICY_UPSTREAM_RESULT_REQUIRED',
-        'D02 v1 cannot execute Policy requiring RuntimeDatum inputs before MTL-D03 exists'
-      );
-    }
-    return payload.requiredInputs;
-  }
-  throw new RuntimeExecutionError('RUNTIME_EXECUTION_SPECIFICATION_UNSUPPORTED', `unsupported executable specification kind ${kind}`);
+  if (kind === 'Policy') return payload.requiredInputs;
+  throw new RuntimeExecutionError(
+    'RUNTIME_EXECUTION_SPECIFICATION_UNSUPPORTED',
+    `unsupported executable specification kind ${kind}`
+  );
 }
 
-function validatePortDatum(port, datum) {
-  if (datum.semanticPayload.semanticId !== port.semanticId) {
+function requiredRuntimePorts(specification) {
+  return specificationKind(specification) === 'Policy'
+    ? specification.semanticPayload.requiredRuntimeOutputs
+    : [];
+}
+
+function validatePortPayload(port, payload, prefix = 'input') {
+  if (payload.semanticId !== port.semanticId) {
     throw new RuntimeExecutionError(
       'RUNTIME_EXECUTION_INPUT_SEMANTIC_MISMATCH',
-      `input ${datum.semanticPayload.semanticId} does not satisfy required semantic ${port.semanticId}`
+      `${prefix} ${payload.semanticId} does not satisfy required semantic ${port.semanticId}`
     );
   }
-  if (datum.semanticPayload.unit !== port.unit) {
+  if (payload.unit !== port.unit) {
     throw new RuntimeExecutionError(
       'RUNTIME_EXECUTION_INPUT_UNIT_MISMATCH',
-      `input unit ${datum.semanticPayload.unit} does not equal required unit ${port.unit}`
+      `${prefix} unit ${payload.unit} does not equal required unit ${port.unit}`
     );
   }
-  if (datum.semanticPayload.value.type !== port.valueType) {
+  if (payload.value?.type !== port.valueType) {
     throw new RuntimeExecutionError(
       'RUNTIME_EXECUTION_INPUT_SEMANTIC_MISMATCH',
-      `input value type ${datum.semanticPayload.value.type} does not equal required ${port.valueType}`
+      `${prefix} value type ${payload.value?.type} does not equal required ${port.valueType}`
     );
   }
-  if (!port.epistemicClasses.includes(datum.semanticPayload.epistemicClass)) {
+  if (!port.epistemicClasses.includes(payload.epistemicClass)) {
     throw new RuntimeExecutionError(
       'RUNTIME_EXECUTION_INPUT_EPISTEMIC_MISMATCH',
-      `input epistemic class ${datum.semanticPayload.epistemicClass} is outside exact specification input contract`
+      `${prefix} epistemic class ${payload.epistemicClass} is outside exact specification input contract`
     );
   }
 }
 
-function buildInputEnvelope({ ledger, bindingAuthority, specification, inputDatumRefs }) {
+function contextEntriesForPorts({ ledger, bindingAuthority, ports, inputDatumRefs }) {
   if (!Array.isArray(inputDatumRefs)) {
     throw new RuntimeExecutionError('RUNTIME_EXECUTION_INPUT_AUTHORITY_INVALID', 'inputDatumRefs must be an array');
   }
-  const ports = requiredContextPorts(specification);
   const bySemantic = new Map();
   for (const ref of inputDatumRefs) {
     let datum;
@@ -118,13 +136,13 @@ function buildInputEnvelope({ ledger, bindingAuthority, specification, inputDatu
     if (!manifestContains(bindingAuthority.frozenWorldRelations.manifest, datum.record.ref)) {
       throw new RuntimeExecutionError(
         'RUNTIME_EXECUTION_INPUT_NOT_IN_MANIFEST',
-        'D02 input authority must be a member of the exact frozen ContextManifest'
+        'D02 ContextDatum input authority must be a member of the exact frozen ContextManifest'
       );
     }
     if (bySemantic.has(datum.semanticPayload.semanticId)) {
       throw new RuntimeExecutionError(
         'RUNTIME_EXECUTION_DUPLICATE_INPUT',
-        `duplicate input semanticId ${datum.semanticPayload.semanticId}`
+        `duplicate ContextDatum semanticId ${datum.semanticPayload.semanticId}`
       );
     }
     bySemantic.set(datum.semanticPayload.semanticId, datum);
@@ -135,15 +153,15 @@ function buildInputEnvelope({ ledger, bindingAuthority, specification, inputDatu
       `exact specification requires ${ports.length} ContextDatum inputs but ${inputDatumRefs.length} were supplied`
     );
   }
-  const entries = ports.map((port) => {
+  return ports.map((port) => {
     const datum = bySemantic.get(port.semanticId);
     if (!datum) {
       throw new RuntimeExecutionError(
         'RUNTIME_EXECUTION_INPUT_SEMANTIC_MISMATCH',
-        `required semantic input ${port.semanticId} is absent`
+        `required ContextDatum semantic input ${port.semanticId} is absent`
       );
     }
-    validatePortDatum(port, datum);
+    validatePortPayload(port, datum.semanticPayload, 'ContextDatum input');
     return {
       authorityRef: datum.record.ref,
       semanticId: datum.semanticPayload.semanticId,
@@ -151,25 +169,45 @@ function buildInputEnvelope({ ledger, bindingAuthority, specification, inputDatu
       payload: datum.semanticPayload
     };
   });
+}
+
+function executionTuple(bindingAuthority) {
   const executionBinding = bindingAuthority.semanticPayload.implementationBindings[0];
-  const nodeId = runtimeExecutionNodeId({
+  const runtimeNodeId = runtimeExecutionNodeId({
     runtimeBindingRef: bindingAuthority.record.ref,
     specificationRef: executionBinding.specificationRef,
     implementationRef: executionBinding.implementationRef,
     implementationConformanceRef: executionBinding.implementationConformanceRef
   });
+  return { executionBinding, runtimeNodeId };
+}
+
+function buildLegacyInputEnvelope({ ledger, bindingAuthority, specification, inputDatumRefs }) {
+  if (requiredRuntimePorts(specification).length > 0) {
+    throw new RuntimeExecutionError(
+      'RUNTIME_EXECUTION_POLICY_UPSTREAM_RESULT_REQUIRED',
+      'Policy requiring RuntimeDatum inputs must use the evidence-backed post-D03 mixed-input execution path'
+    );
+  }
+  const contextEntries = contextEntriesForPorts({
+    ledger,
+    bindingAuthority,
+    ports: requiredContextPorts(specification),
+    inputDatumRefs
+  });
+  const { executionBinding, runtimeNodeId } = executionTuple(bindingAuthority);
   return normalizeRuntimeExecutionInputEnvelope({
     contractVersion: RUNTIME_EXECUTION_INPUT_CONTRACT_VERSION,
     runtimeBindingRef: bindingAuthority.record.ref,
-    runtimeNodeId: nodeId,
+    runtimeNodeId,
     specificationRef: executionBinding.specificationRef,
     implementationRef: executionBinding.implementationRef,
     implementationConformanceRef: executionBinding.implementationConformanceRef,
-    inputEntries: entries
+    inputEntries: contextEntries
   });
 }
 
-function currentExecutionWorld({ ledger, runtimeBindingRef, inputDatumRefs, atTime }) {
+function historicalExecutionBinding({ ledger, runtimeBindingRef }) {
   const binding = validateRuntimeBinding({ ledger, runtimeBindingRef });
   if (binding.semanticPayload.implementationBindings.length !== 1
     || !binding.frozenWorldRelations.specificationExecution) {
@@ -178,6 +216,94 @@ function currentExecutionWorld({ ledger, runtimeBindingRef, inputDatumRefs, atTi
       'D02 requires one exact S03 Specification + Implementation + ImplementationConformance binding'
     );
   }
+  return binding;
+}
+
+export function prepareMixedRuntimeExecutionInput({
+  ledger,
+  runtimeBindingRef,
+  contextDatumRefs = [],
+  runtimeEntries = []
+}) {
+  if (!ledger || typeof ledger.resolve !== 'function') {
+    throw new RuntimeExecutionError('INVALID_LEDGER', 'prepared mixed input requires a replayable AuthorityLedger');
+  }
+  if (!Array.isArray(runtimeEntries)) {
+    throw new RuntimeExecutionError(
+      'RUNTIME_EXECUTION_RUNTIME_INPUT_EVIDENCE_INVALID',
+      'runtimeEntries must be an array of evidence-validated RuntimeDatum entries'
+    );
+  }
+  const binding = historicalExecutionBinding({ ledger, runtimeBindingRef });
+  const specification = binding.frozenWorldRelations.specificationExecution.specification;
+  if (specificationKind(specification) !== 'Policy') {
+    throw new RuntimeExecutionError(
+      'RUNTIME_EXECUTION_SPECIFICATION_UNSUPPORTED',
+      'D02 mixed ContextDatum + RuntimeDatum inputs are only defined for Policy execution'
+    );
+  }
+  const contextEntries = contextEntriesForPorts({
+    ledger,
+    bindingAuthority: binding,
+    ports: requiredContextPorts(specification),
+    inputDatumRefs: contextDatumRefs
+  });
+  const runtimePorts = requiredRuntimePorts(specification);
+  if (runtimeEntries.length !== runtimePorts.length) {
+    throw new RuntimeExecutionError(
+      'RUNTIME_EXECUTION_RUNTIME_INPUT_REQUIRED',
+      `exact Policy requires ${runtimePorts.length} RuntimeDatum inputs but ${runtimeEntries.length} were supplied`
+    );
+  }
+  const bySemantic = new Map();
+  for (const entry of runtimeEntries) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry) || !entry.payload) {
+      throw new RuntimeExecutionError(
+        'RUNTIME_EXECUTION_RUNTIME_INPUT_EVIDENCE_INVALID',
+        'runtime input entry must contain evidence-bound RuntimeDatum payload'
+      );
+    }
+    if (bySemantic.has(entry.semanticId)) {
+      throw new RuntimeExecutionError(
+        'RUNTIME_EXECUTION_DUPLICATE_INPUT',
+        `duplicate RuntimeDatum semanticId ${entry.semanticId}`
+      );
+    }
+    if (entry.payload.runtimeBindingRef
+      && sameAuthorityRef(entry.payload.runtimeBindingRef, binding.record.ref)) {
+      throw new RuntimeExecutionError(
+        'RUNTIME_EXECUTION_RUNTIME_INPUT_SELF_AUTHORIZATION',
+        'a RuntimeDatum produced by the current RuntimeBinding cannot justify execution of that same binding'
+      );
+    }
+    bySemantic.set(entry.semanticId, entry);
+  }
+  const orderedRuntimeEntries = runtimePorts.map((port) => {
+    const entry = bySemantic.get(port.semanticId);
+    if (!entry) {
+      throw new RuntimeExecutionError(
+        'RUNTIME_EXECUTION_RUNTIME_INPUT_REQUIRED',
+        `required RuntimeDatum semantic input ${port.semanticId} is absent`
+      );
+    }
+    validatePortPayload(port, entry.payload, 'RuntimeDatum input');
+    return entry;
+  });
+  const { executionBinding, runtimeNodeId } = executionTuple(binding);
+  return normalizeRuntimeExecutionMixedInputEnvelope({
+    contractVersion: RUNTIME_EXECUTION_MIXED_INPUT_CONTRACT_VERSION,
+    runtimeBindingRef: binding.record.ref,
+    runtimeNodeId,
+    specificationRef: executionBinding.specificationRef,
+    implementationRef: executionBinding.implementationRef,
+    implementationConformanceRef: executionBinding.implementationConformanceRef,
+    contextEntries,
+    runtimeEntries: orderedRuntimeEntries
+  });
+}
+
+function currentExecutionWorld({ ledger, runtimeBindingRef, atTime }) {
+  const binding = historicalExecutionBinding({ ledger, runtimeBindingRef });
   const deployment = resolveDeploymentForRuntime({
     ledger,
     deploymentRef: binding.semanticPayload.deploymentRef,
@@ -205,13 +331,20 @@ function currentExecutionWorld({ ledger, runtimeBindingRef, inputDatumRefs, atTi
       'current Deployment runtime environment differs from frozen bound execution context'
     );
   }
-  const inputEnvelope = buildInputEnvelope({
-    ledger,
-    bindingAuthority: binding,
-    specification: conformance.specification,
-    inputDatumRefs
-  });
-  return deepFreeze({ binding, deployment, conformance, inputEnvelope });
+  return deepFreeze({ binding, deployment, conformance });
+}
+
+function inputEnvelopeMatchesWorld(world, inputEnvelope) {
+  const executionBinding = world.binding.semanticPayload.implementationBindings[0];
+  if (!sameAuthorityRef(inputEnvelope.runtimeBindingRef, world.binding.record.ref)
+    || !sameAuthorityRef(inputEnvelope.specificationRef, executionBinding.specificationRef)
+    || !sameAuthorityRef(inputEnvelope.implementationRef, executionBinding.implementationRef)
+    || !sameAuthorityRef(inputEnvelope.implementationConformanceRef, executionBinding.implementationConformanceRef)) {
+    throw new RuntimeExecutionError(
+      'RUNTIME_EXECUTION_PREPARED_INPUT_WORLD_MISMATCH',
+      'prepared input envelope must bind the exact current RuntimeBinding execution authority tuple'
+    );
+  }
 }
 
 function executionCompletedAt(clock, startedAt) {
@@ -225,35 +358,31 @@ function executionCompletedAt(clock, startedAt) {
   return completedAt;
 }
 
-function errorEnvelope({ world, executionIdValue, inputHash, dispatchClass, startedAt, completedAt, code, phase }) {
+function errorEnvelope({ world, inputEnvelope, executionIdValue, inputHash, dispatchClass, startedAt, completedAt, code, phase }) {
   return normalizeRuntimeExecutionEnvelope({
     contractVersion: RUNTIME_EXECUTION_ENVELOPE_CONTRACT_VERSION,
     authorityClass: RUNTIME_EXECUTION_AUTHORITY_CLASS,
     executionId: executionIdValue,
     dispatchClass,
     runtimeBindingRef: world.binding.record.ref,
-    runtimeNodeId: world.inputEnvelope.runtimeNodeId,
-    specificationRef: world.inputEnvelope.specificationRef,
-    implementationRef: world.inputEnvelope.implementationRef,
-    implementationConformanceRef: world.inputEnvelope.implementationConformanceRef,
+    runtimeNodeId: inputEnvelope.runtimeNodeId,
+    specificationRef: inputEnvelope.specificationRef,
+    implementationRef: inputEnvelope.implementationRef,
+    implementationConformanceRef: inputEnvelope.implementationConformanceRef,
     inputEnvelopeHash: inputHash,
     status: 'FAILED',
     startedAt,
     completedAt,
     rawOutput: null,
     rawOutputHash: null,
-    error: {
-      code,
-      phase,
-      retryDisposition: RUNTIME_EXECUTION_RETRY_DISPOSITION
-    },
+    error: { code, phase, retryDisposition: RUNTIME_EXECUTION_RETRY_DISPOSITION },
     semanticValidation: 'NOT_PERFORMED_D03_REQUIRED'
   });
 }
 
-function successEnvelope({ world, executionIdValue, inputHash, dispatchClass, startedAt, completedAt, output }) {
+function successEnvelope({ world, inputEnvelope, executionIdValue, inputHash, dispatchClass, startedAt, completedAt, output }) {
   if (output === null || output === undefined) {
-    throw new RuntimeExecutionError('RUNTIME_EXECUTION_OUTPUT_INVALID', 'executor output cannot be null/undefined in D02 v1');
+    throw new RuntimeExecutionError('RUNTIME_EXECUTION_OUTPUT_INVALID', 'executor output cannot be null/undefined in D02');
   }
   let canonicalOutput;
   try {
@@ -267,10 +396,10 @@ function successEnvelope({ world, executionIdValue, inputHash, dispatchClass, st
     executionId: executionIdValue,
     dispatchClass,
     runtimeBindingRef: world.binding.record.ref,
-    runtimeNodeId: world.inputEnvelope.runtimeNodeId,
-    specificationRef: world.inputEnvelope.specificationRef,
-    implementationRef: world.inputEnvelope.implementationRef,
-    implementationConformanceRef: world.inputEnvelope.implementationConformanceRef,
+    runtimeNodeId: inputEnvelope.runtimeNodeId,
+    specificationRef: inputEnvelope.specificationRef,
+    implementationRef: inputEnvelope.implementationRef,
+    implementationConformanceRef: inputEnvelope.implementationConformanceRef,
     inputEnvelopeHash: inputHash,
     status: 'SUCCEEDED',
     startedAt,
@@ -297,6 +426,121 @@ async function executeWithTimeout(execute, request, timeoutMs) {
   }
 }
 
+function requestForInputEnvelope({ inputEnvelope, executionIdValue, registration, implementation, inputHash }) {
+  const common = {
+    executionId: executionIdValue,
+    idempotencyKey: executionIdValue,
+    dispatchClass: registration.dispatchClass,
+    runtimeBindingRef: inputEnvelope.runtimeBindingRef,
+    runtimeNodeId: inputEnvelope.runtimeNodeId,
+    specificationRef: inputEnvelope.specificationRef,
+    implementationRef: inputEnvelope.implementationRef,
+    implementationConformanceRef: inputEnvelope.implementationConformanceRef,
+    executionLocator: implementation.semanticPayload.executionLocator,
+    inputEnvelopeHash: inputHash
+  };
+  if (inputEnvelope.contractVersion === RUNTIME_EXECUTION_INPUT_CONTRACT_VERSION) {
+    return deepFreeze({
+      contractVersion: 'adr.executor-request.v1',
+      ...common,
+      inputEntries: inputEnvelope.inputEntries
+    });
+  }
+  return deepFreeze({
+    contractVersion: 'adr.executor-request.v2',
+    ...common,
+    contextEntries: inputEnvelope.contextEntries,
+    runtimeEntries: inputEnvelope.runtimeEntries
+  });
+}
+
+function inputEnvelopeHash(inputEnvelope) {
+  return inputEnvelope.contractVersion === RUNTIME_EXECUTION_INPUT_CONTRACT_VERSION
+    ? runtimeExecutionInputHash(inputEnvelope)
+    : runtimeExecutionMixedInputHash(inputEnvelope);
+}
+
+async function dispatchWorld(broker, { world, inputEnvelope, startedAt }) {
+  inputEnvelopeMatchesWorld(world, inputEnvelope);
+  const inputHash = inputEnvelopeHash(inputEnvelope);
+  const executionIdValue = runtimeExecutionId({
+    runtimeBindingRef: world.binding.record.ref,
+    runtimeNodeId: inputEnvelope.runtimeNodeId,
+    inputEnvelopeHash: inputHash
+  });
+  const implementation = world.conformance.implementation;
+  const registration = broker.executorRegistry.resolve({
+    implementationRef: implementation.record.ref,
+    providerType: implementation.semanticPayload.providerType
+  });
+
+  return broker.idempotencyStore.runOnce(executionIdValue, async () => {
+    const request = requestForInputEnvelope({
+      inputEnvelope,
+      executionIdValue,
+      registration,
+      implementation,
+      inputHash
+    });
+    let result;
+    try {
+      result = await executeWithTimeout(registration.execute, request, broker.timeoutMs);
+    } catch {
+      const completedAt = executionCompletedAt(broker.clock, startedAt);
+      return errorEnvelope({
+        world,
+        inputEnvelope,
+        executionIdValue,
+        inputHash,
+        dispatchClass: registration.dispatchClass,
+        startedAt,
+        completedAt,
+        code: 'RUNTIME_EXECUTION_TRANSPORT_ERROR',
+        phase: 'DISPATCH'
+      });
+    }
+    const completedAt = executionCompletedAt(broker.clock, startedAt);
+    if (result?.timedOut === true) {
+      return errorEnvelope({
+        world,
+        inputEnvelope,
+        executionIdValue,
+        inputHash,
+        dispatchClass: registration.dispatchClass,
+        startedAt,
+        completedAt,
+        code: 'RUNTIME_EXECUTION_TIMEOUT',
+        phase: 'DISPATCH'
+      });
+    }
+    try {
+      return successEnvelope({
+        world,
+        inputEnvelope,
+        executionIdValue,
+        inputHash,
+        dispatchClass: registration.dispatchClass,
+        startedAt,
+        completedAt,
+        output: result.output
+      });
+    } catch (error) {
+      if (error?.code !== 'RUNTIME_EXECUTION_OUTPUT_INVALID') throw error;
+      return errorEnvelope({
+        world,
+        inputEnvelope,
+        executionIdValue,
+        inputHash,
+        dispatchClass: registration.dispatchClass,
+        startedAt,
+        completedAt,
+        code: 'RUNTIME_EXECUTION_OUTPUT_INVALID',
+        phase: 'OUTPUT_CAPTURE'
+      });
+    }
+  });
+}
+
 export class RuntimeExecutionBroker {
   constructor({ executorRegistry, idempotencyStore, clock, timeoutMs = 5000 } = {}) {
     if (!(executorRegistry instanceof ImplementationExecutorRegistry)) {
@@ -318,91 +562,25 @@ export class RuntimeExecutionBroker {
   }
 
   async execute(input) {
-    assertExecuteInput(input);
+    assertExactInput(input, EXECUTE_KEYS, 'broker execute input');
     const { ledger, runtimeBindingRef, inputDatumRefs } = input;
     const startedAt = normalizeDeploymentTimestamp(this.clock(), 'executionStartedAt');
-    const world = currentExecutionWorld({ ledger, runtimeBindingRef, inputDatumRefs, atTime: startedAt });
-    const inputHash = runtimeExecutionInputHash(world.inputEnvelope);
-    const executionIdValue = runtimeExecutionId({
-      runtimeBindingRef: world.binding.record.ref,
-      runtimeNodeId: world.inputEnvelope.runtimeNodeId,
-      inputEnvelopeHash: inputHash
+    const world = currentExecutionWorld({ ledger, runtimeBindingRef, atTime: startedAt });
+    const inputEnvelope = buildLegacyInputEnvelope({
+      ledger,
+      bindingAuthority: world.binding,
+      specification: world.conformance.specification,
+      inputDatumRefs
     });
-    const implementation = world.conformance.implementation;
-    const registration = this.executorRegistry.resolve({
-      implementationRef: implementation.record.ref,
-      providerType: implementation.semanticPayload.providerType
-    });
+    return dispatchWorld(this, { world, inputEnvelope, startedAt });
+  }
 
-    return this.idempotencyStore.runOnce(executionIdValue, async () => {
-      const request = deepFreeze({
-        contractVersion: 'adr.executor-request.v1',
-        executionId: executionIdValue,
-        idempotencyKey: executionIdValue,
-        dispatchClass: registration.dispatchClass,
-        runtimeBindingRef: world.binding.record.ref,
-        runtimeNodeId: world.inputEnvelope.runtimeNodeId,
-        specificationRef: world.inputEnvelope.specificationRef,
-        implementationRef: world.inputEnvelope.implementationRef,
-        implementationConformanceRef: world.inputEnvelope.implementationConformanceRef,
-        executionLocator: implementation.semanticPayload.executionLocator,
-        inputEnvelopeHash: inputHash,
-        inputEntries: world.inputEnvelope.inputEntries
-      });
-
-      let result;
-      try {
-        result = await executeWithTimeout(registration.execute, request, this.timeoutMs);
-      } catch {
-        const completedAt = executionCompletedAt(this.clock, startedAt);
-        return errorEnvelope({
-          world,
-          executionIdValue,
-          inputHash,
-          dispatchClass: registration.dispatchClass,
-          startedAt,
-          completedAt,
-          code: 'RUNTIME_EXECUTION_TRANSPORT_ERROR',
-          phase: 'DISPATCH'
-        });
-      }
-
-      const completedAt = executionCompletedAt(this.clock, startedAt);
-      if (result?.timedOut === true) {
-        return errorEnvelope({
-          world,
-          executionIdValue,
-          inputHash,
-          dispatchClass: registration.dispatchClass,
-          startedAt,
-          completedAt,
-          code: 'RUNTIME_EXECUTION_TIMEOUT',
-          phase: 'DISPATCH'
-        });
-      }
-      try {
-        return successEnvelope({
-          world,
-          executionIdValue,
-          inputHash,
-          dispatchClass: registration.dispatchClass,
-          startedAt,
-          completedAt,
-          output: result.output
-        });
-      } catch (error) {
-        if (error?.code !== 'RUNTIME_EXECUTION_OUTPUT_INVALID') throw error;
-        return errorEnvelope({
-          world,
-          executionIdValue,
-          inputHash,
-          dispatchClass: registration.dispatchClass,
-          startedAt,
-          completedAt,
-          code: 'RUNTIME_EXECUTION_OUTPUT_INVALID',
-          phase: 'OUTPUT_CAPTURE'
-        });
-      }
-    });
+  async [PREPARED_RUNTIME_INPUT_EXECUTE](input) {
+    assertExactInput(input, PREPARED_EXECUTE_KEYS, 'prepared broker execute input');
+    const { ledger, runtimeBindingRef } = input;
+    const startedAt = normalizeDeploymentTimestamp(this.clock(), 'executionStartedAt');
+    const world = currentExecutionWorld({ ledger, runtimeBindingRef, atTime: startedAt });
+    const inputEnvelope = normalizeRuntimeExecutionMixedInputEnvelope(input.inputEnvelope);
+    return dispatchWorld(this, { world, inputEnvelope, startedAt });
   }
 }
