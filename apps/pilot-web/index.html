@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ADR Pilot — Source Ingestion</title>
+  <style>
+    :root { font-family: Inter, ui-sans-serif, system-ui, sans-serif; color-scheme: light; }
+    body { margin: 0; background: #f6f7f8; color: #1b1f23; }
+    main { max-width: 920px; margin: 40px auto; padding: 0 20px 60px; }
+    h1 { font-size: 28px; margin-bottom: 8px; }
+    .sub { color: #59636e; margin-bottom: 28px; }
+    .card { background: white; border: 1px solid #d8dee4; border-radius: 12px; padding: 20px; margin: 16px 0; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+    input, select { width: 100%; box-sizing: border-box; padding: 10px 11px; border: 1px solid #c7ced6; border-radius: 8px; background: white; }
+    input[type=file] { padding: 14px; border-style: dashed; }
+    button { border: 0; border-radius: 8px; padding: 10px 16px; font-weight: 700; cursor: pointer; background: #20252b; color: white; }
+    button:disabled { opacity: .45; cursor: default; }
+    progress { width: 100%; height: 16px; }
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; background: #0d1117; color: #e6edf3; padding: 14px; border-radius: 8px; min-height: 70px; }
+    .status { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+    .warn { background: #fff8c5; border: 1px solid #d4a72c; border-radius: 8px; padding: 10px 12px; font-size: 13px; }
+    @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<main>
+  <h1>ADR Pilot — Scientific Source Ingestion</h1>
+  <div class="sub">Upload exact PDF bytes first. Extraction and scientific authority remain separate downstream steps.</div>
+
+  <div class="warn">This first host persists PDF bytes to scoped filesystem storage, but the AuthorityLedger and upload-session journal are still in-memory. Restart durability is intentionally not claimed yet.</div>
+
+  <section class="card">
+    <h2>Operator</h2>
+    <div class="grid">
+      <div><label for="token">Operator bearer token</label><input id="token" type="password" autocomplete="off"></div>
+      <div><label for="org">Organization</label><input id="org" value="org-a"></div>
+      <div><label for="tenant">Tenant</label><input id="tenant" value="tenant-a"></div>
+      <div><label for="sourceType">Source type</label><select id="sourceType"><option>PUBLICATION</option><option>PROTOCOL</option><option>TRIAL_REPORT</option><option>OTHER</option></select></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>1. Select paper</h2>
+    <input id="file" type="file" accept="application/pdf,.pdf">
+    <div class="grid" style="margin-top:14px">
+      <div><label for="title">Title</label><input id="title" placeholder="Paper title"></div>
+      <div><label for="doi">DOI (optional)</label><input id="doi" placeholder="10.xxxx/..."></div>
+      <div><label for="logicalId">Source logical id</label><input id="logicalId" placeholder="source.paper.my-study"></div>
+      <div><label for="rights">Rights basis</label><select id="rights"><option>INTERNAL_EVALUATION</option><option>LICENSED</option><option>PUBLIC</option><option>OTHER</option></select></div>
+    </div>
+    <p><button id="upload">Create session & upload PDF</button></p>
+    <progress id="progress" value="0" max="100"></progress>
+    <div id="status" class="status">IDLE</div>
+  </section>
+
+  <section class="card">
+    <h2>2. Finalize exact source authority</h2>
+    <p>Only enabled after the server has retained the PDF and produced its own SHA-256 / byte count.</p>
+    <button id="finalize" disabled>Finalize Source + SourceArtifact</button>
+  </section>
+
+  <section class="card">
+    <h2>Result</h2>
+    <pre id="result">No source uploaded yet.</pre>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+let currentUploadId = null;
+
+function authHeaders(extra = {}) {
+  return { Authorization: `Bearer ${$('token').value}`, ...extra };
+}
+
+function setResult(value) {
+  $('result').textContent = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+}
+
+function sourceIdFromFile(file) {
+  return `source.paper.${file.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'upload'}`;
+}
+
+$('file').addEventListener('change', () => {
+  const file = $('file').files[0];
+  if (!file) return;
+  if (!$('title').value) $('title').value = file.name.replace(/\.pdf$/i, '');
+  if (!$('logicalId').value) $('logicalId').value = sourceIdFromFile(file);
+});
+
+$('upload').addEventListener('click', async () => {
+  const file = $('file').files[0];
+  if (!file) return setResult('Select a PDF first.');
+  if (!$('token').value) return setResult('Operator token is required.');
+  $('upload').disabled = true;
+  $('finalize').disabled = true;
+  $('progress').value = 0;
+  $('status').textContent = 'CREATING SESSION';
+  try {
+    const logicalId = $('logicalId').value.trim();
+    const sessionResponse = await fetch('/operator/source-uploads', {
+      method: 'POST',
+      headers: authHeaders({ 'content-type': 'application/json' }),
+      body: JSON.stringify({
+        scope: { organizationId: $('org').value.trim(), tenantId: $('tenant').value.trim() || undefined },
+        filename: file.name,
+        declaredMediaType: 'application/pdf',
+        source: {
+          logicalId,
+          version: '1',
+          sourceType: $('sourceType').value,
+          title: $('title').value.trim(),
+          bibliographic: $('doi').value.trim() ? { doi: $('doi').value.trim() } : {},
+          rights: { basis: $('rights').value, trainingUse: 'PROHIBITED' }
+        },
+        artifact: {
+          logicalId: `${logicalId}.artifact.pdf`,
+          version: '1',
+          mediaType: 'application/pdf',
+          materializationIdentity: `operator-upload:${file.name}`,
+          acquisition: { method: 'UPLOAD', acquiredAt: new Date().toISOString(), locator: `operator-upload://${file.name}` },
+          rightsSnapshot: { basis: $('rights').value, trainingUse: 'PROHIBITED' },
+          metadata: { originalFilename: file.name }
+        }
+      })
+    });
+    const session = await sessionResponse.json();
+    if (!sessionResponse.ok) throw new Error(JSON.stringify(session));
+    currentUploadId = session.uploadId;
+    setResult(session);
+    $('status').textContent = 'UPLOADING';
+
+    const uploaded = await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('PUT', `/operator/source-uploads/${encodeURIComponent(currentUploadId)}/content`);
+      xhr.setRequestHeader('Authorization', `Bearer ${$('token').value}`);
+      xhr.setRequestHeader('Content-Type', 'application/pdf');
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) $('progress').value = Math.round((event.loaded / event.total) * 100);
+        $('status').textContent = `UPLOADING ${event.loaded.toLocaleString()} / ${event.lengthComputable ? event.total.toLocaleString() : '?'} bytes`;
+      };
+      xhr.onerror = () => reject(new Error('network upload failed'));
+      xhr.onload = () => {
+        let payload;
+        try { payload = JSON.parse(xhr.responseText); } catch { payload = xhr.responseText; }
+        if (xhr.status >= 200 && xhr.status < 300) resolve(payload);
+        else reject(new Error(typeof payload === 'string' ? payload : JSON.stringify(payload)));
+      };
+      xhr.send(file);
+    });
+
+    $('progress').value = 100;
+    $('status').textContent = 'STORED';
+    setResult(uploaded);
+    $('finalize').disabled = false;
+  } catch (error) {
+    $('status').textContent = 'FAILED';
+    setResult(error.message);
+  } finally {
+    $('upload').disabled = false;
+  }
+});
+
+$('finalize').addEventListener('click', async () => {
+  if (!currentUploadId) return;
+  $('finalize').disabled = true;
+  $('status').textContent = 'FINALIZING AUTHORITY';
+  try {
+    const response = await fetch(`/operator/source-uploads/${encodeURIComponent(currentUploadId)}/finalize`, {
+      method: 'POST', headers: authHeaders()
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(JSON.stringify(payload));
+    $('status').textContent = 'SOURCE_MATERIALIZED';
+    setResult(payload);
+  } catch (error) {
+    $('status').textContent = 'FAILED';
+    setResult(error.message);
+    $('finalize').disabled = false;
+  }
+});
+</script>
+</body>
+</html>
