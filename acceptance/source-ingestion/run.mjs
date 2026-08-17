@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { closeSync, mkdtempSync, openSync, rmSync, writeSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
@@ -110,6 +110,13 @@ async function collectHash(readable) {
   return { contentHash: `sha256:${hash.digest('hex')}`, byteLength };
 }
 
+function scopedObjectPath(rootDir, scope, contentHash) {
+  const key = createHash('sha256')
+    .update(JSON.stringify([scope.organizationId, scope.tenantId ?? null]), 'utf8')
+    .digest('hex');
+  return join(rootDir, key, 'objects', contentHash.slice('sha256:'.length));
+}
+
 async function expectAsyncError(fn, ErrorType, code) {
   let caught;
   try {
@@ -209,6 +216,33 @@ test('SourceRegistry rejects a forged retained receipt rather than trusting call
       acquisition: { method: 'UPLOAD', acquiredAt: '2026-08-18T02:00:00Z' },
       audit: audit('evt-forged-artifact')
     }), SourceRegistryError, 'RETENTION_RECEIPT_MISMATCH');
+  } finally {
+    env.cleanup();
+  }
+});
+
+test('same-length retained-byte tampering is detected before SourceArtifact authority is minted', async () => {
+  const env = setup();
+  try {
+    const upload = createUpload(env.service, 'tamper-before-finalize');
+    const generated = deterministicPdfStream({ bodyBytes: 512 * 1024 });
+    const stored = await env.service.uploadPdf({ uploadId: upload.uploadId, readable: generated.readable });
+    generated.result();
+
+    const objectPath = scopedObjectPath(env.rootDir, SCOPE, stored.retentionReceipt.contentHash);
+    const fd = openSync(objectPath, 'r+');
+    try {
+      writeSync(fd, Buffer.from('X'), 0, 1, 0);
+    } finally {
+      closeSync(fd);
+    }
+
+    expectError(() => env.service.finalizeUpload({
+      uploadId: upload.uploadId,
+      sourceAudit: audit('evt-tampered-source'),
+      artifactAudit: audit('evt-tampered-artifact')
+    }), SourceIngestionError, 'RETAINED_OBJECT_HASH_MISMATCH');
+    assert.equal(env.ledger.listVersions('SourceArtifact', 'artifact.paper.tamper-before-finalize').length, 0);
   } finally {
     env.cleanup();
   }
