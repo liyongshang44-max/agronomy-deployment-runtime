@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict';
 import {
+  RUNTIME_EXECUTION_RETRY_DISPOSITION,
+  normalizeRuntimeExecutionEnvelope,
+  runtimeExecutionInputHash
+} from '../../packages/implementation-broker/src/index.mjs';
+import {
   createBroker,
-  createExecutableWorld
+  createExecutableWorld,
+  suspendDeployment
 } from './fixture.mjs';
 
 const tests = [];
@@ -79,6 +85,85 @@ test('executor request is deeply frozen so adapter cannot rewrite bound request 
   const envelope = await broker.execute({ ledger: world.env.ledger, runtimeBindingRef: world.binding.ref, inputDatumRefs: [world.soilRef] });
   assert.equal(envelope.status, 'SUCCEEDED');
   assert.equal(frozen, true);
+});
+
+test('normalized execution envelope rejects executionId tampering against exact RuntimeBinding/node/input identity', async () => {
+  const world = createExecutableWorld('execution-id-integrity');
+  const { broker } = createBroker(world, async () => ({ estimate_mm: '1' }));
+  const envelope = await broker.execute({ ledger: world.env.ledger, runtimeBindingRef: world.binding.ref, inputDatumRefs: [world.soilRef] });
+  assert.throws(
+    () => normalizeRuntimeExecutionEnvelope({ ...envelope, executionId: 'sha256:tampered' }),
+    (error) => error?.code === 'RUNTIME_EXECUTION_IDENTITY_MISMATCH'
+  );
+});
+
+test('normalized execution envelope rejects raw-output hash tampering', async () => {
+  const world = createExecutableWorld('output-hash-integrity');
+  const { broker } = createBroker(world, async () => ({ estimate_mm: '1' }));
+  const envelope = await broker.execute({ ledger: world.env.ledger, runtimeBindingRef: world.binding.ref, inputDatumRefs: [world.soilRef] });
+  assert.throws(
+    () => normalizeRuntimeExecutionEnvelope({ ...envelope, rawOutputHash: 'sha256:tampered' }),
+    (error) => error?.code === 'RUNTIME_EXECUTION_OUTPUT_HASH_MISMATCH'
+  );
+});
+
+test('current-use Deployment revalidation precedes cached retry after authority is suspended', async () => {
+  const world = createExecutableWorld('cached-retry-current-use');
+  let calls = 0;
+  const { broker } = createBroker(world, async () => { calls += 1; return { estimate_mm: '1' }; });
+  const first = await broker.execute({ ledger: world.env.ledger, runtimeBindingRef: world.binding.ref, inputDatumRefs: [world.soilRef] });
+  assert.equal(first.status, 'SUCCEEDED');
+  suspendDeployment(world);
+  await assert.rejects(
+    () => broker.execute({ ledger: world.env.ledger, runtimeBindingRef: world.binding.ref, inputDatumRefs: [world.soilRef] }),
+    (error) => error?.code === 'DEPLOYMENT_NOT_RUNTIME_ACTIVE'
+  );
+  assert.equal(calls, 1);
+});
+
+test('clock regression after executor side effect fails closed and exact retry does not re-dispatch', async () => {
+  const world = createExecutableWorld('clock-regression');
+  let calls = 0;
+  const { broker } = createBroker(
+    world,
+    async () => { calls += 1; return { estimate_mm: '1' }; },
+    { clockValues: ['2026-08-20T10:15:00.000Z', '2026-08-20T10:14:59.000Z'] }
+  );
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    await assert.rejects(
+      () => broker.execute({ ledger: world.env.ledger, runtimeBindingRef: world.binding.ref, inputDatumRefs: [world.soilRef] }),
+      (error) => error?.code === 'RUNTIME_EXECUTION_CLOCK_REGRESSION'
+    );
+  }
+  assert.equal(calls, 1);
+});
+
+test('failed execution retry contract explicitly preserves current-use revalidation before cache replay', async () => {
+  const world = createExecutableWorld('retry-disposition');
+  const { broker } = createBroker(world, async () => { throw new Error('offline'); });
+  const envelope = await broker.execute({ ledger: world.env.ledger, runtimeBindingRef: world.binding.ref, inputDatumRefs: [world.soilRef] });
+  assert.equal(envelope.status, 'FAILED');
+  assert.equal(envelope.error.retryDisposition, RUNTIME_EXECUTION_RETRY_DISPOSITION);
+});
+
+test('input envelope identity remains hash-bound to its exact runtime node tuple', async () => {
+  const world = createExecutableWorld('input-node-identity');
+  let captured;
+  const { broker } = createBroker(world, async (request) => { captured = request; return { estimate_mm: '1' }; });
+  await broker.execute({ ledger: world.env.ledger, runtimeBindingRef: world.binding.ref, inputDatumRefs: [world.soilRef] });
+  const inputEnvelope = {
+    contractVersion: 'adr.runtime-execution-input.v1',
+    runtimeBindingRef: captured.runtimeBindingRef,
+    runtimeNodeId: `${captured.runtimeNodeId}:tampered`,
+    specificationRef: captured.specificationRef,
+    implementationRef: captured.implementationRef,
+    implementationConformanceRef: captured.implementationConformanceRef,
+    inputEntries: captured.inputEntries
+  };
+  assert.throws(
+    () => runtimeExecutionInputHash(inputEnvelope),
+    (error) => error?.code === 'RUNTIME_EXECUTION_IDENTITY_MISMATCH'
+  );
 });
 
 let passed = 0;

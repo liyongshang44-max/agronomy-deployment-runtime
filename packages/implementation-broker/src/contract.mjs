@@ -1,13 +1,16 @@
 import { cloneCanonicalValue, deepFreeze, semanticHash } from '../../canonicalization/src/index.mjs';
 import { assertAuthorityRef } from '../../contracts/src/authority.mjs';
+import { normalizeDeploymentTimestamp } from '../../deployment/src/index.mjs';
 
 export const RUNTIME_EXECUTION_INPUT_CONTRACT_VERSION = 'adr.runtime-execution-input.v1';
 export const RUNTIME_EXECUTION_ENVELOPE_CONTRACT_VERSION = 'adr.runtime-execution-envelope.v1';
 export const RUNTIME_EXECUTION_AUTHORITY_CLASS = 'EXECUTION_EVIDENCE_NON_SEMANTIC_D03_REQUIRED';
+export const RUNTIME_EXECUTION_RETRY_DISPOSITION = 'CURRENT_USE_REVALIDATION_THEN_SAME_EXECUTION_ID_RETURNS_CACHED_RESULT';
 export const RUNTIME_EXECUTION_STATUSES = deepFreeze(['SUCCEEDED', 'FAILED']);
 export const RUNTIME_EXECUTION_DISPATCH_CLASSES = deepFreeze(['INTERNAL', 'EXTERNAL']);
 export const RUNTIME_EXECUTION_ERROR_CODES = deepFreeze([
   'RUNTIME_EXECUTION_BINDING_REQUIRED',
+  'RUNTIME_EXECUTION_SPECIFICATION_UNSUPPORTED',
   'RUNTIME_EXECUTION_INPUT_AUTHORITY_INVALID',
   'RUNTIME_EXECUTION_INPUT_NOT_IN_MANIFEST',
   'RUNTIME_EXECUTION_INPUT_SEMANTIC_MISMATCH',
@@ -16,6 +19,11 @@ export const RUNTIME_EXECUTION_ERROR_CODES = deepFreeze([
   'RUNTIME_EXECUTION_DUPLICATE_INPUT',
   'RUNTIME_EXECUTION_PARAMETER_BINDING_REQUIRED',
   'RUNTIME_EXECUTION_POLICY_UPSTREAM_RESULT_REQUIRED',
+  'RUNTIME_EXECUTION_CONFORMANCE_MISMATCH',
+  'RUNTIME_EXECUTION_DEPLOYMENT_ENVIRONMENT_MISMATCH',
+  'RUNTIME_EXECUTION_IDENTITY_MISMATCH',
+  'RUNTIME_EXECUTION_OUTPUT_HASH_MISMATCH',
+  'RUNTIME_EXECUTION_CLOCK_REGRESSION',
   'RUNTIME_EXECUTOR_NOT_REGISTERED',
   'RUNTIME_EXECUTOR_DISPATCH_CLASS_MISMATCH',
   'RUNTIME_EXECUTION_TIMEOUT',
@@ -64,6 +72,26 @@ function exactRef(value, kind, name) {
   return ref;
 }
 
+function executionTimestamp(value, name) {
+  try {
+    return normalizeDeploymentTimestamp(value, name);
+  } catch (error) {
+    throw new RuntimeExecutionError(
+      'INVALID_RUNTIME_EXECUTION_TIME',
+      `${name} must be an explicit valid runtime timestamp: ${error?.code ?? error?.message ?? 'invalid'}`
+    );
+  }
+}
+
+export function runtimeExecutionNodeId({ runtimeBindingRef, specificationRef, implementationRef, implementationConformanceRef }) {
+  return `runtime-node:${semanticHash('RuntimeExecutionNodeIdentity', {
+    runtimeBindingRef: exactRef(runtimeBindingRef, 'RuntimeBinding', 'runtimeBindingRef'),
+    specificationRef: assertAuthorityRef(specificationRef),
+    implementationRef: exactRef(implementationRef, 'Implementation', 'implementationRef'),
+    implementationConformanceRef: exactRef(implementationConformanceRef, 'ImplementationConformance', 'implementationConformanceRef')
+  })}`;
+}
+
 export function normalizeRuntimeExecutionInputEnvelope(value) {
   exactObject(value, 'RuntimeExecutionInputEnvelope', new Set([
     'contractVersion', 'runtimeBindingRef', 'runtimeNodeId', 'specificationRef',
@@ -94,13 +122,30 @@ export function normalizeRuntimeExecutionInputEnvelope(value) {
   if (new Set(semanticIds).size !== semanticIds.length) {
     throw new RuntimeExecutionError('RUNTIME_EXECUTION_DUPLICATE_INPUT', 'one exact input authority per semanticId is allowed in D02 v1');
   }
+  const runtimeBindingRef = exactRef(value.runtimeBindingRef, 'RuntimeBinding', 'runtimeBindingRef');
+  const specificationRef = assertAuthorityRef(value.specificationRef);
+  const implementationRef = exactRef(value.implementationRef, 'Implementation', 'implementationRef');
+  const implementationConformanceRef = exactRef(value.implementationConformanceRef, 'ImplementationConformance', 'implementationConformanceRef');
+  const runtimeNodeId = text(value.runtimeNodeId, 'runtimeNodeId');
+  const expectedNodeId = runtimeExecutionNodeId({
+    runtimeBindingRef,
+    specificationRef,
+    implementationRef,
+    implementationConformanceRef
+  });
+  if (runtimeNodeId !== expectedNodeId) {
+    throw new RuntimeExecutionError(
+      'RUNTIME_EXECUTION_IDENTITY_MISMATCH',
+      'runtimeNodeId must be derived from the exact RuntimeBinding/Specification/Implementation/Conformance tuple'
+    );
+  }
   return deepFreeze({
     contractVersion: RUNTIME_EXECUTION_INPUT_CONTRACT_VERSION,
-    runtimeBindingRef: exactRef(value.runtimeBindingRef, 'RuntimeBinding', 'runtimeBindingRef'),
-    runtimeNodeId: text(value.runtimeNodeId, 'runtimeNodeId'),
-    specificationRef: assertAuthorityRef(value.specificationRef),
-    implementationRef: exactRef(value.implementationRef, 'Implementation', 'implementationRef'),
-    implementationConformanceRef: exactRef(value.implementationConformanceRef, 'ImplementationConformance', 'implementationConformanceRef'),
+    runtimeBindingRef,
+    runtimeNodeId,
+    specificationRef,
+    implementationRef,
+    implementationConformanceRef,
     inputEntries: deepFreeze([...entries].sort((a, b) => a.semanticId.localeCompare(b.semanticId)))
   });
 }
@@ -109,21 +154,16 @@ export function runtimeExecutionInputHash(value) {
   return semanticHash('RuntimeExecutionInputEnvelope', normalizeRuntimeExecutionInputEnvelope(value));
 }
 
-export function runtimeExecutionNodeId({ runtimeBindingRef, specificationRef, implementationRef, implementationConformanceRef }) {
-  return `runtime-node:${semanticHash('RuntimeExecutionNodeIdentity', {
-    runtimeBindingRef: exactRef(runtimeBindingRef, 'RuntimeBinding', 'runtimeBindingRef'),
-    specificationRef: assertAuthorityRef(specificationRef),
-    implementationRef: exactRef(implementationRef, 'Implementation', 'implementationRef'),
-    implementationConformanceRef: exactRef(implementationConformanceRef, 'ImplementationConformance', 'implementationConformanceRef')
-  })}`;
-}
-
 export function runtimeExecutionId({ runtimeBindingRef, runtimeNodeId, inputEnvelopeHash }) {
   return semanticHash('RuntimeExecutionIdentity', {
     runtimeBindingRef: exactRef(runtimeBindingRef, 'RuntimeBinding', 'runtimeBindingRef'),
     runtimeNodeId: text(runtimeNodeId, 'runtimeNodeId'),
     inputEnvelopeHash: text(inputEnvelopeHash, 'inputEnvelopeHash')
   });
+}
+
+export function runtimeExecutionRawOutputHash(output) {
+  return semanticHash('RuntimeExecutionOpaqueOutput', cloneCanonicalValue(output));
 }
 
 export function normalizeRuntimeExecutionEnvelope(value) {
@@ -152,28 +192,65 @@ export function normalizeRuntimeExecutionEnvelope(value) {
   }
   const error = value.error === null ? null : (() => {
     exactObject(value.error, 'error', new Set(['code', 'phase', 'retryDisposition']));
+    const retryDisposition = text(value.error.retryDisposition, 'error.retryDisposition');
+    if (retryDisposition !== RUNTIME_EXECUTION_RETRY_DISPOSITION) {
+      throw new RuntimeExecutionError(
+        'INVALID_RUNTIME_EXECUTION_ENVELOPE',
+        'failed execution retryDisposition must preserve current-use revalidation before cached replay'
+      );
+    }
     return deepFreeze({
       code: text(value.error.code, 'error.code'),
       phase: text(value.error.phase, 'error.phase'),
-      retryDisposition: text(value.error.retryDisposition, 'error.retryDisposition')
+      retryDisposition
     });
   })();
+  const runtimeBindingRef = exactRef(value.runtimeBindingRef, 'RuntimeBinding', 'runtimeBindingRef');
+  const specificationRef = assertAuthorityRef(value.specificationRef);
+  const implementationRef = exactRef(value.implementationRef, 'Implementation', 'implementationRef');
+  const implementationConformanceRef = exactRef(value.implementationConformanceRef, 'ImplementationConformance', 'implementationConformanceRef');
+  const runtimeNodeId = text(value.runtimeNodeId, 'runtimeNodeId');
+  const expectedNodeId = runtimeExecutionNodeId({
+    runtimeBindingRef,
+    specificationRef,
+    implementationRef,
+    implementationConformanceRef
+  });
+  if (runtimeNodeId !== expectedNodeId) {
+    throw new RuntimeExecutionError('RUNTIME_EXECUTION_IDENTITY_MISMATCH', 'execution envelope runtimeNodeId does not match exact bound authority tuple');
+  }
+  const inputEnvelopeHash = text(value.inputEnvelopeHash, 'inputEnvelopeHash');
+  const executionId = text(value.executionId, 'executionId');
+  const expectedExecutionId = runtimeExecutionId({ runtimeBindingRef, runtimeNodeId, inputEnvelopeHash });
+  if (executionId !== expectedExecutionId) {
+    throw new RuntimeExecutionError('RUNTIME_EXECUTION_IDENTITY_MISMATCH', 'executionId does not match exact RuntimeBinding/node/input identity');
+  }
+  const startedAt = executionTimestamp(value.startedAt, 'startedAt');
+  const completedAt = executionTimestamp(value.completedAt, 'completedAt');
+  if (new Date(completedAt).getTime() < new Date(startedAt).getTime()) {
+    throw new RuntimeExecutionError('RUNTIME_EXECUTION_CLOCK_REGRESSION', 'completedAt cannot precede startedAt');
+  }
+  const rawOutput = value.rawOutput === null ? null : cloneCanonicalValue(value.rawOutput);
+  const rawOutputHash = value.rawOutputHash === null ? null : text(value.rawOutputHash, 'rawOutputHash');
+  if (status === 'SUCCEEDED' && runtimeExecutionRawOutputHash(rawOutput) !== rawOutputHash) {
+    throw new RuntimeExecutionError('RUNTIME_EXECUTION_OUTPUT_HASH_MISMATCH', 'rawOutputHash must match exact opaque rawOutput bytes after canonicalization');
+  }
   return deepFreeze({
     contractVersion: RUNTIME_EXECUTION_ENVELOPE_CONTRACT_VERSION,
     authorityClass: RUNTIME_EXECUTION_AUTHORITY_CLASS,
-    executionId: text(value.executionId, 'executionId'),
+    executionId,
     dispatchClass,
-    runtimeBindingRef: exactRef(value.runtimeBindingRef, 'RuntimeBinding', 'runtimeBindingRef'),
-    runtimeNodeId: text(value.runtimeNodeId, 'runtimeNodeId'),
-    specificationRef: assertAuthorityRef(value.specificationRef),
-    implementationRef: exactRef(value.implementationRef, 'Implementation', 'implementationRef'),
-    implementationConformanceRef: exactRef(value.implementationConformanceRef, 'ImplementationConformance', 'implementationConformanceRef'),
-    inputEnvelopeHash: text(value.inputEnvelopeHash, 'inputEnvelopeHash'),
+    runtimeBindingRef,
+    runtimeNodeId,
+    specificationRef,
+    implementationRef,
+    implementationConformanceRef,
+    inputEnvelopeHash,
     status,
-    startedAt: text(value.startedAt, 'startedAt'),
-    completedAt: text(value.completedAt, 'completedAt'),
-    rawOutput: value.rawOutput === null ? null : cloneCanonicalValue(value.rawOutput),
-    rawOutputHash: value.rawOutputHash === null ? null : text(value.rawOutputHash, 'rawOutputHash'),
+    startedAt,
+    completedAt,
+    rawOutput,
+    rawOutputHash,
     error,
     semanticValidation: 'NOT_PERFORMED_D03_REQUIRED'
   });

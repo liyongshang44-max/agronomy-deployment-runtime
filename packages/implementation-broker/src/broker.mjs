@@ -1,7 +1,6 @@
 import {
   cloneCanonicalValue,
-  deepFreeze,
-  semanticHash
+  deepFreeze
 } from '../../canonicalization/src/index.mjs';
 import { sameAuthorityRef } from '../../contracts/src/authority.mjs';
 import { validateContextDatumAuthority } from '../../context-contract/src/index.mjs';
@@ -12,13 +11,14 @@ import {
   RUNTIME_EXECUTION_AUTHORITY_CLASS,
   RUNTIME_EXECUTION_ENVELOPE_CONTRACT_VERSION,
   RUNTIME_EXECUTION_INPUT_CONTRACT_VERSION,
+  RUNTIME_EXECUTION_RETRY_DISPOSITION,
   RuntimeExecutionError,
   normalizeRuntimeExecutionEnvelope,
   normalizeRuntimeExecutionInputEnvelope,
   runtimeExecutionId,
   runtimeExecutionInputHash,
   runtimeExecutionNodeId,
-  text
+  runtimeExecutionRawOutputHash
 } from './contract.mjs';
 import { RuntimeExecutionIdempotencyStore } from './idempotency.mjs';
 import { ImplementationExecutorRegistry } from './registry.mjs';
@@ -214,8 +214,15 @@ function currentExecutionWorld({ ledger, runtimeBindingRef, inputDatumRefs, atTi
   return deepFreeze({ binding, deployment, conformance, inputEnvelope });
 }
 
-function rawOutputHash(output) {
-  return semanticHash('RuntimeExecutionOpaqueOutput', cloneCanonicalValue(output));
+function executionCompletedAt(clock, startedAt) {
+  const completedAt = normalizeDeploymentTimestamp(clock(), 'executionCompletedAt');
+  if (new Date(completedAt).getTime() < new Date(startedAt).getTime()) {
+    throw new RuntimeExecutionError(
+      'RUNTIME_EXECUTION_CLOCK_REGRESSION',
+      'execution completion clock cannot precede the dispatch/current-use authorization timestamp'
+    );
+  }
+  return completedAt;
 }
 
 function errorEnvelope({ world, executionIdValue, inputHash, dispatchClass, startedAt, completedAt, code, phase }) {
@@ -238,7 +245,7 @@ function errorEnvelope({ world, executionIdValue, inputHash, dispatchClass, star
     error: {
       code,
       phase,
-      retryDisposition: 'SAME_EXECUTION_ID_RETURNS_CACHED_RESULT'
+      retryDisposition: RUNTIME_EXECUTION_RETRY_DISPOSITION
     },
     semanticValidation: 'NOT_PERFORMED_D03_REQUIRED'
   });
@@ -269,16 +276,25 @@ function successEnvelope({ world, executionIdValue, inputHash, dispatchClass, st
     startedAt,
     completedAt,
     rawOutput: canonicalOutput,
-    rawOutputHash: rawOutputHash(canonicalOutput),
+    rawOutputHash: runtimeExecutionRawOutputHash(canonicalOutput),
     error: null,
     semanticValidation: 'NOT_PERFORMED_D03_REQUIRED'
   });
 }
 
-function timeoutPromise(timeoutMs) {
-  return new Promise((resolve) => {
-    setTimeout(() => resolve({ timedOut: true }), timeoutMs);
+async function executeWithTimeout(execute, request, timeoutMs) {
+  let timer = null;
+  const timeout = new Promise((resolve) => {
+    timer = setTimeout(() => resolve({ timedOut: true }), timeoutMs);
   });
+  try {
+    return await Promise.race([
+      Promise.resolve().then(() => execute(request)).then((output) => ({ output })),
+      timeout
+    ]);
+  } finally {
+    if (timer !== null) clearTimeout(timer);
+  }
 }
 
 export class RuntimeExecutionBroker {
@@ -304,8 +320,8 @@ export class RuntimeExecutionBroker {
   async execute(input) {
     assertExecuteInput(input);
     const { ledger, runtimeBindingRef, inputDatumRefs } = input;
-    const atTime = normalizeDeploymentTimestamp(this.clock(), 'executionClock');
-    const world = currentExecutionWorld({ ledger, runtimeBindingRef, inputDatumRefs, atTime });
+    const startedAt = normalizeDeploymentTimestamp(this.clock(), 'executionStartedAt');
+    const world = currentExecutionWorld({ ledger, runtimeBindingRef, inputDatumRefs, atTime: startedAt });
     const inputHash = runtimeExecutionInputHash(world.inputEnvelope);
     const executionIdValue = runtimeExecutionId({
       runtimeBindingRef: world.binding.record.ref,
@@ -319,7 +335,6 @@ export class RuntimeExecutionBroker {
     });
 
     return this.idempotencyStore.runOnce(executionIdValue, async () => {
-      const startedAt = normalizeDeploymentTimestamp(this.clock(), 'executionStartedAt');
       const request = deepFreeze({
         contractVersion: 'adr.executor-request.v1',
         executionId: executionIdValue,
@@ -337,12 +352,9 @@ export class RuntimeExecutionBroker {
 
       let result;
       try {
-        result = await Promise.race([
-          Promise.resolve().then(() => registration.execute(request)).then((output) => ({ output })),
-          timeoutPromise(this.timeoutMs)
-        ]);
+        result = await executeWithTimeout(registration.execute, request, this.timeoutMs);
       } catch {
-        const completedAt = normalizeDeploymentTimestamp(this.clock(), 'executionCompletedAt');
+        const completedAt = executionCompletedAt(this.clock, startedAt);
         return errorEnvelope({
           world,
           executionIdValue,
@@ -355,7 +367,7 @@ export class RuntimeExecutionBroker {
         });
       }
 
-      const completedAt = normalizeDeploymentTimestamp(this.clock(), 'executionCompletedAt');
+      const completedAt = executionCompletedAt(this.clock, startedAt);
       if (result?.timedOut === true) {
         return errorEnvelope({
           world,
