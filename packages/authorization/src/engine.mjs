@@ -19,7 +19,10 @@ export const PERMISSIONS = deepFreeze({
   RUNTIME_PROFILE_MANAGE: 'runtime.profile.manage',
   SPECIFICATION_MANAGE: 'specification.manage',
   IMPLEMENTATION_MANAGE: 'implementation.manage',
-  IMPLEMENTATION_CONFORMANCE_QUALIFY: 'implementation.conformance.qualify'
+  IMPLEMENTATION_CONFORMANCE_QUALIFY: 'implementation.conformance.qualify',
+  SECRET_MANAGE: 'security.secret.manage',
+  SECRET_USE: 'security.secret.use',
+  RETENTION_MANAGE: 'security.retention.manage'
 });
 
 const VALID_PERMISSIONS = new Set(Object.values(PERMISSIONS));
