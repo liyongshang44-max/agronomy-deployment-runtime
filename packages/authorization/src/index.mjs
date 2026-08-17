@@ -37,6 +37,11 @@ export {
   outcomeWriteScope,
   OUTCOME_RESOURCE_TYPE
 } from './outcome-write.mjs';
+export {
+  authorizeOutcomeEvaluation,
+  outcomeEvaluationScope,
+  OUTCOME_EVALUATION_RESOURCE_TYPE
+} from './outcome-evaluate.mjs';
 
 // Principal identity is the stable actor identity and organizational tenancy assertion.
 // Program memberships are contextual claims and are deliberately not part of identity equality.
