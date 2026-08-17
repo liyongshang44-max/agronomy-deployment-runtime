@@ -8,6 +8,7 @@ import {
 import {
   makeEnv,
   modelSpec,
+  policyActionSemantics,
   policySpec,
   publish,
   transformationSpec
@@ -26,7 +27,7 @@ test('S01 publishes exact QualifiedTransformation Model and Policy specification
   assert.equal(policy.ref.kind, 'Policy');
   assert.equal(transformation.semanticPayload.contractVersion, 'adr.qualified-transformation.v1');
   assert.equal(model.semanticPayload.contractVersion, 'adr.model.v1');
-  assert.equal(policy.semanticPayload.contractVersion, 'adr.policy.v1');
+  assert.equal(policy.semanticPayload.contractVersion, 'adr.policy.v2');
 });
 
 test('QualifiedTransformation freezes semantic conversion method domain uncertainty and limitations while preserving epistemic class', () => {
@@ -50,10 +51,15 @@ test('Model freezes computational semantic contract independently from any execu
   assert.equal(JSON.stringify(normalized).includes('implementation'), false);
 });
 
-test('Policy freezes decision logic action space human gate fallback and abstention semantics without becoming Knowledge', () => {
+test('Policy freezes decision logic action space governed action semantics human gate fallback and abstention semantics without becoming Knowledge', () => {
   const normalized = normalizePolicy(policySpec());
   assert.equal(normalized.decisionType, 'IRRIGATION_TIMING');
   assert.deepEqual(normalized.actionSpace, ['IRRIGATE_NOW', 'WAIT']);
+  assert.equal(normalized.actionSemantics.equivalenceMode, 'EXACT_MATERIAL_PARAMETERS');
+  assert.deepEqual(
+    normalized.actionSemantics.actions.map((action) => action.actionCode),
+    ['IRRIGATE_NOW', 'WAIT']
+  );
   assert.equal(normalized.humanGate.mode, 'REQUIRED');
   assert.equal(normalized.fallback.disposition, 'ABSTAIN');
   assert.deepEqual(normalized.abstentionConditions, ['MISSING_REQUIRED_RUNTIME_OUTPUT']);
@@ -85,10 +91,14 @@ test('material computation change versions Model semantics without involving Imp
   assert.notEqual(first.ref.semanticHash, second.ref.semanticHash);
 });
 
-test('material Policy action-space change creates distinct semantic identity', () => {
+test('material Policy action-space change with matching action semantics creates distinct semantic identity', () => {
   const env = makeEnv();
   const first = publish(env, 'Policy', 'policy-versioned', '1', policySpec());
-  const second = publish(env, 'Policy', 'policy-versioned', '2', policySpec({ actionSpace: ['WAIT', 'IRRIGATE_NOW', 'IRRIGATE_WITHIN_48H'] }));
+  const actionSpace = ['WAIT', 'IRRIGATE_NOW', 'IRRIGATE_WITHIN_48H'];
+  const second = publish(env, 'Policy', 'policy-versioned', '2', policySpec({
+    actionSpace,
+    actionSemantics: policyActionSemantics(actionSpace)
+  }));
   assert.notEqual(first.ref.semanticHash, second.ref.semanticHash);
 });
 

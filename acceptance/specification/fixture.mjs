@@ -95,12 +95,56 @@ export function modelSpec(overrides = {}) {
   };
 }
 
-export function policySpec(overrides = {}) {
+function irrigationParameters() {
+  return [
+    {
+      name: 'amount',
+      semanticId: 'action.irrigation.amount',
+      valueType: 'DECIMAL',
+      unit: 'mm',
+      required: true,
+      material: true
+    },
+    {
+      name: 'start_time',
+      semanticId: 'action.irrigation.start_time',
+      valueType: 'TIMESTAMP',
+      unit: 'iso8601',
+      required: true,
+      material: true
+    },
+    {
+      name: 'note',
+      semanticId: 'action.note',
+      valueType: 'STRING',
+      unit: '1',
+      required: false,
+      material: false
+    }
+  ];
+}
+
+export function policyActionSemantics(actionSpace = ['WAIT', 'IRRIGATE_NOW']) {
   return {
-    contractVersion: 'adr.policy.v1',
+    equivalenceMode: 'EXACT_MATERIAL_PARAMETERS',
+    actions: actionSpace.map((actionCode) => ({
+      actionCode,
+      parameters: actionCode.startsWith('IRRIGATE') ? irrigationParameters() : []
+    }))
+  };
+}
+
+export function policySpec(overrides = {}) {
+  const contractVersion = overrides.contractVersion ?? 'adr.policy.v2';
+  const actionSpace = overrides.actionSpace ?? ['WAIT', 'IRRIGATE_NOW'];
+  const actionSemantics = overrides.actionSemantics
+    ?? (contractVersion === 'adr.policy.v2' ? policyActionSemantics(actionSpace) : undefined);
+  return {
+    contractVersion,
     controlScope: controlScope(),
     decisionType: 'IRRIGATION_TIMING',
-    actionSpace: ['WAIT', 'IRRIGATE_NOW'],
+    actionSpace,
+    ...(actionSemantics ? { actionSemantics } : {}),
     requiredInputs: [port('operation.irrigation_capacity', ['CONFIGURATION'], 'mm_per_day')],
     requiredRuntimeOutputs: [port('soil.root_zone_water_storage', ['STATE_ESTIMATE'], 'mm')],
     decisionLogic: { methodId: 'irrigation-threshold-policy-v1', definitionHash: hash('c') },
