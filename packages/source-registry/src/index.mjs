@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { Transform } from 'node:stream';
 import { cloneCanonicalValue, deepFreeze } from '../../canonicalization/src/index.mjs';
 import { assertAuthorityRef } from '../../contracts/src/authority.mjs';
 
@@ -71,6 +72,37 @@ function normalizeBytes(value) {
   );
 }
 
+function normalizeAcquisition(acquisition) {
+  if (!acquisition || typeof acquisition !== 'object' || Array.isArray(acquisition)) {
+    throw new SourceRegistryError('INVALID_ACQUISITION', 'SourceArtifact acquisition metadata is required');
+  }
+  const acquiredAt = normalizeTimestamp(acquisition.acquiredAt, 'acquisition.acquiredAt');
+  const method = requiredText(acquisition.method, 'acquisition.method');
+  const locator = optionalText(acquisition.locator, 'acquisition.locator');
+  return deepFreeze({
+    method,
+    acquiredAt,
+    ...(locator ? { locator } : {}),
+    metadata: cloneCanonicalValue(acquisition.metadata ?? {})
+  });
+}
+
+function normalizeRetentionReceipt(receipt) {
+  if (!receipt || typeof receipt !== 'object' || Array.isArray(receipt)) {
+    throw new SourceRegistryError('INVALID_RETENTION_RECEIPT', 'retentionReceipt must be an object');
+  }
+  const byteLength = receipt.byteLength;
+  if (!Number.isSafeInteger(byteLength) || byteLength < 0) {
+    throw new SourceRegistryError('INVALID_RETENTION_RECEIPT', 'retentionReceipt.byteLength must be a non-negative safe integer');
+  }
+  return deepFreeze({
+    storeKind: requiredText(receipt.storeKind, 'retentionReceipt.storeKind'),
+    retentionId: requiredText(receipt.retentionId, 'retentionReceipt.retentionId'),
+    contentHash: requiredText(receipt.contentHash, 'retentionReceipt.contentHash'),
+    byteLength
+  });
+}
+
 export function sourceContentHash(bytes) {
   const normalized = normalizeBytes(bytes);
   return `sha256:${createHash('sha256').update(normalized).digest('hex')}`;
@@ -130,18 +162,80 @@ function hasScopedArtifactStoreContract(store) {
   return typeof store?.putForScope === 'function' && typeof store?.getForScope === 'function';
 }
 
+function hasScopedRetentionInspectionContract(store) {
+  return typeof store?.inspectForScope === 'function';
+}
+
+function hasScopedStreamReadContract(store) {
+  return typeof store?.createReadStreamForScope === 'function';
+}
+
 function putArtifactBytes(store, ownership, bytes) {
   if (hasScopedArtifactStoreContract(store)) {
     return store.putForScope(normalizeOwnership(ownership), bytes);
   }
-  return store.put(bytes);
+  if (hasLegacyArtifactStoreContract(store)) return store.put(bytes);
+  throw new SourceRegistryError(
+    'ARTIFACT_STORE_BYTE_PUT_UNSUPPORTED',
+    'configured artifact store does not support synchronous exact-byte materialization'
+  );
 }
 
 function getArtifactBytes(store, ownership, contentHash) {
   if (hasScopedArtifactStoreContract(store)) {
     return store.getForScope(normalizeOwnership(ownership), contentHash);
   }
-  return store.get(contentHash);
+  if (hasLegacyArtifactStoreContract(store)) return store.get(contentHash);
+  throw new SourceRegistryError(
+    'ARTIFACT_STORE_BYTE_READ_UNSUPPORTED',
+    'configured artifact store does not support bounded exact-byte reads; use readArtifactStream when available'
+  );
+}
+
+function inspectRetainedArtifact(store, ownership, receipt) {
+  if (!hasScopedRetentionInspectionContract(store)) {
+    throw new SourceRegistryError(
+      'ARTIFACT_STORE_RETENTION_INSPECTION_UNSUPPORTED',
+      'retained-artifact finalization requires scoped artifact-store inspection'
+    );
+  }
+  const inspected = normalizeRetentionReceipt(
+    store.inspectForScope(normalizeOwnership(ownership), receipt.contentHash)
+  );
+  for (const field of ['storeKind', 'retentionId', 'contentHash', 'byteLength']) {
+    if (inspected[field] !== receipt[field]) {
+      throw new SourceRegistryError(
+        'RETENTION_RECEIPT_MISMATCH',
+        `retentionReceipt.${field} does not match the exact retained object`
+      );
+    }
+  }
+  return inspected;
+}
+
+function artifactSemanticPayload({
+  source,
+  mediaType,
+  materializationIdentity,
+  retention,
+  acquisition,
+  rightsSnapshot,
+  metadata
+}) {
+  return {
+    sourceRef: source.ref,
+    mediaType: requiredText(mediaType, 'mediaType'),
+    materializationIdentity: requiredText(materializationIdentity, 'materializationIdentity'),
+    contentHash: retention.contentHash,
+    byteLength: retention.byteLength,
+    retention: {
+      storeKind: retention.storeKind,
+      retentionId: retention.retentionId
+    },
+    acquisition: normalizeAcquisition(acquisition),
+    ...(rightsSnapshot !== undefined ? { rightsSnapshot: cloneCanonicalValue(rightsSnapshot) } : {}),
+    metadata: cloneCanonicalValue(metadata ?? {})
+  };
 }
 
 export class SourceRegistry {
@@ -152,10 +246,12 @@ export class SourceRegistry {
     if (!ledger || typeof ledger.publish !== 'function' || typeof ledger.resolve !== 'function') {
       throw new SourceRegistryError('INVALID_LEDGER', 'SourceRegistry requires the shared AuthorityLedger contract');
     }
-    if (!artifactStore || (!hasLegacyArtifactStoreContract(artifactStore) && !hasScopedArtifactStoreContract(artifactStore))) {
+    if (!artifactStore || (!hasLegacyArtifactStoreContract(artifactStore)
+      && !hasScopedArtifactStoreContract(artifactStore)
+      && !hasScopedRetentionInspectionContract(artifactStore))) {
       throw new SourceRegistryError(
         'INVALID_ARTIFACT_STORE',
-        'SourceRegistry requires either legacy put/get or tenant-scoped putForScope/getForScope exact artifact storage'
+        'SourceRegistry requires exact artifact byte storage or scoped retained-object inspection'
       );
     }
     this.#ledger = ledger;
@@ -223,38 +319,63 @@ export class SourceRegistry {
   }) {
     const exactSource = sourceRecord(this.#ledger.resolve(assertAuthorityRef(sourceRef)));
     const exactBytes = normalizeBytes(bytes);
-    const retention = putArtifactBytes(this.#artifactStore, exactSource.semanticPayload.ownership, exactBytes);
-
-    if (!acquisition || typeof acquisition !== 'object' || Array.isArray(acquisition)) {
-      throw new SourceRegistryError('INVALID_ACQUISITION', 'SourceArtifact acquisition metadata is required');
-    }
-    const acquiredAt = normalizeTimestamp(acquisition.acquiredAt, 'acquisition.acquiredAt');
-    const method = requiredText(acquisition.method, 'acquisition.method');
-    const locator = optionalText(acquisition.locator, 'acquisition.locator');
+    const retention = normalizeRetentionReceipt(
+      putArtifactBytes(this.#artifactStore, exactSource.semanticPayload.ownership, exactBytes)
+    );
 
     return this.#ledger.publish({
       kind: 'SourceArtifact',
       logicalId: requiredText(logicalId, 'logicalId'),
       version: requiredText(version, 'version'),
-      semanticPayload: {
-        sourceRef: exactSource.ref,
-        mediaType: requiredText(mediaType, 'mediaType'),
-        materializationIdentity: requiredText(materializationIdentity, 'materializationIdentity'),
-        contentHash: retention.contentHash,
-        byteLength: retention.byteLength,
-        retention: {
-          storeKind: retention.storeKind,
-          retentionId: retention.retentionId
-        },
-        acquisition: {
-          method,
-          acquiredAt,
-          ...(locator ? { locator } : {}),
-          metadata: cloneCanonicalValue(acquisition.metadata ?? {})
-        },
-        ...(rightsSnapshot !== undefined ? { rightsSnapshot: cloneCanonicalValue(rightsSnapshot) } : {}),
-        metadata: cloneCanonicalValue(metadata)
-      },
+      semanticPayload: artifactSemanticPayload({
+        source: exactSource,
+        mediaType,
+        materializationIdentity,
+        retention,
+        acquisition,
+        rightsSnapshot,
+        metadata
+      }),
+      audit: {
+        ...audit,
+        inputRefs: [exactSource.ref, ...(audit?.inputRefs ?? [])]
+      }
+    });
+  }
+
+  materializeRetainedArtifact({
+    logicalId,
+    version,
+    sourceRef,
+    retentionReceipt,
+    mediaType,
+    materializationIdentity,
+    acquisition,
+    rightsSnapshot,
+    metadata = {},
+    audit
+  }) {
+    const exactSource = sourceRecord(this.#ledger.resolve(assertAuthorityRef(sourceRef)));
+    const receipt = normalizeRetentionReceipt(retentionReceipt);
+    const retention = inspectRetainedArtifact(
+      this.#artifactStore,
+      exactSource.semanticPayload.ownership,
+      receipt
+    );
+
+    return this.#ledger.publish({
+      kind: 'SourceArtifact',
+      logicalId: requiredText(logicalId, 'logicalId'),
+      version: requiredText(version, 'version'),
+      semanticPayload: artifactSemanticPayload({
+        source: exactSource,
+        mediaType,
+        materializationIdentity,
+        retention,
+        acquisition,
+        rightsSnapshot,
+        metadata
+      }),
       audit: {
         ...audit,
         inputRefs: [exactSource.ref, ...(audit?.inputRefs ?? [])]
@@ -286,6 +407,57 @@ export class SourceRegistry {
       throw new SourceRegistryError('ARTIFACT_BYTE_LENGTH_MISMATCH', 'retained bytes no longer match SourceArtifact byteLength');
     }
     return bytes;
+  }
+
+  readArtifactStream(ref) {
+    const artifact = this.resolveArtifact(ref);
+    const source = this.resolveSource(artifact.semanticPayload.sourceRef);
+    if (!hasScopedStreamReadContract(this.#artifactStore)) {
+      throw new SourceRegistryError(
+        'ARTIFACT_STREAM_READ_UNSUPPORTED',
+        'configured artifact store does not support scoped streaming reads'
+      );
+    }
+    const input = this.#artifactStore.createReadStreamForScope(
+      normalizeOwnership(source.semanticPayload.ownership),
+      artifact.semanticPayload.contentHash
+    );
+    if (!input || typeof input.pipe !== 'function') {
+      throw new SourceRegistryError('INVALID_ARTIFACT_STREAM', 'artifact store returned an invalid readable stream');
+    }
+
+    const expectedHash = artifact.semanticPayload.contentHash;
+    const expectedLength = artifact.semanticPayload.byteLength;
+    const hash = createHash('sha256');
+    let byteLength = 0;
+    const verifier = new Transform({
+      transform(chunk, encoding, callback) {
+        const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, encoding);
+        byteLength += bytes.byteLength;
+        hash.update(bytes);
+        callback(null, bytes);
+      },
+      flush(callback) {
+        const actualHash = `sha256:${hash.digest('hex')}`;
+        if (actualHash !== expectedHash) {
+          callback(new SourceRegistryError(
+            'ARTIFACT_CONTENT_HASH_MISMATCH',
+            'streamed retained bytes no longer match SourceArtifact contentHash'
+          ));
+          return;
+        }
+        if (byteLength !== expectedLength) {
+          callback(new SourceRegistryError(
+            'ARTIFACT_BYTE_LENGTH_MISMATCH',
+            'streamed retained bytes no longer match SourceArtifact byteLength'
+          ));
+          return;
+        }
+        callback();
+      }
+    });
+    input.on('error', (error) => verifier.destroy(error));
+    return input.pipe(verifier);
   }
 
   artifactStore() {
