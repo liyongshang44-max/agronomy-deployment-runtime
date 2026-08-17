@@ -7,6 +7,8 @@
     "node": ">=24 <25"
   },
   "scripts": {
+    "start": "node apps/pilot-api/src/server.mjs",
+    "start:pilot": "node apps/pilot-api/src/server.mjs",
     "build": "npm run check:constitution",
     "check:constitution": "node scripts/constitution/check.mjs",
     "test:constitution": "node acceptance/constitution/run.mjs",
