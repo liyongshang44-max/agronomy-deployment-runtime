@@ -32,6 +32,11 @@ export {
   DEPLOYMENT_CONTROL_ACTIONS,
   DEPLOYMENT_RESOURCE_TYPE
 } from './deployment-control.mjs';
+export {
+  authorizeOutcomeWrite,
+  outcomeWriteScope,
+  OUTCOME_RESOURCE_TYPE
+} from './outcome-write.mjs';
 
 // Principal identity is the stable actor identity and organizational tenancy assertion.
 // Program memberships are contextual claims and are deliberately not part of identity equality.
