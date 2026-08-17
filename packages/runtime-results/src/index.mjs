@@ -17,3 +17,4 @@ export {
   normalizeRuntimeResult
 } from './contract.mjs';
 export { collectRuntimeResult, validateRuntimeResult } from './collector.mjs';
+export { executePolicyWithRuntimeResults } from './policy-execution.mjs';
