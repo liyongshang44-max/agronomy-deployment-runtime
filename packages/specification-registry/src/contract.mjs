@@ -4,7 +4,8 @@ import { CONTEXT_VALUE_TYPES, EPISTEMIC_CLASSES } from '../../context-contract/s
 
 export const QUALIFIED_TRANSFORMATION_CONTRACT_VERSION = 'adr.qualified-transformation.v1';
 export const MODEL_CONTRACT_VERSION = 'adr.model.v1';
-export const POLICY_CONTRACT_VERSION = 'adr.policy.v1';
+export const POLICY_LEGACY_CONTRACT_VERSION = 'adr.policy.v1';
+export const POLICY_CONTRACT_VERSION = 'adr.policy.v2';
 
 export const SPECIFICATION_KINDS = deepFreeze(['QualifiedTransformation', 'Model', 'Policy']);
 export const SPECIFICATION_AUTHORITY_CLASSES = deepFreeze({
@@ -22,6 +23,7 @@ const UNCERTAINTY_MODES = new Set(['PRESERVE', 'WIDEN', 'TRANSFORM_WITH_DECLARED
 const HUMAN_GATE_MODES = new Set(['NONE', 'REQUIRED']);
 const FALLBACK_DISPOSITIONS = new Set(['WAIT', 'ABSTAIN', 'EXTERNAL_AUTHORITY']);
 const THRESHOLD_MODES = new Set(['SPEC_DEFINED', 'EXTERNAL_AUTHORITY']);
+const POLICY_ACTION_EQUIVALENCE_MODES = new Set(['EXACT_MATERIAL_PARAMETERS']);
 const HASH_RE = /^sha256:[a-f0-9]{64}$/;
 
 export class SpecificationError extends Error {
@@ -168,6 +170,72 @@ function refList(values, name, { allowEmpty = true } = {}) {
   return deepFreeze(keyed.map(([, ref]) => ref));
 }
 
+function policyActionParameter(value, name) {
+  exactObject(value, name, new Set(['name', 'semanticId', 'valueType', 'unit', 'required', 'material']));
+  const valueType = text(value.valueType, `${name}.valueType`);
+  if (!VALUE_TYPES.has(valueType)) {
+    throw new SpecificationError('INVALID_SPECIFICATION_VALUE_TYPE', `${name} contains unsupported value type ${valueType}`);
+  }
+  return deepFreeze({
+    name: text(value.name, `${name}.name`),
+    semanticId: text(value.semanticId, `${name}.semanticId`),
+    valueType,
+    unit: text(value.unit, `${name}.unit`),
+    required: bool(value.required, `${name}.required`),
+    material: bool(value.material, `${name}.material`)
+  });
+}
+
+function policyActionSemantics(value, actionSpace) {
+  exactObject(value, 'actionSemantics', new Set(['equivalenceMode', 'actions']));
+  const equivalenceMode = text(value.equivalenceMode, 'actionSemantics.equivalenceMode');
+  if (!POLICY_ACTION_EQUIVALENCE_MODES.has(equivalenceMode)) {
+    throw new SpecificationError(
+      'INVALID_POLICY_ACTION_EQUIVALENCE',
+      `unsupported Policy action equivalence mode ${equivalenceMode}`
+    );
+  }
+  if (!Array.isArray(value.actions) || value.actions.length === 0) {
+    throw new SpecificationError('INVALID_POLICY_ACTION_SEMANTICS', 'actionSemantics.actions must be a non-empty array');
+  }
+  const actions = value.actions.map((action, index) => {
+    const name = `actionSemantics.actions[${index}]`;
+    exactObject(action, name, new Set(['actionCode', 'parameters']));
+    if (!Array.isArray(action.parameters)) {
+      throw new SpecificationError('INVALID_POLICY_ACTION_SEMANTICS', `${name}.parameters must be an array`);
+    }
+    const parameters = action.parameters.map((parameter, parameterIndex) =>
+      policyActionParameter(parameter, `${name}.parameters[${parameterIndex}]`));
+    const parameterNames = parameters.map((parameter) => parameter.name);
+    const semanticIds = parameters.map((parameter) => parameter.semanticId);
+    if (new Set(parameterNames).size !== parameterNames.length) {
+      throw new SpecificationError('DUPLICATE_POLICY_ACTION_PARAMETER', `${name} cannot repeat parameter name`);
+    }
+    if (new Set(semanticIds).size !== semanticIds.length) {
+      throw new SpecificationError('DUPLICATE_POLICY_ACTION_PARAMETER_SEMANTIC', `${name} cannot repeat parameter semanticId`);
+    }
+    return deepFreeze({
+      actionCode: text(action.actionCode, `${name}.actionCode`),
+      parameters: deepFreeze([...parameters].sort((a, b) => a.name.localeCompare(b.name)))
+    });
+  });
+  const actionCodes = actions.map((action) => action.actionCode);
+  if (new Set(actionCodes).size !== actionCodes.length) {
+    throw new SpecificationError('DUPLICATE_POLICY_ACTION_SEMANTIC', 'actionSemantics cannot repeat actionCode');
+  }
+  const sortedActionCodes = [...actionCodes].sort();
+  if (JSON.stringify(sortedActionCodes) !== JSON.stringify(actionSpace)) {
+    throw new SpecificationError(
+      'POLICY_ACTION_SEMANTICS_COVERAGE_MISMATCH',
+      'Policy actionSemantics must define exactly one semantic contract for every actionSpace code and no others'
+    );
+  }
+  return deepFreeze({
+    equivalenceMode,
+    actions: deepFreeze([...actions].sort((a, b) => a.actionCode.localeCompare(b.actionCode)))
+  });
+}
+
 export function normalizeQualifiedTransformation(value) {
   exactObject(value, 'QualifiedTransformation', new Set([
     'contractVersion', 'authorityClass', 'controlScope', 'inputContract', 'outputContract',
@@ -249,15 +317,34 @@ export function normalizeModel(value) {
 export function normalizePolicy(value) {
   exactObject(value, 'Policy', new Set([
     'contractVersion', 'authorityClass', 'controlScope', 'decisionType', 'actionSpace',
-    'requiredInputs', 'requiredRuntimeOutputs', 'decisionLogic', 'thresholdAuthority',
+    'actionSemantics', 'requiredInputs', 'requiredRuntimeOutputs', 'decisionLogic', 'thresholdAuthority',
     'operationalConstraints', 'jurisdictionConstraints', 'humanGate', 'fallback',
     'abstentionConditions', 'limitations'
   ]));
-  if (text(value.contractVersion, 'contractVersion') !== POLICY_CONTRACT_VERSION) {
+  const contractVersion = text(value.contractVersion, 'contractVersion');
+  if (contractVersion !== POLICY_CONTRACT_VERSION && contractVersion !== POLICY_LEGACY_CONTRACT_VERSION) {
     throw new SpecificationError('UNSUPPORTED_SPECIFICATION_CONTRACT', 'unsupported Policy contractVersion');
   }
   if (value.authorityClass !== undefined && value.authorityClass !== SPECIFICATION_AUTHORITY_CLASSES.Policy) {
     throw new SpecificationError('INVALID_SPECIFICATION_AUTHORITY_CLASS', 'invalid Policy authorityClass');
+  }
+  const actionSpace = list(value.actionSpace, 'actionSpace', { allowEmpty: false });
+  let actionSemantics;
+  if (contractVersion === POLICY_LEGACY_CONTRACT_VERSION) {
+    if (value.actionSemantics !== undefined) {
+      throw new SpecificationError(
+        'POLICY_V1_ACTION_SEMANTICS_FORBIDDEN',
+        'adr.policy.v1 historical semantics do not include governed action equivalence; publish adr.policy.v2 instead'
+      );
+    }
+  } else {
+    if (value.actionSemantics === undefined) {
+      throw new SpecificationError(
+        'POLICY_ACTION_SEMANTICS_REQUIRED',
+        'adr.policy.v2 requires governed action semantics and material-equivalence authority'
+      );
+    }
+    actionSemantics = policyActionSemantics(value.actionSemantics, actionSpace);
   }
   exactObject(value.thresholdAuthority, 'thresholdAuthority', new Set(['mode', 'authorityRefs']));
   const thresholdMode = text(value.thresholdAuthority.mode, 'thresholdAuthority.mode');
@@ -273,11 +360,12 @@ export function normalizePolicy(value) {
   const fallbackDisposition = text(value.fallback.disposition, 'fallback.disposition');
   if (!FALLBACK_DISPOSITIONS.has(fallbackDisposition)) throw new SpecificationError('INVALID_POLICY_FALLBACK', `unsupported fallback ${fallbackDisposition}`);
   return deepFreeze({
-    contractVersion: POLICY_CONTRACT_VERSION,
+    contractVersion,
     authorityClass: SPECIFICATION_AUTHORITY_CLASSES.Policy,
     controlScope: controlScope(value.controlScope),
     decisionType: text(value.decisionType, 'decisionType'),
-    actionSpace: list(value.actionSpace, 'actionSpace', { allowEmpty: false }),
+    actionSpace,
+    ...(actionSemantics ? { actionSemantics } : {}),
     requiredInputs: portList(value.requiredInputs ?? [], 'requiredInputs', { allowEmpty: true }),
     requiredRuntimeOutputs: portList(value.requiredRuntimeOutputs, 'requiredRuntimeOutputs'),
     decisionLogic: method(value.decisionLogic, 'decisionLogic'),
