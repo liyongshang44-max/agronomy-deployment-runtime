@@ -1,10 +1,13 @@
 import { createHash, randomUUID } from 'node:crypto';
 import {
+  closeSync,
   createReadStream,
   createWriteStream,
   existsSync,
   mkdirSync,
+  openSync,
   readFileSync,
+  readSync,
   statSync,
   writeFileSync
 } from 'node:fs';
@@ -30,6 +33,7 @@ export const SOURCE_UPLOAD_STATES = deepFreeze([
 const STATE_SET = new Set(SOURCE_UPLOAD_STATES);
 const PDF_MAGIC = Buffer.from('%PDF-', 'ascii');
 const CONTENT_HASH_RE = /^sha256:[0-9a-f]{64}$/;
+const VERIFY_BUFFER_BYTES = 1024 * 1024;
 
 export class SourceIngestionError extends Error {
   constructor(code, message) {
@@ -84,6 +88,24 @@ function retentionReceipt(scopeInput, contentHashInput, byteLength) {
     contentHash,
     byteLength
   });
+}
+
+function hashFileSync(path) {
+  const fd = openSync(path, 'r');
+  const hash = createHash('sha256');
+  const buffer = Buffer.allocUnsafe(VERIFY_BUFFER_BYTES);
+  let byteLength = 0;
+  try {
+    while (true) {
+      const bytesRead = readSync(fd, buffer, 0, buffer.byteLength, null);
+      if (bytesRead === 0) break;
+      hash.update(buffer.subarray(0, bytesRead));
+      byteLength += bytesRead;
+    }
+  } finally {
+    closeSync(fd);
+  }
+  return { contentHash: `sha256:${hash.digest('hex')}`, byteLength };
 }
 
 async function safeUnlinkAsync(path) {
@@ -159,11 +181,11 @@ export class FileSystemScopedArtifactStore {
     const objectPath = this.#objectPath(scope, contentHash);
     mkdirSync(join(this.#scopeDir(scope), 'objects'), { recursive: true });
     if (!existsSync(objectPath)) writeFileSync(objectPath, bytes, { flag: 'wx' });
-    const actualLength = statSync(objectPath).size;
-    if (actualLength !== bytes.byteLength) {
+    const inspected = this.inspectForScope(scope, contentHash);
+    if (inspected.byteLength !== bytes.byteLength) {
       throw new SourceIngestionError('RETAINED_OBJECT_LENGTH_MISMATCH', 'retained object length differs from exact input bytes');
     }
-    return retentionReceipt(scope, contentHash, actualLength);
+    return inspected;
   }
 
   getForScope(scopeInput, contentHashInput) {
@@ -189,7 +211,20 @@ export class FileSystemScopedArtifactStore {
     if (!info.isFile()) {
       throw new SourceIngestionError('INVALID_RETAINED_OBJECT', 'retained artifact path is not a file');
     }
-    return retentionReceipt(scope, contentHash, info.size);
+    const verified = hashFileSync(objectPath);
+    if (verified.contentHash !== contentHash) {
+      throw new SourceIngestionError(
+        'RETAINED_OBJECT_HASH_MISMATCH',
+        'scoped retained object bytes do not match requested content hash'
+      );
+    }
+    if (verified.byteLength !== info.size) {
+      throw new SourceIngestionError(
+        'RETAINED_OBJECT_LENGTH_MISMATCH',
+        'scoped retained object changed during integrity inspection'
+      );
+    }
+    return retentionReceipt(scope, verified.contentHash, verified.byteLength);
   }
 
   createReadStreamForScope(scopeInput, contentHashInput) {
@@ -249,6 +284,8 @@ export class FileSystemScopedArtifactStore {
         if (error?.code === 'EEXIST' || error?.code === 'EPERM') {
           const existing = await stat(objectPath).catch(() => null);
           if (!existing?.isFile() || existing.size !== byteLength) throw error;
+          const inspected = this.inspectForScope(scope, contentHash);
+          if (inspected.byteLength !== byteLength) throw error;
           await safeUnlinkAsync(stagingPath);
         } else {
           throw error;
