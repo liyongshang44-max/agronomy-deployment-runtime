@@ -7,6 +7,11 @@ import {
   OpenAIExtractionError,
   extractCompilationProposalWithOpenAI
 } from '../../apps/pilot-api/src/extraction/openai.mjs';
+import { AuthorityLedger } from '../../packages/provenance/src/index.mjs';
+import {
+  ScientificCompiler,
+  createDeterministicCompilerDefinition
+} from '../../packages/scientific-compiler/src/index.mjs';
 
 function jsonResponse(status, payload) {
   return new Response(JSON.stringify(payload), {
@@ -129,6 +134,59 @@ function chunkedPdf(byteLength, chunkBytes = 512 * 1024) {
   return Readable.from(chunks());
 }
 
+function documentCoordinateProposal() {
+  const notReported = { status: 'NOT_REPORTED', dimensions: [] };
+  return {
+    claims: [{
+      key: 'claim-1',
+      claimType: 'OPERATIONAL_RECOMMENDATION',
+      assertion: 'Irrigation may be considered when root-zone depletion exceeds 45%.',
+      confidence: 0.91,
+      sourceLocator: {
+        kind: 'DOCUMENT_COORDINATE',
+        scheme: 'PDF_PAGE_TEXT_V1',
+        coordinates: { page: 7, evidenceText: 'root-zone depletion exceeds 45%' }
+      },
+      sourceContext: {
+        BIOLOGICAL: {
+          status: 'REPORTED',
+          dimensions: [{
+            semanticHint: 'crop',
+            valueCandidate: 'maize',
+            supportClass: 'EXPLICIT_SOURCE',
+            confidence: 0.99,
+            sourceLocator: {
+              kind: 'DOCUMENT_COORDINATE',
+              scheme: 'PDF_PAGE_TEXT_V1',
+              coordinates: { page: 2, evidenceText: 'maize' }
+            }
+          }]
+        },
+        ENVIRONMENTAL: notReported,
+        MANAGEMENT: notReported,
+        OPERATIONAL: notReported,
+        MEASUREMENT: notReported,
+        JURISDICTION_ECONOMIC: notReported
+      }
+    }],
+    runMetadata: {
+      provider: ADR_EXTRACTION_PROVIDER,
+      model: 'test-model',
+      promptVersion: ADR_EXTRACTION_PROMPT_VERSION,
+      schemaVersion: ADR_EXTRACTION_SCHEMA_VERSION
+    }
+  };
+}
+
+function audit(eventId) {
+  return {
+    eventId,
+    occurredAt: '2026-08-18T01:00:00.000Z',
+    actor: { type: 'SERVICE', id: 'source-extraction-acceptance' },
+    details: { channel: 'source-extraction-acceptance' }
+  };
+}
+
 async function expectAsyncError(fn, ErrorType, code) {
   let caught;
   try { await fn(); } catch (error) { caught = error; }
@@ -201,6 +259,60 @@ test('provider fails closed when retained SourceArtifact byteLength disagrees wi
     'SOURCE_STREAM_LENGTH_MISMATCH'
   );
   assert.deepEqual(fake.state.cancelledUploads, ['upload-test']);
+});
+
+test('ScientificCompiler materializes DOCUMENT_COORDINATE proposals without loading whole retained PDF bytes', () => {
+  const ledger = new AuthorityLedger();
+  const source = ledger.publish({
+    kind: 'Source',
+    logicalId: 'source.large-paper',
+    version: '1',
+    semanticPayload: { title: 'Large paper' },
+    audit: audit('evt-large-source')
+  });
+  const artifact = ledger.publish({
+    kind: 'SourceArtifact',
+    logicalId: 'artifact.large-paper',
+    version: '1',
+    semanticPayload: {
+      sourceRef: source.ref,
+      contentHash: `sha256:${'a'.repeat(64)}`,
+      byteLength: 750 * 1024 * 1024,
+      mediaType: 'application/pdf'
+    },
+    audit: { ...audit('evt-large-artifact'), inputRefs: [source.ref] }
+  });
+  let wholeReads = 0;
+  const sourceRegistry = {
+    resolveArtifact(ref) { return ledger.resolve(ref); },
+    readArtifactBytes() {
+      wholeReads += 1;
+      throw new Error('WHOLE_PDF_READ_FORBIDDEN_IN_DOCUMENT_COORDINATE_PATH');
+    }
+  };
+  const definition = createDeterministicCompilerDefinition({
+    ledger,
+    logicalId: 'compiler.openai-paper-extraction',
+    version: '1',
+    compilerId: 'openai-paper-extraction',
+    implementationVersion: 'v1',
+    configuration: { model: 'test-model' },
+    audit: audit('evt-compiler-definition')
+  });
+  const compiler = new ScientificCompiler({ ledger, sourceRegistry });
+  const result = compiler.materializeCompilationProposal({
+    compilationLogicalId: 'compilation.large-paper',
+    version: '1',
+    sourceArtifactRef: artifact.ref,
+    compilerDefinitionRef: definition.ref,
+    proposal: documentCoordinateProposal(),
+    audit: audit('evt-compilation')
+  });
+
+  assert.equal(wholeReads, 0);
+  assert.equal(result.claimCandidates.length, 1);
+  assert.equal(result.claimCandidates[0].semanticPayload.sourceLocator.kind, 'DOCUMENT_COORDINATE');
+  assert.equal(result.result.semanticPayload.sourceArtifactContentHash, artifact.semanticPayload.contentHash);
 });
 
 let passed = 0;
