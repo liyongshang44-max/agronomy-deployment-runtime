@@ -26,6 +26,7 @@ import {
 } from './extraction/openai.mjs';
 import { ManualExternalProposalImportService } from './extraction/manual-import.mjs';
 import { PilotReviewAdapter } from './review/pilot-review.mjs';
+import { listRecoverableCompilations } from './recovery/compilation-recovery.mjs';
 import {
   PilotCheckpointError,
   loadPilotCheckpoint,
@@ -126,6 +127,12 @@ function uploadPath(pathname) {
   return { uploadId: decodeURIComponent(match[1]), action: match[2] ?? null };
 }
 
+function recoveryPath(pathname) {
+  const match = pathname.match(/^\/operator\/source-uploads\/([^/]+)\/compilations$/);
+  if (!match) return null;
+  return { uploadId: decodeURIComponent(match[1]) };
+}
+
 function extractionConfigured() { return Boolean(OPENAI_API_KEY && EXTRACTION_MODEL); }
 
 function extractionCompilerDefinition() {
@@ -216,6 +223,15 @@ const server = createServer(async (req, res) => {
         const created = ingestion.createUpload(await readJson(req));
         checkpointRuntime();
         return json(res, 201, created);
+      }
+
+      const recovery = recoveryPath(url.pathname);
+      if (recovery && req.method === 'GET') {
+        const upload = ingestion.getUpload(recovery.uploadId);
+        if (upload.state !== 'SOURCE_MATERIALIZED' || !upload.sourceArtifactRef) {
+          return json(res, 409, { error: 'SOURCE_UPLOAD_STATE_INVALID', message: `compilation recovery requires SOURCE_MATERIALIZED, received ${upload.state}` });
+        }
+        return json(res, 200, listRecoverableCompilations({ ledger, sourceArtifactRef: upload.sourceArtifactRef }));
       }
 
       const parsed = uploadPath(url.pathname);
