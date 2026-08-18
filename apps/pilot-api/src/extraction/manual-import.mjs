@@ -51,10 +51,12 @@ function invalidSummary(index, claim, error) {
   };
 }
 
-function makeDefinition({ ledger, providerLabel, modelLabel, audit }) {
+function makeDefinition({ ledger, providerLabel, modelLabel, promptVersion, audit }) {
   const identity = {
     providerLabel,
     modelLabel,
+    promptVersion,
+    promptVersionAuthority: 'PROPOSAL_DECLARED_NOT_VERIFIED',
     modelIdentityAuthority: 'OPERATOR_DECLARED_NOT_VERIFIED',
     transport: 'USER_COPY_PASTE',
     schemaVersion: MANUAL_EXTERNAL_IMPORT_SCHEMA_VERSION
@@ -76,7 +78,7 @@ function makeDefinition({ ledger, providerLabel, modelLabel, audit }) {
   });
 }
 
-function dryRunClaim({ ledger, artifactStore, sourceArtifactRef, claim, providerLabel, modelLabel, index, audit }) {
+function dryRunClaim({ ledger, artifactStore, sourceArtifactRef, claim, providerLabel, modelLabel, promptVersion, index, audit }) {
   const clonedLedger = AuthorityLedger.fromSnapshot(ledger.exportSnapshot());
   const clonedRegistry = new SourceRegistry({ ledger: clonedLedger, artifactStore });
   const clonedCompiler = new ScientificCompiler({ ledger: clonedLedger, sourceRegistry: clonedRegistry });
@@ -84,6 +86,7 @@ function dryRunClaim({ ledger, artifactStore, sourceArtifactRef, claim, provider
     ledger: clonedLedger,
     providerLabel,
     modelLabel,
+    promptVersion,
     audit: {
       ...audit,
       eventId: `${audit.eventId}:preflight-definition:${index}`
@@ -94,7 +97,7 @@ function dryRunClaim({ ledger, artifactStore, sourceArtifactRef, claim, provider
     version: '1',
     sourceArtifactRef,
     compilerDefinitionRef: definition.ref,
-    proposal: { claims: [claim], runMetadata: { preflightOnly: true } },
+    proposal: { claims: [claim], runMetadata: { preflightOnly: true, promptVersion } },
     audit: {
       ...audit,
       eventId: `${audit.eventId}:preflight:${index}`
@@ -137,6 +140,7 @@ export class ManualExternalProposalImportService {
     }
     const provider = safeLabel(providerLabel, 'EXTERNAL_WEB');
     const model = safeLabel(modelLabel, 'UNKNOWN_MODEL');
+    const promptVersion = safeLabel(proposal.promptVersion, 'NOT_REPORTED');
     const duplicates = duplicateKeys(proposal.claims);
     const reviewable = [];
     const invalid = [];
@@ -155,6 +159,7 @@ export class ManualExternalProposalImportService {
           claim,
           providerLabel: provider,
           modelLabel: model,
+          promptVersion,
           index,
           audit
         });
@@ -170,7 +175,8 @@ export class ManualExternalProposalImportService {
       reviewable: reviewable.length,
       invalid: invalid.length,
       invalidCandidates: invalid,
-      importPayloadHash: payloadHash
+      importPayloadHash: payloadHash,
+      promptVersion
     };
 
     if (reviewable.length === 0) {
@@ -186,6 +192,7 @@ export class ManualExternalProposalImportService {
       ledger: this.#ledger,
       providerLabel: provider,
       modelLabel: model,
+      promptVersion,
       audit: {
         ...audit,
         eventId: `${audit.eventId}:definition`
@@ -202,6 +209,8 @@ export class ManualExternalProposalImportService {
           provider: MANUAL_EXTERNAL_IMPORT_PROVIDER,
           providerLabel: provider,
           modelLabel: model,
+          promptVersion,
+          promptVersionAuthority: 'PROPOSAL_DECLARED_NOT_VERIFIED',
           modelIdentityAuthority: 'OPERATOR_DECLARED_NOT_VERIFIED',
           transport: 'USER_COPY_PASTE',
           schemaVersion: MANUAL_EXTERNAL_IMPORT_SCHEMA_VERSION,
