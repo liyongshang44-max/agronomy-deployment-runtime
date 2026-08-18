@@ -31,8 +31,11 @@ jobs:
       - name: Constitutional static checks
         run: npm run build
 
-      - name: RA02 pilot host boundary acceptance
-        run: node acceptance/rights-enforcement/host-boundary.mjs && node acceptance/rights-enforcement/host-egress-deny.mjs
+      - name: RA02 host static boundary
+        run: node acceptance/rights-enforcement/host-boundary.mjs
+
+      - name: RA02 host egress deny before network
+        run: node acceptance/rights-enforcement/host-egress-deny.mjs
 
       - name: Constitutional acceptance
         run: npm test
