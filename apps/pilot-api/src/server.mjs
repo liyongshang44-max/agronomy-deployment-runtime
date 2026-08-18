@@ -10,7 +10,19 @@ import {
   PilotSourceIngestionService,
   SourceIngestionError
 } from '../../../packages/source-ingestion/src/index.mjs';
+import {
+  ScientificCompiler,
+  ScientificCompilerError,
+  createDeterministicCompilerDefinition
+} from '../../../packages/scientific-compiler/src/index.mjs';
 import { materializePilotOpenApi } from '../../../packages/public-api/src/index.mjs';
+import {
+  ADR_EXTRACTION_PROMPT_VERSION,
+  ADR_EXTRACTION_PROVIDER,
+  ADR_EXTRACTION_SCHEMA_VERSION,
+  OpenAIExtractionError,
+  extractCompilationProposalWithOpenAI
+} from './extraction/openai.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const WEB_ROOT = resolve(HERE, '../../pilot-web');
@@ -21,6 +33,8 @@ const PORT = Number(process.env.ADR_PORT ?? 8787);
 const OPERATOR_TOKEN = process.env.ADR_OPERATOR_TOKEN ?? '';
 const OPERATOR_ID = process.env.ADR_OPERATOR_ID ?? 'local-pilot-operator';
 const MAX_UPLOAD_BYTES = Number(process.env.ADR_MAX_SOURCE_UPLOAD_BYTES ?? DEFAULT_MAX_SOURCE_UPLOAD_BYTES);
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY ?? '';
+const EXTRACTION_MODEL = process.env.ADR_EXTRACTION_MODEL ?? '';
 const MAX_JSON_BYTES = 1024 * 1024;
 
 if (!Number.isSafeInteger(PORT) || PORT <= 0 || PORT > 65535) throw new Error('ADR_PORT must be a valid TCP port');
@@ -40,6 +54,8 @@ const ingestion = new PilotSourceIngestionService({
   artifactStore,
   maxUploadBytes: MAX_UPLOAD_BYTES
 });
+const compiler = new ScientificCompiler({ ledger, sourceRegistry });
+let compilerDefinition = null;
 
 function json(res, status, payload) {
   const body = Buffer.from(JSON.stringify(payload, null, 2));
@@ -89,19 +105,51 @@ async function readJson(req) {
   }
 }
 
-function audit(eventId) {
+function audit(eventId, { actorType = 'USER', channel = 'pilot-api-source-ingestion' } = {}) {
   return {
     eventId,
     occurredAt: new Date().toISOString(),
-    actor: { type: 'USER', id: OPERATOR_ID },
-    details: { channel: 'pilot-api-source-ingestion' }
+    actor: { type: actorType, id: OPERATOR_ID },
+    details: { channel }
   };
 }
 
 function uploadPath(pathname) {
-  const match = pathname.match(/^\/operator\/source-uploads\/([^/]+)(?:\/(content|finalize))?$/);
+  const match = pathname.match(/^\/operator\/source-uploads\/([^/]+)(?:\/(content|finalize|extract))?$/);
   if (!match) return null;
   return { uploadId: decodeURIComponent(match[1]), action: match[2] ?? null };
+}
+
+function extractionConfigured() {
+  return Boolean(OPENAI_API_KEY && EXTRACTION_MODEL);
+}
+
+function extractionCompilerDefinition() {
+  if (!extractionConfigured()) {
+    throw new OpenAIExtractionError('EXTRACTION_PROVIDER_NOT_CONFIGURED', 'OPENAI_API_KEY and ADR_EXTRACTION_MODEL are required');
+  }
+  if (compilerDefinition) return compilerDefinition;
+  compilerDefinition = createDeterministicCompilerDefinition({
+    ledger,
+    logicalId: 'compiler.openai-paper-extraction',
+    version: '1',
+    compilerId: 'openai-paper-extraction',
+    implementationVersion: 'pilot-v1',
+    extractionContractVersion: ADR_EXTRACTION_SCHEMA_VERSION,
+    locatorContractVersion: 'PDF_PAGE_TEXT_V1',
+    configuration: {
+      provider: ADR_EXTRACTION_PROVIDER,
+      model: EXTRACTION_MODEL,
+      promptVersion: ADR_EXTRACTION_PROMPT_VERSION,
+      schemaVersion: ADR_EXTRACTION_SCHEMA_VERSION,
+      outputAuthority: 'PROPOSAL_ONLY'
+    },
+    audit: audit('evt-compiler-definition:openai-paper-extraction:v1', {
+      actorType: 'SERVICE',
+      channel: 'pilot-api-source-extraction'
+    })
+  });
+  return compilerDefinition;
 }
 
 function errorStatus(error) {
@@ -111,6 +159,11 @@ function errorStatus(error) {
     if (error.code === 'SOURCE_UPLOAD_STATE_INVALID') return 409;
     return 400;
   }
+  if (error instanceof OpenAIExtractionError) {
+    if (error.code === 'EXTRACTION_PROVIDER_NOT_CONFIGURED') return 503;
+    return 502;
+  }
+  if (error instanceof ScientificCompilerError) return 409;
   if (typeof error?.code === 'string' && error.code.includes('AUTHORITY')) return 409;
   return 500;
 }
@@ -139,7 +192,14 @@ const server = createServer(async (req, res) => {
         service: 'adr-pilot-api',
         authorityPersistence: 'IN_MEMORY_NOT_RESTART_DURABLE',
         artifactPersistence: 'FILESYSTEM_SCOPED_CONTENT_ADDRESSABLE',
-        maxSourceUploadBytes: MAX_UPLOAD_BYTES
+        maxSourceUploadBytes: MAX_UPLOAD_BYTES,
+        extraction: {
+          configured: extractionConfigured(),
+          provider: ADR_EXTRACTION_PROVIDER,
+          model: EXTRACTION_MODEL || null,
+          externalProcessingAuthorizationRequired: true,
+          proposalAuthority: 'PROPOSAL_ONLY'
+        }
       });
       return;
     }
@@ -195,6 +255,72 @@ const server = createServer(async (req, res) => {
         });
         return;
       }
+      if (parsed && req.method === 'POST' && parsed.action === 'extract') {
+        if (!extractionConfigured()) {
+          json(res, 503, { error: 'EXTRACTION_PROVIDER_NOT_CONFIGURED', required: ['OPENAI_API_KEY', 'ADR_EXTRACTION_MODEL'] });
+          return;
+        }
+        const body = await readJson(req);
+        if (body.externalProcessingAuthorized !== true) {
+          json(res, 409, {
+            error: 'EXTERNAL_MODEL_PROCESSING_AUTHORIZATION_REQUIRED',
+            message: 'set externalProcessingAuthorized=true only when this SourceArtifact may be sent to the configured external model provider'
+          });
+          return;
+        }
+        const upload = ingestion.getUpload(parsed.uploadId);
+        if (upload.state !== 'SOURCE_MATERIALIZED' || !upload.sourceArtifactRef) {
+          json(res, 409, { error: 'SOURCE_UPLOAD_STATE_INVALID', message: `extract requires SOURCE_MATERIALIZED, received ${upload.state}` });
+          return;
+        }
+        const artifact = sourceRegistry.resolveArtifact(upload.sourceArtifactRef);
+        const providerResult = await extractCompilationProposalWithOpenAI({
+          readable: sourceRegistry.readArtifactStream(artifact.ref),
+          byteLength: artifact.semanticPayload.byteLength,
+          filename: upload.filename,
+          model: EXTRACTION_MODEL,
+          apiKey: OPENAI_API_KEY
+        });
+        const definition = extractionCompilerDefinition();
+        const compilationVersion = typeof body.compilationVersion === 'string' && body.compilationVersion.trim()
+          ? body.compilationVersion.trim()
+          : `run-${new Date().toISOString()}`;
+        const compilationLogicalId = typeof body.compilationLogicalId === 'string' && body.compilationLogicalId.trim()
+          ? body.compilationLogicalId.trim()
+          : `compilation.${artifact.ref.logicalId}`;
+        const compiled = compiler.materializeCompilationProposal({
+          compilationLogicalId,
+          version: compilationVersion,
+          sourceArtifactRef: artifact.ref,
+          compilerDefinitionRef: definition.ref,
+          proposal: providerResult.proposal,
+          audit: audit(`evt-compilation:${parsed.uploadId}:${compilationVersion}`, {
+            actorType: 'SERVICE',
+            channel: 'pilot-api-source-extraction'
+          })
+        });
+        json(res, 201, {
+          compilationResultRef: compiled.result.ref,
+          candidateCount: compiled.claimCandidates.length,
+          claimCandidates: compiled.claimCandidates.map((record) => ({
+            ref: record.ref,
+            claimType: record.semanticPayload.claimType,
+            assertion: record.semanticPayload.assertion,
+            sourceLocator: record.semanticPayload.sourceLocator,
+            extractionConfidence: record.semanticPayload.extractionConfidence ?? null
+          })),
+          sourceContextCandidateRefs: compiled.sourceContextCandidates.map((record) => record.ref),
+          providerTrace: {
+            provider: providerResult.providerTrace.provider,
+            model: providerResult.providerTrace.model,
+            responseId: providerResult.providerTrace.responseId,
+            uploadedBytes: providerResult.providerTrace.uploadedBytes,
+            fileDeletedAfterExtraction: providerResult.providerTrace.fileDeletedAfterExtraction
+          },
+          authorityClaim: 'PROPOSAL_ONLY'
+        });
+        return;
+      }
     }
 
     json(res, 404, { error: 'NOT_FOUND' });
@@ -211,5 +337,6 @@ server.listen(PORT, HOST, () => {
   console.log(`ADR pilot API listening on http://${HOST}:${PORT}`);
   console.log(`Artifact directory: ${ARTIFACT_DIR}`);
   console.log(`Max source upload bytes: ${MAX_UPLOAD_BYTES}`);
+  console.log(`Extraction provider: ${extractionConfigured() ? `${ADR_EXTRACTION_PROVIDER}/${EXTRACTION_MODEL}` : 'NOT_CONFIGURED'}`);
   console.log('Authority persistence: IN_MEMORY_NOT_RESTART_DURABLE');
 });
