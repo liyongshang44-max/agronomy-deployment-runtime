@@ -99,15 +99,15 @@ When a context family is REPORTED, use dimensions like:
   "dimensions": [
     {
       "semanticHint": "crop.identity",
-      "valueCandidate": "cotton",
+      "valueCandidate": "maize",
       "supportClass": "EXPLICIT_SOURCE",
-      "confidence": 0.95,
+      "confidence": 0.90,
       "sourceLocator": {
         "kind": "DOCUMENT_COORDINATE",
         "scheme": "PDF_PAGE_TEXT_V1",
         "coordinates": {
           "page": 4,
-          "evidenceText": "short exact phrase from source"
+          "evidenceText": "maize plots"
         }
       }
     }
@@ -116,16 +116,16 @@ When a context family is REPORTED, use dimensions like:
 
 ATOMIZATION EXAMPLES
 
-BAD: one claim says "The dataset had 171 fields and yield ranged from 1,250 to 6,960 kg/ha" while its evidenceText only says "The dataset consists of 171 fields".
-GOOD: emit the field-count claim and yield-range claim separately, each with evidenceText that directly supports its complete assertion.
+BAD: one claim says "The trial included 84 plots and mean root depth was 42 cm" while its evidenceText only says "The trial included 84 plots".
+GOOD: emit the plot-count claim and root-depth claim separately, each with evidenceText that directly supports its complete assertion.
 
-BAD: one claim reports Placebo, RCC, RSR, and UCC outcomes while evidenceText contains only the Placebo result.
-GOOD: split outcomes into independently evidenced claims unless one contiguous source excerpt explicitly states all outcomes used in the combined assertion.
+BAD: one claim reports accuracy, RMSE, and calibration slope while evidenceText contains only the accuracy result.
+GOOD: split the metrics into independently evidenced claims unless one contiguous source excerpt explicitly states every metric used in the combined assertion.
 
-BAD: assert treated={3} and control={0,1,2} while evidenceText contains only the treated branch.
+BAD: assert treatment=A and control=B while evidenceText contains only the treatment branch.
 GOOD: cite one excerpt containing both branches or emit separately valid branch definitions.
 
-BAD: turn a source window "from sowing day to 5 days after" into "for at least 5 days".
+BAD: turn a source window "from day 0 through day 3" into "for at least 3 days".
 GOOD: preserve the fixed window exactly, or omit the claim if its material temporal qualifier cannot be bound under the single-locator contract.
 
 FINAL SILENT CHECK BEFORE OUTPUT
