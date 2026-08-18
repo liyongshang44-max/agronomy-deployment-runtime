@@ -110,7 +110,7 @@ assert.equal(imported.compilation.semanticPayload.runMetadata.promptVersionAutho
 assert.equal(imported.compilation.semanticPayload.runMetadata.originalCandidateCount, 2);
 assert.equal(imported.compilation.semanticPayload.runMetadata.invalidCandidateCount, 1);
 
-const compilerDefinitions = first.ledger.exportSnapshot().records.filter((record) => record.ref.kind === 'CompilerDefinition');
+const compilerDefinitions = first.ledger.exportSnapshot().records.filter((record) => record.ref.kind === 'ScientificCompilerDefinition');
 assert.equal(compilerDefinitions.length, 1);
 assert.equal(compilerDefinitions[0].semanticPayload.configuration.promptVersion, 'adr-paper-extraction-prompt-v3');
 assert.equal(compilerDefinitions[0].semanticPayload.configuration.promptVersionAuthority, 'PROPOSAL_DECLARED_NOT_VERIFIED');
