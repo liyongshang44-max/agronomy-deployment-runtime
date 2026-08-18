@@ -177,7 +177,7 @@ try {
     ingestion: ingestion3,
     gate: new RightsEffectGate({ ledger: ledger3 }),
     snapshot: outerValidTampered.rightsGovernance
-  }), Error, 'AUTHORITY_NOT_FOUND');
+  }), Error, 'AUTHORITY_HASH_MISMATCH');
 
   const legacyPath = join(root, 'legacy-checkpoint.json');
   savePilotCheckpoint({ path: legacyPath, ledger: ledger1, ingestion: ingestion1 });
