@@ -16,7 +16,7 @@
     "test:authorization": "node acceptance/authorization/run.mjs && node acceptance/authorization/integrity.mjs && node acceptance/authorization/scoped.mjs && node acceptance/authorization/context-write.mjs && node acceptance/authorization/context-write-a03.mjs && node acceptance/authorization/context-write-a04.mjs && node acceptance/authorization/outcome-write.mjs && node acceptance/authorization/runtime-profile.mjs && node acceptance/authorization/deployment.mjs && node acceptance/authorization/specification.mjs && node acceptance/authorization/implementation.mjs && node acceptance/authorization/implementation-conformance.mjs && node acceptance/authorization/security-operations.mjs",
     "test:source": "node acceptance/source-materialization/run.mjs",
     "test:source-ingestion": "node acceptance/source-ingestion/run.mjs",
-    "test:source-extraction": "node acceptance/source-extraction/run.mjs",
+    "test:source-extraction": "node acceptance/source-extraction/run.mjs && node acceptance/source-extraction/contract-v3.mjs",
     "test:manual-proposal-import": "node acceptance/manual-proposal-import/run.mjs",
     "test:pilot-source-review": "node acceptance/pilot-source-review/run.mjs",
     "test:pilot-runtime-persistence": "node acceptance/pilot-runtime-persistence/run.mjs",
