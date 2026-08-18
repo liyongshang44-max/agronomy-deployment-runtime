@@ -73,7 +73,7 @@ Invariant:
 rights metadata ≠ RightsDecision
 ```
 
-## 3. RA01 authority objects
+## 3. RA01 authority objects and administration root
 
 RA01 defines four immutable authority kinds:
 
@@ -85,6 +85,17 @@ RA01 defines four immutable authority kinds:
 All four use normal `AuthorityLedger` identity, semantic hashing, audit and lineage rules.
 
 `RightsRevocation` must create explicit `revokes` lineage to the exact `RightsGrant`.
+
+RA01 deliberately has **no implicit rights-administration delegation**. Until a later explicit `rights.manage`-style authorization authority is designed and accepted:
+
+```text
+RightsGrant.grantorPrincipal   == exact RightsPolicy.ownerPrincipal
+RightsRevocation.revokerPrincipal == exact RightsPolicy.ownerPrincipal
+```
+
+Being in the same organization or tenant is insufficient to create or revoke rights authority. Future delegation must be explicit authority; it may not be inferred from tenancy, UI role, or possession of the source.
+
+The `RightsPolicy` is the ADR on-platform trust root for the recorded rights basis. A recorded contract/license/customer assertion is not itself an independent legal opinion by ADR.
 
 ## 4. Frozen v1 operation vocabulary
 
@@ -143,6 +154,8 @@ Rights authority is bi-temporal enough to preserve historical explanation:
 - a RightsRevocation records `recordedAt` and `effectiveAt`;
 - a RightsDecision records the exact `evaluatedAt`.
 
+The semantic publication timestamp is bound to the direct AuthorityLedger audit timestamp for Policy, Grant, Revocation and Decision publication. A caller may not backdate the semantic authority time independently of its recorded publication audit.
+
 Historical evaluation considers only grant/revocation authority that had been issued/recorded by the evaluation time. Therefore a later-entered grant or later-recorded revocation cannot silently rewrite the authority world the system actually knew when an earlier decision was made.
 
 A historical RightsDecision may remain replay-valid after grant expiry or later revocation.
@@ -155,7 +168,7 @@ Invariant:
 historical replay validity ≠ current-use eligibility
 ```
 
-## 8. Rights obligations
+## 8. Rights obligations are mandatory enforcement requirements
 
 An ALLOW may carry mandatory obligations such as:
 
@@ -165,9 +178,32 @@ DELETE_PROVIDER_COPY
 NO_REDISTRIBUTION
 ```
 
-RA01 preserves these obligations in RightsDecision authority. Downstream enforcement work must not ignore them. RA01 does not claim that an obligation has been fulfilled merely because it was recorded.
+RA01 preserves these obligations in RightsDecision authority. They are not advisory labels.
 
-## 9. Planned enforcement order
+Before a consumer may treat an ALLOW as executable, it must explicitly declare that it can enforce every obligation attached to that exact RightsDecision. If any obligation is unsupported, use fails closed.
+
+```text
+RightsDecision = ALLOW
++ unsupported mandatory obligation
+= NOT EXECUTABLE
+```
+
+Declaring an enforcement capability does **not** prove that the obligation was actually fulfilled. Later enforcement slices must retain execution evidence where an obligation requires an observable action, such as deletion of a provider copy.
+
+## 9. Closed semantic shapes
+
+Every RA01 authority payload is a closed contract. Unknown semantic fields at the policy, grant, revocation, decision, principal, ownership, basis, grantee or rule level are rejected.
+
+This is required because `AuthorityLedger` is intentionally generic. A caller may not publish a typed Rights object with additional hashed-but-ignored semantics and then rely on a permissive validator to launder it into effective authority.
+
+Invariant:
+
+```text
+hashed hidden field ≠ ignored extension
+hashed hidden field = invalid Rights authority
+```
+
+## 10. Planned enforcement order
 
 After RA01 is accepted, integration proceeds without reopening the established scientific/runtime architecture:
 
@@ -191,7 +227,7 @@ RA08 15-minute customer demonstration
 
 The `RAxx` namespace is used because `R01/R02/R03` already identify existing Runtime Plan / Information Requirement / Runtime Eligibility milestones.
 
-## 10. Enforcement points
+## 11. Enforcement points
 
 Later integration must evaluate Rights Authority **before** the dangerous side effect.
 
@@ -213,7 +249,7 @@ USE_FOR_PRODUCTION_DECISION
 
 A UI warning or post-hoc audit is not enforcement.
 
-## 11. Qualification and Release remain separate
+## 12. Qualification and Release remain separate
 
 Scientific Qualification continues to answer scientific-use qualification. Rights does not certify scientific truth.
 
@@ -234,7 +270,7 @@ new production use after rights expiry/revocation: BLOCK
 required remediation: publish a new legal release/world, never mutate the old release
 ```
 
-## 12. Decision path remains non-RAG authority
+## 13. Decision path remains non-RAG authority
 
 This decision does not weaken the existing runtime chain. Retrieval may discover candidates, but it does not become decision authority.
 
@@ -257,7 +293,7 @@ DecisionProblem
 
 `RuntimeEligibility` remains explicitly non-decision authority, and DecisionResult callers remain unable to self-author disposition/action semantics.
 
-## 13. Decision evidence
+## 14. Decision evidence
 
 The final `DecisionEvidenceBundle` should be a deterministic projection/read model over exact AuthorityLedger refs and audit/lineage, not a parallel mutable fact store and not a new source of scientific or decision authority.
 
@@ -274,7 +310,7 @@ DecisionResult
 
 and include the exact RightsDecision refs that legalized the source/material use relevant to the decision.
 
-## 14. Non-goals of RA01
+## 15. Non-goals of RA01
 
 RA01 does not yet:
 
@@ -285,10 +321,11 @@ RA01 does not yet:
 - alter Claim or SourceContext schema;
 - add multi-locator evidence authority;
 - alter RuntimeEligibility or DecisionResult semantics;
+- implement delegated rights administration;
 - claim that a customer assertion or recorded license basis is independently verified legal advice.
 
 Those are later explicit integration slices.
 
 ## Acceptance principle
 
-The foundation is acceptable only if absence, ambiguity, expiry, revocation, scope mismatch, unknown operation and stale-decision reuse fail closed while historical authority remains replayable.
+The foundation is acceptable only if absence, ambiguity, expiry, revocation, scope mismatch, unknown operation, hidden semantic fields, unauthorized administration, unsupported obligations and stale-decision reuse fail closed while historical authority remains replayable.
