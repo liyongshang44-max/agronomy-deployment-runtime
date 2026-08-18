@@ -1,0 +1,63 @@
+{
+  "benchmarkId": "ADR_REAL_PAPER_BENCHMARK_V1",
+  "status": "REFERENCE_CORPUS_ONLY_NOT_DOMAIN_AUTHORITY",
+  "goldStatus": "NOT_ESTABLISHED",
+  "extractionBlindness": "EXTRACTION_WORKER_MUST_RECEIVE_ONLY_THE_EXACT_SOURCE_ARTIFACT_AND_FROZEN_EXTRACTION_CONTRACT",
+  "papers": [
+    {
+      "paperId": "RP001",
+      "title": "Seedling-Stage Deficit Irrigation with Nitrogen Application in Three-Year Field Study Provides Guidance for Improving Maize Yield, Water and Nitrogen Use Efficiencies",
+      "authors": [
+        "Yuxi Li",
+        "Jian Chen",
+        "Longbing Tian",
+        "Zhaoyin Shen",
+        "Daniel Buchvaldt Amby",
+        "Fulai Liu",
+        "Qiang Gao",
+        "Yin Wang"
+      ],
+      "journal": "Plants",
+      "year": 2022,
+      "volume": "11",
+      "issue": "21",
+      "article": "3007",
+      "doi": "10.3390/plants11213007",
+      "license": "CC_BY_4_0",
+      "sourceType": "PUBLICATION",
+      "selectionRole": "FIRST_REAL_PAPER_BASELINE",
+      "selectionRationale": [
+        "three-year field experiment rather than a single controlled-pot study",
+        "explicit maize, irrigation, nitrogen, soil-water and growth-stage context",
+        "quantitative agronomic outcomes including grain yield, WUE and NUE",
+        "contrasting year-specific response creates a direct over-generalization test",
+        "open-access license permits a clean first pilot rights path"
+      ],
+      "coverageTags": [
+        "maize",
+        "deficit_irrigation",
+        "nitrogen_fertilization",
+        "growth_stage",
+        "soil_water_content",
+        "multi_year_field_trial",
+        "grain_yield",
+        "water_use_efficiency",
+        "nitrogen_use_efficiency",
+        "climate_effect_modifier"
+      ],
+      "knownChallengeClassesForHumanEvaluationOnly": [
+        "YEAR_SPECIFIC_DIRECTION_CHANGE",
+        "INITIAL_SOIL_WATER_CONDITION_BOUNDARY",
+        "PRECIPITATION_EFFECT_MODIFIER",
+        "NITROGEN_COMPENSATORY_EFFECT",
+        "DISCUSSION_TO_RECOMMENDATION_OVERREACH_RISK"
+      ],
+      "referenceAnnotationStatus": "PENDING_INDEPENDENT_ANNOTATION_AND_DOMAIN_EXPERT_ADJUDICATION",
+      "externalProcessing": {
+        "paperIsOpenAccess": true,
+        "operatorConfirmationStillRequired": true,
+        "automaticAuthorizationFromLicense": false
+      }
+    }
+  ]
+}
