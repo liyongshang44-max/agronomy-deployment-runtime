@@ -1,7 +1,7 @@
 import { deepFreeze } from '../../canonicalization/src/index.mjs';
 import { assertAuthorityRef, sameAuthorityRef } from '../../contracts/src/authority.mjs';
 import { validateRightsDecision, validateRightsPolicy } from '../../rights-authority/src/index.mjs';
-import { RightsEnforcementError } from './index.mjs';
+import { RightsEnforcementError } from './errors.mjs';
 
 export const RIGHTS_GOVERNED_SOURCE_INGESTION_VERSION = 'adr.rights.governed-source-ingestion.v1';
 
@@ -17,6 +17,20 @@ function validAudit(value, name) {
     throw new RightsEnforcementError('RIGHTS_ENFORCEMENT_AUDIT_REQUIRED', `${name} is required`);
   }
   return structuredClone(value);
+}
+
+function normalizedScope(scope) {
+  if (!scope || typeof scope !== 'object' || Array.isArray(scope)) {
+    throw new RightsEnforcementError('INVALID_RIGHTS_ENFORCEMENT_SCOPE', 'scope must be an object');
+  }
+  return {
+    organizationId: requiredText(scope.organizationId, 'scope.organizationId'),
+    ...(scope.tenantId ? { tenantId: requiredText(scope.tenantId, 'scope.tenantId') } : {})
+  };
+}
+
+function sameScope(left, right) {
+  return left.organizationId === right.organizationId && (left.tenantId ?? null) === (right.tenantId ?? null);
 }
 
 function publicGovernance(record) {
@@ -58,25 +72,26 @@ export class RightsGovernedPilotSourceIngestion {
   }
 
   createUpload({ scope, filename, declaredMediaType = 'application/pdf', source, artifact, rightsPolicyRef, sourceAudit }) {
+    const exactScope = normalizedScope(scope);
     const policy = validateRightsPolicy({ ledger: this.#ledger, rightsPolicyRef });
-    const upload = this.#ingestion.createUpload({ scope, filename, declaredMediaType, source, artifact });
-    const exactSource = this.#sourceRegistry.registerSource({
-      ...source,
-      ownership: scope,
-      audit: validAudit(sourceAudit, 'sourceAudit')
-    });
-    if (policy.ownership.organizationId !== exactSource.semanticPayload.ownership.organizationId
-      || (policy.ownership.tenantId ?? null) !== (exactSource.semanticPayload.ownership.tenantId ?? null)) {
+    if (!sameScope(policy.ownership, exactScope)) {
       throw new RightsEnforcementError(
         'RIGHTS_POLICY_SOURCE_SCOPE_MISMATCH',
-        'RightsPolicy ownership must equal exact pre-retention Source ownership'
+        'RightsPolicy ownership must equal upload Source ownership before any upload session or Source authority is created'
       );
     }
+    const exactSourceAudit = validAudit(sourceAudit, 'sourceAudit');
+    const upload = this.#ingestion.createUpload({ scope: exactScope, filename, declaredMediaType, source, artifact });
+    const exactSource = this.#sourceRegistry.registerSource({
+      ...source,
+      ownership: exactScope,
+      audit: exactSourceAudit
+    });
     const record = {
       uploadId: upload.uploadId,
       sourceRef: exactSource.ref,
       rightsPolicyRef: policy.record.ref,
-      sourceAudit: structuredClone(sourceAudit)
+      sourceAudit: exactSourceAudit
     };
     this.#records.set(upload.uploadId, record);
     return deepFreeze({ upload, governance: publicGovernance(record), source: exactSource });
@@ -184,8 +199,14 @@ export class RightsGovernedPilotSourceIngestion {
       this.#ingestion.getUpload(uploadId);
       const sourceRef = assertAuthorityRef(input.sourceRef);
       const rightsPolicyRef = assertAuthorityRef(input.rightsPolicyRef);
-      this.#sourceRegistry.resolveSource(sourceRef);
-      validateRightsPolicy({ ledger: this.#ledger, rightsPolicyRef });
+      const source = this.#sourceRegistry.resolveSource(sourceRef);
+      const policy = validateRightsPolicy({ ledger: this.#ledger, rightsPolicyRef });
+      if (!sameScope(policy.ownership, source.semanticPayload.ownership)) {
+        throw new RightsEnforcementError(
+          'INVALID_RIGHTS_GOVERNED_UPLOAD_SNAPSHOT',
+          'restored RightsPolicy scope differs from pre-retention Source ownership'
+        );
+      }
       const record = {
         uploadId,
         sourceRef,
