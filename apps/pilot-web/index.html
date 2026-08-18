@@ -15,19 +15,22 @@
     label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
     input, select { width: 100%; box-sizing: border-box; padding: 10px 11px; border: 1px solid #c7ced6; border-radius: 8px; background: white; }
     input[type=file] { padding: 14px; border-style: dashed; }
+    input[type=checkbox] { width: auto; margin-right: 8px; }
     button { border: 0; border-radius: 8px; padding: 10px 16px; font-weight: 700; cursor: pointer; background: #20252b; color: white; }
     button:disabled { opacity: .45; cursor: default; }
     progress { width: 100%; height: 16px; }
     pre { white-space: pre-wrap; overflow-wrap: anywhere; background: #0d1117; color: #e6edf3; padding: 14px; border-radius: 8px; min-height: 70px; }
     .status { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
     .warn { background: #fff8c5; border: 1px solid #d4a72c; border-radius: 8px; padding: 10px 12px; font-size: 13px; }
+    .note { color: #59636e; font-size: 13px; line-height: 1.5; }
+    .provider { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
     @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
 <main>
   <h1>ADR Pilot — Scientific Source Ingestion</h1>
-  <div class="sub">Upload exact PDF bytes first. Extraction and scientific authority remain separate downstream steps.</div>
+  <div class="sub">Upload exact PDF bytes, materialize SourceArtifact, then generate proposal-only scientific candidates for human review.</div>
 
   <div class="warn">This first host persists PDF bytes to scoped filesystem storage, but the AuthorityLedger and upload-session journal are still in-memory. Restart durability is intentionally not claimed yet.</div>
 
@@ -57,8 +60,16 @@
 
   <section class="card">
     <h2>2. Finalize exact source authority</h2>
-    <p>Only enabled after the server has retained the PDF and produced its own SHA-256 / byte count.</p>
+    <p>Only enabled after the server has retained the PDF and reproduced its SHA-256 / byte count.</p>
     <button id="finalize" disabled>Finalize Source + SourceArtifact</button>
+  </section>
+
+  <section class="card">
+    <h2>3. Extract scientific candidates</h2>
+    <p class="note">Extraction output is <strong>proposal only</strong>. It does not become a source-faithful Claim or QualifiedKnowledge until the downstream human review and qualification workflow accepts it.</p>
+    <p class="provider" id="provider">Extraction provider: checking…</p>
+    <label style="font-weight:500"><input id="externalAuth" type="checkbox">I confirm this SourceArtifact may be sent to the configured external model provider for this extraction run.</label>
+    <p><button id="extract" disabled>Extract Claim Candidates</button></p>
   </section>
 
   <section class="card">
@@ -69,6 +80,8 @@
 <script>
 const $ = (id) => document.getElementById(id);
 let currentUploadId = null;
+let extractionConfigured = false;
+let sourceMaterialized = false;
 
 function authHeaders(extra = {}) {
   return { Authorization: `Bearer ${$('token').value}`, ...extra };
@@ -81,6 +94,27 @@ function setResult(value) {
 function sourceIdFromFile(file) {
   return `source.paper.${file.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'upload'}`;
 }
+
+function refreshExtractButton() {
+  $('extract').disabled = !(sourceMaterialized && extractionConfigured && $('externalAuth').checked);
+}
+
+async function loadReadiness() {
+  try {
+    const response = await fetch('/readyz', { cache: 'no-store' });
+    const readiness = await response.json();
+    extractionConfigured = Boolean(readiness?.extraction?.configured);
+    $('provider').textContent = extractionConfigured
+      ? `Extraction provider: ${readiness.extraction.provider} / ${readiness.extraction.model}`
+      : 'Extraction provider: NOT_CONFIGURED (set OPENAI_API_KEY and ADR_EXTRACTION_MODEL before starting the host)';
+  } catch {
+    extractionConfigured = false;
+    $('provider').textContent = 'Extraction provider: readiness unavailable';
+  }
+  refreshExtractButton();
+}
+
+$('externalAuth').addEventListener('change', refreshExtractButton);
 
 $('file').addEventListener('change', () => {
   const file = $('file').files[0];
@@ -95,6 +129,8 @@ $('upload').addEventListener('click', async () => {
   if (!$('token').value) return setResult('Operator token is required.');
   $('upload').disabled = true;
   $('finalize').disabled = true;
+  sourceMaterialized = false;
+  refreshExtractButton();
   $('progress').value = 0;
   $('status').textContent = 'CREATING SESSION';
   try {
@@ -173,6 +209,8 @@ $('finalize').addEventListener('click', async () => {
     const payload = await response.json();
     if (!response.ok) throw new Error(JSON.stringify(payload));
     $('status').textContent = 'SOURCE_MATERIALIZED';
+    sourceMaterialized = true;
+    refreshExtractButton();
     setResult(payload);
   } catch (error) {
     $('status').textContent = 'FAILED';
@@ -180,6 +218,31 @@ $('finalize').addEventListener('click', async () => {
     $('finalize').disabled = false;
   }
 });
+
+$('extract').addEventListener('click', async () => {
+  if (!currentUploadId || !sourceMaterialized) return;
+  if (!$('externalAuth').checked) return setResult('Explicit external processing authorization is required.');
+  $('extract').disabled = true;
+  $('status').textContent = 'EXTRACTING CANDIDATES';
+  try {
+    const response = await fetch(`/operator/source-uploads/${encodeURIComponent(currentUploadId)}/extract`, {
+      method: 'POST',
+      headers: authHeaders({ 'content-type': 'application/json' }),
+      body: JSON.stringify({ externalProcessingAuthorized: true })
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(JSON.stringify(payload));
+    $('status').textContent = `CANDIDATES_READY (${payload.candidateCount})`;
+    setResult(payload);
+  } catch (error) {
+    $('status').textContent = 'EXTRACTION_FAILED';
+    setResult(error.message);
+  } finally {
+    refreshExtractButton();
+  }
+});
+
+loadReadiness();
 </script>
 </body>
 </html>
