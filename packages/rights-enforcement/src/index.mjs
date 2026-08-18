@@ -4,17 +4,13 @@ import {
   assertRightsAllowed,
   publishRightsDecision
 } from '../../rights-authority/src/index.mjs';
+import { RightsEnforcementError } from './errors.mjs';
+
+export { RightsEnforcementError } from './errors.mjs';
+export { RightsGovernedPilotSourceIngestion, RIGHTS_GOVERNED_SOURCE_INGESTION_VERSION } from './pilot-source.mjs';
 
 export const RIGHTS_EFFECT_GATE_VERSION = 'adr.rights.effect-gate.v1';
 export const RIGHTS_EFFECT_GATE_AUTHORITY_CLAIM = 'ENFORCEMENT_ONLY_NOT_DOMAIN_OR_DECISION_AUTHORITY';
-
-export class RightsEnforcementError extends Error {
-  constructor(code, message) {
-    super(message);
-    this.name = 'RightsEnforcementError';
-    this.code = code;
-  }
-}
 
 function requiredText(value, name) {
   if (typeof value !== 'string' || value.trim().length === 0) {
