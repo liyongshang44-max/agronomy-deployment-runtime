@@ -137,7 +137,7 @@ let pdfObjectUrl = null;
 function authHeaders(extra = {}) { return { Authorization: `Bearer ${$('token').value}`, ...extra }; }
 function setResult(value) { $('result').textContent = typeof value === 'string' ? value : JSON.stringify(value, null, 2); }
 function sourceIdFromFile(file) { return `source.paper.${file.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'upload'}`; }
-function esc(value) { return String(value ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c])); }
+function esc(value) { return String(value ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function refreshButtons() {
   $('importProposal').disabled = !sourceMaterialized;
   $('extract').disabled = !(sourceMaterialized && extractionConfigured && $('externalAuth').checked);
