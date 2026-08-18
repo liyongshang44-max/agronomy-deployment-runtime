@@ -79,7 +79,28 @@ function normalizeClaimType(value) {
   return normalized;
 }
 
-function normalizeLocator(locator, artifactBytes) {
+function exactArtifactEvidence(artifact, bytes = null) {
+  const contentHash = requiredText(artifact?.semanticPayload?.contentHash, 'SourceArtifact.contentHash');
+  const byteLength = artifact?.semanticPayload?.byteLength;
+  if (!Number.isSafeInteger(byteLength) || byteLength < 0) {
+    throw new ScientificCompilerError('INVALID_SOURCE_ARTIFACT_LENGTH', 'SourceArtifact.byteLength must be a non-negative safe integer');
+  }
+  if (bytes !== null) {
+    if (!Buffer.isBuffer(bytes) && !(bytes instanceof Uint8Array)) {
+      throw new ScientificCompilerError('EXACT_BYTES_REQUIRED', 'artifact bytes must be Buffer or Uint8Array');
+    }
+    const exact = Buffer.isBuffer(bytes)
+      ? bytes
+      : Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    if (exact.byteLength !== byteLength || sourceContentHash(exact) !== contentHash) {
+      throw new ScientificCompilerError('SOURCE_ARTIFACT_BYTES_MISMATCH', 'loaded SourceArtifact bytes do not match frozen contentHash/byteLength');
+    }
+    return { contentHash, byteLength, bytes: exact };
+  }
+  return { contentHash, byteLength, bytes: null };
+}
+
+function normalizeLocator(locator, artifactEvidence) {
   if (!locator || typeof locator !== 'object' || Array.isArray(locator)) {
     throw new ScientificCompilerError('SOURCE_LOCATOR_REQUIRED', 'candidate source locator must be an object');
   }
@@ -88,18 +109,21 @@ function normalizeLocator(locator, artifactBytes) {
   if (kind === 'WHOLE_ARTIFACT') {
     return deepFreeze({
       kind,
-      contentHash: sourceContentHash(artifactBytes),
-      byteLength: artifactBytes.byteLength
+      contentHash: artifactEvidence.contentHash,
+      byteLength: artifactEvidence.byteLength
     });
   }
 
   if (kind === 'BYTE_RANGE') {
+    if (!artifactEvidence.bytes) {
+      throw new ScientificCompilerError('BYTE_RANGE_REQUIRES_EXACT_BYTES', 'BYTE_RANGE locator requires exact SourceArtifact bytes');
+    }
     const start = locator.start;
     const endExclusive = locator.endExclusive;
-    if (!Number.isInteger(start) || !Number.isInteger(endExclusive) || start < 0 || endExclusive <= start || endExclusive > artifactBytes.byteLength) {
-      throw new ScientificCompilerError('INVALID_BYTE_RANGE', `invalid BYTE_RANGE ${start}:${endExclusive} for artifact length ${artifactBytes.byteLength}`);
+    if (!Number.isInteger(start) || !Number.isInteger(endExclusive) || start < 0 || endExclusive <= start || endExclusive > artifactEvidence.byteLength) {
+      throw new ScientificCompilerError('INVALID_BYTE_RANGE', `invalid BYTE_RANGE ${start}:${endExclusive} for artifact length ${artifactEvidence.byteLength}`);
     }
-    const selected = artifactBytes.subarray(start, endExclusive);
+    const selected = artifactEvidence.bytes.subarray(start, endExclusive);
     return deepFreeze({
       kind,
       start,
@@ -125,7 +149,26 @@ function normalizeLocator(locator, artifactBytes) {
   throw new ScientificCompilerError('UNSUPPORTED_SOURCE_LOCATOR', `unsupported source locator kind ${kind}`);
 }
 
-function normalizeDimensionCandidate(dimension, artifactBytes, family) {
+function locatorNeedsExactBytes(locator) {
+  return Boolean(locator && typeof locator === 'object' && !Array.isArray(locator) && locator.kind === 'BYTE_RANGE');
+}
+
+function proposalNeedsExactBytes(proposal) {
+  if (!proposal || typeof proposal !== 'object' || Array.isArray(proposal) || !Array.isArray(proposal.claims)) return false;
+  for (const claim of proposal.claims) {
+    if (locatorNeedsExactBytes(claim?.sourceLocator)) return true;
+    const sourceContext = claim?.sourceContext;
+    if (!sourceContext || typeof sourceContext !== 'object' || Array.isArray(sourceContext)) continue;
+    for (const family of SOURCE_CONTEXT_FAMILIES) {
+      const dimensions = sourceContext?.[family]?.dimensions;
+      if (!Array.isArray(dimensions)) continue;
+      if (dimensions.some((dimension) => locatorNeedsExactBytes(dimension?.sourceLocator))) return true;
+    }
+  }
+  return false;
+}
+
+function normalizeDimensionCandidate(dimension, artifactEvidence, family) {
   if (!dimension || typeof dimension !== 'object' || Array.isArray(dimension)) {
     throw new ScientificCompilerError('INVALID_CONTEXT_DIMENSION_CANDIDATE', `${family} dimension candidate must be an object`);
   }
@@ -141,14 +184,14 @@ function normalizeDimensionCandidate(dimension, artifactBytes, family) {
     valueCandidate: cloneCanonicalValue(dimension.valueCandidate),
     ...(dimension.unitCandidate ? { unitCandidate: requiredText(dimension.unitCandidate, `${family}.unitCandidate`) } : {}),
     supportClass,
-    sourceLocator: normalizeLocator(dimension.sourceLocator, artifactBytes),
+    sourceLocator: normalizeLocator(dimension.sourceLocator, artifactEvidence),
     ...(optionalNumber(dimension.confidence, `${family}.confidence`) !== undefined
       ? { confidence: optionalNumber(dimension.confidence, `${family}.confidence`) }
       : {})
   });
 }
 
-function normalizeContextFamily(candidate, artifactBytes, family) {
+function normalizeContextFamily(candidate, artifactEvidence, family) {
   if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
     throw new ScientificCompilerError('CONTEXT_FAMILY_REQUIRED', `SourceContextCandidate requires ${family}`);
   }
@@ -168,11 +211,11 @@ function normalizeContextFamily(candidate, artifactBytes, family) {
   }
   return deepFreeze({
     status,
-    dimensions: dimensions.map((dimension) => normalizeDimensionCandidate(dimension, artifactBytes, family))
+    dimensions: dimensions.map((dimension) => normalizeDimensionCandidate(dimension, artifactEvidence, family))
   });
 }
 
-function normalizeSourceContextCandidate(candidate, artifactBytes) {
+function normalizeSourceContextCandidate(candidate, artifactEvidence) {
   if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
     throw new ScientificCompilerError('SOURCE_CONTEXT_CANDIDATE_REQUIRED', 'each ClaimCandidate requires a SourceContextCandidate proposal');
   }
@@ -184,12 +227,12 @@ function normalizeSourceContextCandidate(candidate, artifactBytes) {
   }
   const normalized = {};
   for (const family of SOURCE_CONTEXT_FAMILIES) {
-    normalized[family] = normalizeContextFamily(candidate[family], artifactBytes, family);
+    normalized[family] = normalizeContextFamily(candidate[family], artifactEvidence, family);
   }
   return deepFreeze(normalized);
 }
 
-function normalizeClaimProposal(proposal, artifactBytes) {
+function normalizeClaimProposal(proposal, artifactEvidence) {
   if (!proposal || typeof proposal !== 'object' || Array.isArray(proposal)) {
     throw new ScientificCompilerError('INVALID_CLAIM_PROPOSAL', 'claim proposal must be an object');
   }
@@ -198,11 +241,11 @@ function normalizeClaimProposal(proposal, artifactBytes) {
     claimType: normalizeClaimType(proposal.claimType),
     assertion: requiredText(proposal.assertion, 'claim.assertion'),
     ...(proposal.structured !== undefined ? { structured: cloneCanonicalValue(proposal.structured) } : {}),
-    sourceLocator: normalizeLocator(proposal.sourceLocator, artifactBytes),
+    sourceLocator: normalizeLocator(proposal.sourceLocator, artifactEvidence),
     ...(optionalNumber(proposal.confidence, 'claim.confidence') !== undefined
       ? { confidence: optionalNumber(proposal.confidence, 'claim.confidence') }
       : {}),
-    sourceContext: normalizeSourceContextCandidate(proposal.sourceContext, artifactBytes)
+    sourceContext: normalizeSourceContextCandidate(proposal.sourceContext, artifactEvidence)
   });
 }
 
@@ -310,13 +353,16 @@ export class ScientificCompiler {
   }) {
     const artifact = exactSourceArtifact(this.#sourceRegistry.resolveArtifact(assertAuthorityRef(sourceArtifactRef)));
     const compilerDefinition = compilerDefinitionRecord(this.#ledger.resolve(assertAuthorityRef(compilerDefinitionRef)));
-    const artifactBytes = this.#sourceRegistry.readArtifactBytes(artifact.ref);
 
     if (!proposal || typeof proposal !== 'object' || Array.isArray(proposal) || !Array.isArray(proposal.claims)) {
       throw new ScientificCompilerError('INVALID_COMPILATION_PROPOSAL', 'compilation proposal must contain claims[]');
     }
 
-    const claims = proposal.claims.map((claim) => normalizeClaimProposal(claim, artifactBytes));
+    const artifactBytes = proposalNeedsExactBytes(proposal)
+      ? this.#sourceRegistry.readArtifactBytes(artifact.ref)
+      : null;
+    const artifactEvidence = exactArtifactEvidence(artifact, artifactBytes);
+    const claims = proposal.claims.map((claim) => normalizeClaimProposal(claim, artifactEvidence));
     assertUniqueClaimKeys(claims);
 
     const candidateRefs = [];
