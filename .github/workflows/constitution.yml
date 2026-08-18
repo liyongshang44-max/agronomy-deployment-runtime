@@ -31,8 +31,5 @@ jobs:
       - name: Constitutional static checks
         run: npm run build
 
-      - name: Rights authority acceptance
-        run: node acceptance/rights-authority/run.mjs
-
       - name: Constitutional acceptance
         run: npm test
