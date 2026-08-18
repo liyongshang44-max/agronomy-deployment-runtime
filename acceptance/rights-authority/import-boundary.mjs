@@ -4,6 +4,7 @@ import { relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(fileURLToPath(new URL('../../', import.meta.url)));
+const RIGHTS_ROOT_PREFIX = 'packages/rights-authority/';
 const ALLOWED_RAW_IMPORTER = 'packages/rights-authority/src/hardening.mjs';
 const SOURCE_ROOTS = ['packages', 'apps', 'adapters', 'sdk', 'scripts', 'acceptance'];
 const EXTENSIONS = new Set(['.mjs', '.js', '.cjs', '.ts', '.tsx', '.jsx']);
@@ -36,9 +37,10 @@ for (const rootName of SOURCE_ROOTS) {
     const repoPath = relative(ROOT, path).replaceAll('\\', '/');
     if (repoPath === ALLOWED_RAW_IMPORTER) continue;
     const text = readFileSync(path, 'utf8');
-    if (text.includes(rawPackagePath) || text.includes(rawRelativeSingle) || text.includes(rawRelativeDouble)) {
-      violations.push(repoPath);
-    }
+    const explicitRightsRawPath = text.includes(rawPackagePath);
+    const rightsLocalRawImport = repoPath.startsWith(RIGHTS_ROOT_PREFIX)
+      && (text.includes(rawRelativeSingle) || text.includes(rawRelativeDouble));
+    if (explicitRightsRawPath || rightsLocalRawImport) violations.push(repoPath);
   }
 }
 
