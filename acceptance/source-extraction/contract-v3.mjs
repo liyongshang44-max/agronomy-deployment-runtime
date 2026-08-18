@@ -47,20 +47,45 @@ for (const required of [
   'either cite one contiguous excerpt that contains both branches or emit separately reviewable branches',
   'Prefer omission over a candidate whose assertion, qualifier, context, or evidence binding is uncertain',
   'Would removing SourceContext still leave the claim-level evidence sufficient to verify the assertion?',
+  'The trial included 84 plots and mean root depth was 42 cm',
+  'accuracy, RMSE, and calibration slope',
+  'treatment=A and control=B',
+  'from day 0 through day 3',
   `"promptVersion": "${ADR_MANUAL_EXTRACTION_PROMPT_VERSION}"`
 ]) {
   assert.ok(promptA.includes(required), `canonical prompt missing contract clause: ${required}`);
 }
 
-assert.ok(promptA.includes('171 fields and yield ranged from 1,250 to 6,960 kg/ha'), 'paper-1 composite evidence regression example must remain frozen');
-assert.ok(promptA.includes('Placebo, RCC, RSR, and UCC'), 'paper-1 robustness regression example must remain frozen');
-assert.ok(promptA.includes('treated={3} and control={0,1,2}'), 'paper-1 binary-definition regression example must remain frozen');
-assert.ok(promptA.includes('from sowing day to 5 days after'), 'paper-1 temporal regression example must remain frozen');
+for (const forbiddenPaper1Signature of [
+  '171 fields',
+  '1,250',
+  '6,960',
+  'Placebo',
+  'RCC',
+  'RSR',
+  'UCC',
+  'treated={3}',
+  'control={0,1,2}',
+  'sowing day to 5 days after',
+  '372',
+  '546',
+  '12%',
+  '17%',
+  'Orchomenes',
+  'cotton'
+]) {
+  assert.equal(
+    promptA.includes(forbiddenPaper1Signature),
+    false,
+    `canonical prompt leaks paper-1 benchmark signature: ${forbiddenPaper1Signature}`
+  );
+}
 
 console.log(JSON.stringify({
   contract: ADR_MANUAL_EXTRACTION_CONTRACT,
   promptVersion: ADR_MANUAL_EXTRACTION_PROMPT_VERSION,
   claimTypes: ADR_MANUAL_EXTRACTION_CLAIM_TYPES.length,
   contextFamilies: ADR_MANUAL_EXTRACTION_CONTEXT_FAMILIES.length,
+  blindBenchmarkLeakageCheck: 'PASS',
   status: 'PASS'
 }, null, 2));
