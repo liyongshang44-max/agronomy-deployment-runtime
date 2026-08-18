@@ -52,6 +52,7 @@ function fixture() {
 }
 
 const proposal = {
+  promptVersion: 'adr-paper-extraction-prompt-v3',
   claims: [
     {
       key: 'valid-boundary',
@@ -94,6 +95,7 @@ const imported = first.service.import({
 assert.equal(imported.preflight.total, 2);
 assert.equal(imported.preflight.reviewable, 1);
 assert.equal(imported.preflight.invalid, 1);
+assert.equal(imported.preflight.promptVersion, 'adr-paper-extraction-prompt-v3');
 assert.equal(imported.preflight.invalidCandidates[0].key, 'invalid-measurement-type');
 assert.equal(imported.preflight.invalidCandidates[0].error.code, 'INVALID_CLAIM_CANDIDATE_TYPE');
 assert.equal(imported.materialized, true);
@@ -103,8 +105,15 @@ assert.equal(imported.compilation.semanticPayload.candidateCount, 1);
 assert.equal(imported.compilation.semanticPayload.runMetadata.provider, 'MANUAL_EXTERNAL_PROPOSAL_IMPORT');
 assert.equal(imported.compilation.semanticPayload.runMetadata.providerLabel, 'DEEPSEEK_WEB');
 assert.equal(imported.compilation.semanticPayload.runMetadata.modelIdentityAuthority, 'OPERATOR_DECLARED_NOT_VERIFIED');
+assert.equal(imported.compilation.semanticPayload.runMetadata.promptVersion, 'adr-paper-extraction-prompt-v3');
+assert.equal(imported.compilation.semanticPayload.runMetadata.promptVersionAuthority, 'PROPOSAL_DECLARED_NOT_VERIFIED');
 assert.equal(imported.compilation.semanticPayload.runMetadata.originalCandidateCount, 2);
 assert.equal(imported.compilation.semanticPayload.runMetadata.invalidCandidateCount, 1);
+
+const compilerDefinitions = first.ledger.exportSnapshot().records.filter((record) => record.ref.kind === 'CompilerDefinition');
+assert.equal(compilerDefinitions.length, 1);
+assert.equal(compilerDefinitions[0].semanticPayload.configuration.promptVersion, 'adr-paper-extraction-prompt-v3');
+assert.equal(compilerDefinitions[0].semanticPayload.configuration.promptVersionAuthority, 'PROPOSAL_DECLARED_NOT_VERIFIED');
 
 const claimRecords = first.ledger.exportSnapshot().records.filter((record) => record.ref.kind === 'ClaimCandidate');
 assert.equal(claimRecords.length, 1);
@@ -112,6 +121,7 @@ assert.ok(claimRecords.every((record) => record.semanticPayload.claimType !== 'M
 
 const duplicate = fixture();
 const duplicateProposal = {
+  promptVersion: 'adr-paper-extraction-prompt-v3',
   claims: [
     { ...proposal.claims[0], key: 'same-key' },
     { ...proposal.claims[0], key: 'same-key', assertion: 'Second assertion with duplicate key.' }
@@ -128,8 +138,24 @@ const duplicateResult = duplicate.service.import({
 });
 assert.equal(duplicateResult.preflight.reviewable, 0);
 assert.equal(duplicateResult.preflight.invalid, 2);
+assert.equal(duplicateResult.preflight.promptVersion, 'adr-paper-extraction-prompt-v3');
 assert.ok(duplicateResult.preflight.invalidCandidates.every((candidate) => candidate.error.code === 'DUPLICATE_CLAIM_KEY'));
 assert.equal(duplicateResult.materialized, false);
 assert.equal(duplicate.ledger.exportSnapshot().records.filter((record) => record.ref.kind === 'ClaimCandidate').length, 0);
 
-console.log(JSON.stringify({ total: 2, passed: 2, failed: 0 }, null, 2));
+const legacy = fixture();
+const legacyProposal = { claims: [{ ...proposal.claims[0], key: 'legacy-valid' }] };
+const legacyResult = legacy.service.import({
+  sourceArtifactRef: legacy.artifact.ref,
+  proposal: legacyProposal,
+  providerLabel: 'LEGACY_WEB',
+  modelLabel: 'unknown',
+  compilationLogicalId: 'compilation.manual-import.legacy-no-prompt-version',
+  version: '1',
+  audit: audit('evt-import-legacy')
+});
+assert.equal(legacyResult.preflight.promptVersion, 'NOT_REPORTED');
+assert.equal(legacyResult.compilation.semanticPayload.runMetadata.promptVersion, 'NOT_REPORTED');
+assert.equal(legacyResult.compilation.semanticPayload.runMetadata.promptVersionAuthority, 'PROPOSAL_DECLARED_NOT_VERIFIED');
+
+console.log(JSON.stringify({ total: 3, passed: 3, failed: 0 }, null, 2));
