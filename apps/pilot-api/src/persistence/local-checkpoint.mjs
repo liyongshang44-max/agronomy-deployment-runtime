@@ -50,19 +50,27 @@ export function loadPilotCheckpoint({ path }) {
   return deepFreeze(cloneCanonicalValue(parsed.payload));
 }
 
-export function savePilotCheckpoint({ path, ledger, ingestion }) {
+export function savePilotCheckpoint({ path, ledger, ingestion, rightsGovernance = null }) {
   if (!ledger || typeof ledger.exportSnapshot !== 'function') {
     throw new PilotCheckpointError('PILOT_CHECKPOINT_LEDGER_REQUIRED', 'ledger.exportSnapshot is required');
   }
   if (!ingestion || typeof ingestion.exportSnapshot !== 'function') {
     throw new PilotCheckpointError('PILOT_CHECKPOINT_INGESTION_REQUIRED', 'ingestion.exportSnapshot is required');
   }
+  if (rightsGovernance !== null && (!rightsGovernance || typeof rightsGovernance.exportSnapshot !== 'function')) {
+    throw new PilotCheckpointError(
+      'PILOT_CHECKPOINT_RIGHTS_GOVERNANCE_INVALID',
+      'rightsGovernance must expose exportSnapshot when supplied'
+    );
+  }
   const filePath = resolve(path);
   mkdirSync(dirname(filePath), { recursive: true });
-  const envelope = checkpointEnvelope({
+  const payload = {
     ledger: ledger.exportSnapshot(),
-    ingestion: ingestion.exportSnapshot()
-  });
+    ingestion: ingestion.exportSnapshot(),
+    ...(rightsGovernance ? { rightsGovernance: rightsGovernance.exportSnapshot() } : {})
+  };
+  const envelope = checkpointEnvelope(payload);
   const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
   try {
     writeFileSync(tempPath, `${JSON.stringify(envelope)}\n`, { encoding: 'utf8', flag: 'wx' });
