@@ -25,11 +25,17 @@ import {
   extractCompilationProposalWithOpenAI
 } from './extraction/openai.mjs';
 import { PilotReviewAdapter } from './review/pilot-review.mjs';
+import {
+  PilotCheckpointError,
+  loadPilotCheckpoint,
+  savePilotCheckpoint
+} from './persistence/local-checkpoint.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const WEB_ROOT = resolve(HERE, '../../pilot-web');
 const DATA_DIR = resolve(process.env.ADR_DATA_DIR ?? '.adr-pilot');
 const ARTIFACT_DIR = join(DATA_DIR, 'artifacts');
+const CHECKPOINT_PATH = join(DATA_DIR, 'runtime-checkpoint.json');
 const HOST = process.env.ADR_HOST ?? '127.0.0.1';
 const PORT = Number(process.env.ADR_PORT ?? 8787);
 const OPERATOR_TOKEN = process.env.ADR_OPERATOR_TOKEN ?? '';
@@ -40,21 +46,29 @@ const EXTRACTION_MODEL = process.env.ADR_EXTRACTION_MODEL ?? '';
 const MAX_JSON_BYTES = 1024 * 1024;
 
 if (!Number.isSafeInteger(PORT) || PORT <= 0 || PORT > 65535) throw new Error('ADR_PORT must be a valid TCP port');
-if (!Number.isSafeInteger(MAX_UPLOAD_BYTES) || MAX_UPLOAD_BYTES <= 0) {
-  throw new Error('ADR_MAX_SOURCE_UPLOAD_BYTES must be a positive safe integer');
-}
-if (!OPERATOR_TOKEN) {
-  throw new Error('ADR_OPERATOR_TOKEN is required; operator ingestion routes are never started without a bearer token');
-}
+if (!Number.isSafeInteger(MAX_UPLOAD_BYTES) || MAX_UPLOAD_BYTES <= 0) throw new Error('ADR_MAX_SOURCE_UPLOAD_BYTES must be a positive safe integer');
+if (!OPERATOR_TOKEN) throw new Error('ADR_OPERATOR_TOKEN is required; operator ingestion routes are never started without a bearer token');
 
 mkdirSync(DATA_DIR, { recursive: true });
-const ledger = new AuthorityLedger();
+const restoredCheckpoint = loadPilotCheckpoint({ path: CHECKPOINT_PATH });
+const ledger = restoredCheckpoint ? AuthorityLedger.fromSnapshot(restoredCheckpoint.ledger) : new AuthorityLedger();
 const artifactStore = new FileSystemScopedArtifactStore({ rootDir: ARTIFACT_DIR });
 const sourceRegistry = new SourceRegistry({ ledger, artifactStore });
-const ingestion = new PilotSourceIngestionService({ sourceRegistry, artifactStore, maxUploadBytes: MAX_UPLOAD_BYTES });
+const ingestion = new PilotSourceIngestionService({
+  sourceRegistry,
+  artifactStore,
+  maxUploadBytes: MAX_UPLOAD_BYTES,
+  snapshot: restoredCheckpoint?.ingestion ?? null
+});
 const compiler = new ScientificCompiler({ ledger, sourceRegistry });
 const reviewAdapter = new PilotReviewAdapter({ ledger, operatorId: OPERATOR_ID });
 let compilerDefinition = null;
+let checkpointHash = restoredCheckpoint ? 'RESTORED_AND_VERIFIED' : 'EMPTY_RUNTIME';
+
+function checkpointRuntime() {
+  checkpointHash = savePilotCheckpoint({ path: CHECKPOINT_PATH, ledger, ingestion });
+  return checkpointHash;
+}
 
 function json(res, status, payload) {
   const body = Buffer.from(JSON.stringify(payload, null, 2));
@@ -68,11 +82,7 @@ function json(res, status, payload) {
 
 function text(res, status, body, contentType = 'text/plain; charset=utf-8') {
   const bytes = Buffer.from(body);
-  res.writeHead(status, {
-    'content-type': contentType,
-    'content-length': bytes.byteLength,
-    'cache-control': 'no-store'
-  });
+  res.writeHead(status, { 'content-type': contentType, 'content-length': bytes.byteLength, 'cache-control': 'no-store' });
   res.end(bytes);
 }
 
@@ -148,6 +158,7 @@ function errorStatus(error) {
   }
   if (error instanceof OpenAIExtractionError) return error.code === 'EXTRACTION_PROVIDER_NOT_CONFIGURED' ? 503 : 502;
   if (error instanceof ScientificCompilerError || error instanceof SourceFaithfulReviewError) return 409;
+  if (error instanceof PilotCheckpointError) return 500;
   if (typeof error?.code === 'string' && error.code.includes('AUTHORITY')) return 409;
   return 500;
 }
@@ -171,8 +182,9 @@ const server = createServer(async (req, res) => {
       return json(res, 200, {
         ready: true,
         service: 'adr-pilot-api',
-        authorityPersistence: 'IN_MEMORY_NOT_RESTART_DURABLE',
+        authorityPersistence: 'LOCAL_CHECKPOINT_RESTART_DURABLE_V1',
         artifactPersistence: 'FILESYSTEM_SCOPED_CONTENT_ADDRESSABLE',
+        checkpoint: { path: CHECKPOINT_PATH, state: checkpointHash },
         maxSourceUploadBytes: MAX_UPLOAD_BYTES,
         extraction: {
           configured: extractionConfigured(),
@@ -193,7 +205,9 @@ const server = createServer(async (req, res) => {
       if (!operatorAuthorized(req)) return json(res, 401, { error: 'OPERATOR_AUTH_REQUIRED' });
 
       if (req.method === 'POST' && url.pathname === '/operator/source-uploads') {
-        return json(res, 201, ingestion.createUpload(await readJson(req)));
+        const created = ingestion.createUpload(await readJson(req));
+        checkpointRuntime();
+        return json(res, 201, created);
       }
 
       const parsed = uploadPath(url.pathname);
@@ -201,7 +215,14 @@ const server = createServer(async (req, res) => {
       if (parsed && req.method === 'PUT' && parsed.action === 'content') {
         const contentType = String(req.headers['content-type'] ?? '').split(';')[0].trim().toLowerCase();
         if (contentType !== 'application/pdf') return json(res, 415, { error: 'PDF_CONTENT_TYPE_REQUIRED' });
-        return json(res, 201, await ingestion.uploadPdf({ uploadId: parsed.uploadId, readable: req }));
+        try {
+          const stored = await ingestion.uploadPdf({ uploadId: parsed.uploadId, readable: req });
+          checkpointRuntime();
+          return json(res, 201, stored);
+        } catch (error) {
+          checkpointRuntime();
+          throw error;
+        }
       }
       if (parsed && req.method === 'POST' && parsed.action === 'finalize') {
         const result = ingestion.finalizeUpload({
@@ -209,6 +230,7 @@ const server = createServer(async (req, res) => {
           sourceAudit: audit(`evt-source-upload:${parsed.uploadId}:source`),
           artifactAudit: audit(`evt-source-upload:${parsed.uploadId}:artifact`)
         });
+        checkpointRuntime();
         return json(res, 201, {
           upload: result.upload,
           sourceRef: result.source.ref,
@@ -251,6 +273,7 @@ const server = createServer(async (req, res) => {
           proposal: providerResult.proposal,
           audit: audit(`evt-compilation:${parsed.uploadId}:${compilationVersion}`, { actorType: 'SERVICE', channel: 'pilot-api-source-extraction' })
         });
+        checkpointRuntime();
         const candidates = compiled.claimCandidates.map((claimRecord, index) => {
           const contextRecord = compiled.sourceContextCandidates[index];
           return {
@@ -289,6 +312,7 @@ const server = createServer(async (req, res) => {
           contextAdjudication: body.contextAdjudication,
           version: typeof body.reviewVersion === 'string' && body.reviewVersion.trim() ? body.reviewVersion.trim() : `review-${new Date().toISOString()}`
         });
+        checkpointRuntime();
         return json(res, 201, {
           reviewRef: reviewed.review.ref,
           disposition: reviewed.review.semanticPayload.disposition,
@@ -312,8 +336,9 @@ server.headersTimeout = 60_000;
 server.listen(PORT, HOST, () => {
   console.log(`ADR pilot API listening on http://${HOST}:${PORT}`);
   console.log(`Artifact directory: ${ARTIFACT_DIR}`);
+  console.log(`Checkpoint: ${CHECKPOINT_PATH} (${checkpointHash})`);
   console.log(`Max source upload bytes: ${MAX_UPLOAD_BYTES}`);
   console.log(`Extraction provider: ${extractionConfigured() ? `${ADR_EXTRACTION_PROVIDER}/${EXTRACTION_MODEL}` : 'NOT_CONFIGURED'}`);
   console.log('Source-faithful review: ENABLED');
-  console.log('Authority persistence: IN_MEMORY_NOT_RESTART_DURABLE');
+  console.log('Authority persistence: LOCAL_CHECKPOINT_RESTART_DURABLE_V1');
 });
