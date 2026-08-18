@@ -60,7 +60,17 @@
       <div><label>Tenant</label><input id="tenant" value="tenant-a"></div>
     </div>
     <p><button id="resume" class="secondary">Resume existing SourceArtifact</button></p>
-    <p class="note">After a browser refresh, paste the existing upload id and resume it. This does not upload or re-materialize the PDF. Re-select the same local PDF below only if you want the left-side PDF preview.</p>
+    <p class="note">After a browser refresh or process restart, resume the existing upload id. This does not upload or re-materialize the PDF. Re-select the same local PDF below only for preview.</p>
+    <div id="compilationRecovery" hidden>
+      <div class="split"></div>
+      <h3>Resume existing compilation</h3>
+      <p class="note">Read-only recovery from the restored AuthorityLedger. Selecting a compilation does not re-import the external model output and does not create a new compilation version.</p>
+      <div class="grid">
+        <div><label>Existing compilation</label><select id="compilationSelect"></select></div>
+        <div><label>Recovery state</label><div id="compilationSummary" class="status">NO_COMPILATION_SELECTED</div></div>
+      </div>
+      <p><button id="resumeCompilation" class="secondary" disabled>Resume existing compilation</button></p>
+    </div>
   </section>
 
   <section class="card">
@@ -121,12 +131,13 @@ let currentUploadId = null;
 let extractionConfigured = false;
 let sourceMaterialized = false;
 let currentCompilation = null;
+let recoverableCompilations = [];
 let pdfObjectUrl = null;
 
 function authHeaders(extra = {}) { return { Authorization: `Bearer ${$('token').value}`, ...extra }; }
 function setResult(value) { $('result').textContent = typeof value === 'string' ? value : JSON.stringify(value, null, 2); }
 function sourceIdFromFile(file) { return `source.paper.${file.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'upload'}`; }
-function esc(value) { return String(value ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function esc(value) { return String(value ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c])); }
 function refreshButtons() {
   $('importProposal').disabled = !sourceMaterialized;
   $('extract').disabled = !(sourceMaterialized && extractionConfigured && $('externalAuth').checked);
@@ -157,6 +168,51 @@ function jumpToPage(page) {
   if (!pdfObjectUrl || !page) return;
   $('pdf').src = `${pdfObjectUrl}#page=${encodeURIComponent(page)}`;
 }
+function recoveredPreflight(compilation) {
+  const metadata = compilation.runMetadata ?? {};
+  return {
+    total: metadata.originalCandidateCount ?? compilation.candidateCount,
+    reviewable: compilation.candidateCount,
+    invalid: metadata.invalidCandidateCount ?? 0,
+    invalidCandidates: [],
+    importPayloadHash: metadata.importPayloadHash ?? 'NOT_RECORDED'
+  };
+}
+function compilationLabel(compilation) {
+  const metadata = compilation.runMetadata ?? {};
+  const provider = metadata.providerLabel ?? metadata.provider ?? 'UNKNOWN_PROVIDER';
+  const model = metadata.modelLabel ?? metadata.model ?? 'UNKNOWN_MODEL';
+  return `${provider} / ${model} — ${compilation.version} — ${compilation.reviewedCount}/${compilation.candidateCount} reviewed`;
+}
+
+async function loadRecoverableCompilations() {
+  recoverableCompilations = [];
+  $('compilationRecovery').hidden = true;
+  $('resumeCompilation').disabled = true;
+  $('compilationSelect').innerHTML = '';
+  $('compilationSummary').textContent = 'CHECKING_EXISTING_COMPILATIONS';
+  if (!currentUploadId || !sourceMaterialized) return;
+  const response = await fetch(`/operator/source-uploads/${encodeURIComponent(currentUploadId)}/compilations`, { headers: authHeaders() });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(JSON.stringify(payload));
+  recoverableCompilations = payload.compilations ?? [];
+  if (recoverableCompilations.length === 0) {
+    $('compilationSummary').textContent = 'NO_EXISTING_COMPILATIONS';
+    return;
+  }
+  $('compilationSelect').innerHTML = recoverableCompilations.map((compilation, index) => `<option value="${index}">${esc(compilationLabel(compilation))}</option>`).join('');
+  $('compilationRecovery').hidden = false;
+  $('resumeCompilation').disabled = false;
+  const selected = recoverableCompilations[0];
+  $('compilationSummary').textContent = `${selected.reviewedCount}/${selected.candidateCount} reviewed · ${selected.acceptedCount ?? 0} accepted · ${selected.rejectedCount ?? 0} rejected`;
+}
+
+function updateCompilationSummary() {
+  const index = Number($('compilationSelect').value);
+  const selected = recoverableCompilations[index];
+  if (!selected) return $('compilationSummary').textContent = 'NO_COMPILATION_SELECTED';
+  $('compilationSummary').textContent = `${selected.reviewedCount}/${selected.candidateCount} reviewed · ${selected.acceptedCount ?? 0} accepted · ${selected.rejectedCount ?? 0} rejected`;
+}
 
 async function loadReadiness() {
   try {
@@ -179,6 +235,7 @@ async function loadReadiness() {
 }
 
 $('externalAuth').addEventListener('change', refreshButtons);
+$('compilationSelect').addEventListener('change', updateCompilationSummary);
 $('file').addEventListener('change', () => {
   const file = $('file').files[0];
   if (!file) return;
@@ -206,12 +263,33 @@ $('resume').addEventListener('click', async () => {
     $('reviewSection').hidden = true;
     refreshButtons();
     setResult(payload);
+    await loadRecoverableCompilations();
   } catch (error) {
     sourceMaterialized = false;
+    recoverableCompilations = [];
+    $('compilationRecovery').hidden = true;
     $('status').textContent = 'RESUME_FAILED';
     refreshButtons();
     setResult(error.message);
   }
+});
+
+$('resumeCompilation').addEventListener('click', () => {
+  const index = Number($('compilationSelect').value);
+  const compilation = recoverableCompilations[index];
+  if (!compilation) return setResult('Select an existing compilation first.');
+  const payload = { ...compilation, preflight: recoveredPreflight(compilation), recovered: true };
+  $('status').textContent = `CANDIDATES_RECOVERED (${compilation.candidateCount})`;
+  $('importSummary').textContent = `RECOVERED ${compilationLabel(compilation)} HASH=${payload.preflight.importPayloadHash}`;
+  renderCandidates(payload);
+  setResult({
+    recovery: 'READ_ONLY_EXISTING_COMPILATION',
+    compilationResultRef: compilation.compilationResultRef,
+    version: compilation.version,
+    runMetadata: compilation.runMetadata,
+    candidateCount: compilation.candidateCount,
+    reviewedCount: compilation.reviewedCount
+  });
 });
 
 $('upload').addEventListener('click', async () => {
@@ -219,6 +297,7 @@ $('upload').addEventListener('click', async () => {
   if (!file) return setResult('Select a PDF first.');
   if (!$('token').value) return setResult('Operator token is required.');
   $('upload').disabled = true; $('finalize').disabled = true; sourceMaterialized = false; currentCompilation = null;
+  recoverableCompilations = []; $('compilationRecovery').hidden = true;
   $('reviewSection').hidden = true; refreshButtons(); $('progress').value = 0; $('status').textContent = 'CREATING SESSION';
   try {
     const logicalId = $('logicalId').value.trim();
@@ -269,11 +348,23 @@ $('finalize').addEventListener('click', async () => {
     const response = await fetch(`/operator/source-uploads/${encodeURIComponent(currentUploadId)}/finalize`, { method: 'POST', headers: authHeaders() });
     const payload = await response.json(); if (!response.ok) throw new Error(JSON.stringify(payload));
     $('status').textContent = 'SOURCE_MATERIALIZED'; sourceMaterialized = true; refreshButtons(); setResult(payload);
+    await loadRecoverableCompilations();
   } catch (error) { $('status').textContent = 'FAILED'; setResult(error.message); $('finalize').disabled = false; }
 });
 
+function reviewStatus(candidate) {
+  const review = candidate.review;
+  if (!review) return '';
+  if (review.disposition === 'ACCEPT_SOURCE_FAITHFUL') {
+    return `ACCEPT_SOURCE_FAITHFUL → ${review.claimRef ? 'Claim minted' : 'review recorded'} (recovered)`;
+  }
+  return 'REJECT_SOURCE_FAITHFUL → no Claim minted (recovered)';
+}
+
 function candidateHtml(candidate, index) {
   const page = pageOf(candidate.sourceLocator);
+  const reviewed = Boolean(candidate.review);
+  const disabled = reviewed ? ' disabled' : '';
   let contexts = '';
   for (const family of FAMILIES) {
     const data = candidate.contextFamilies?.[family];
@@ -282,21 +373,22 @@ function candidateHtml(candidate, index) {
     for (let i = 0; i < data.dimensions.length; i += 1) {
       const d = data.dimensions[i];
       dims += `<div class="dimension" data-family="${family}" data-dim="${i}">
-        <input class="semanticId" value="${esc(guessSemanticId(d.semanticHint))}" title="canonical semanticId">
-        <select class="valueType">${['CATEGORY','STRING','DECIMAL','INTEGER','BOOLEAN','DATE','TIMESTAMP','UNKNOWN'].map(v => `<option${v===guessValueType(d.valueCandidate)?' selected':''}>${v}</option>`).join('')}</select>
-        <input class="unit" value="${esc(d.unitCandidate ?? '')}" placeholder="unit / blank">
+        <input class="semanticId" value="${esc(guessSemanticId(d.semanticHint))}" title="canonical semanticId"${disabled}>
+        <select class="valueType"${disabled}>${['CATEGORY','STRING','DECIMAL','INTEGER','BOOLEAN','DATE','TIMESTAMP','UNKNOWN'].map(v => `<option${v===guessValueType(d.valueCandidate)?' selected':''}>${v}</option>`).join('')}</select>
+        <input class="unit" value="${esc(d.unitCandidate ?? '')}" placeholder="unit / blank"${disabled}>
       </div><div class="note">${esc(d.semanticHint)} = <strong>${esc(d.valueCandidate)}</strong> · page ${esc(pageOf(d.sourceLocator) ?? '?')} · ${esc(evidenceOf(d.sourceLocator))}</div>`;
     }
     contexts += `<div class="family"><strong>${family}</strong>${dims}</div>`;
   }
-  return `<div class="candidate" id="candidate-${index}">
-    <div><span class="badge">${esc(candidate.claimType)}</span><span class="badge">confidence ${esc(candidate.extractionConfidence ?? 'n/a')}</span></div>
+  const rationale = candidate.review?.rationale ?? '';
+  return `<div class="candidate${reviewed ? ' reviewed' : ''}" id="candidate-${index}">
+    <div><span class="badge">${esc(candidate.claimType)}</span><span class="badge">confidence ${esc(candidate.extractionConfidence ?? 'n/a')}</span>${reviewed ? '<span class="badge">REVIEW RECOVERED</span>' : ''}</div>
     <div class="claim">${esc(candidate.assertion)}</div>
     <div class="evidence"><button class="secondary" onclick="jumpToPage(${Number(page) || 1})">Page ${esc(page ?? '?')}</button> ${esc(evidenceOf(candidate.sourceLocator))}</div>
     ${contexts}
-    <label style="margin-top:12px">Review rationale / rejection reason</label><textarea class="rationale" rows="2" placeholder="Why accept or reject?"></textarea>
-    <div class="actions"><button onclick="submitReview(${index},'ACCEPT_SOURCE_FAITHFUL')">Accept source-faithful</button><button class="reject" onclick="submitReview(${index},'REJECT_SOURCE_FAITHFUL')">Reject</button></div>
-    <div class="status review-status"></div>
+    <label style="margin-top:12px">Review rationale / rejection reason</label><textarea class="rationale" rows="2" placeholder="Why accept or reject?"${disabled}>${esc(rationale)}</textarea>
+    <div class="actions"><button onclick="submitReview(${index},'ACCEPT_SOURCE_FAITHFUL')"${disabled}>Accept source-faithful</button><button class="reject" onclick="submitReview(${index},'REJECT_SOURCE_FAITHFUL')"${disabled}>Reject</button></div>
+    <div class="status review-status">${esc(reviewStatus(candidate))}</div>
   </div>`;
 }
 
@@ -307,7 +399,9 @@ function renderPreflight(payload) {
   for (const item of p.invalidCandidates ?? []) {
     invalid += `<div class="candidate invalid"><span class="badge bad">INVALID</span> <strong>${esc(item.key ?? `candidate-${item.index}`)}</strong><div class="note">${esc(item.claimType ?? 'unknown type')}</div><div class="claim">${esc(item.assertion ?? '')}</div><div class="evidence">${esc(item.error?.code)} — ${esc(item.error?.message)}</div></div>`;
   }
-  $('preflight').innerHTML = `<div class="ok"><strong>Compiler preflight:</strong> total ${esc(p.total)} · reviewable ${esc(p.reviewable)} · invalid ${esc(p.invalid)}<br><span class="mono">raw proposal hash: ${esc(p.importPayloadHash)}</span></div>${invalid ? `<h3>Invalid candidates — not materialized</h3>${invalid}` : ''}`;
+  const recoveredNote = payload.recovered && p.invalid > 0 && (p.invalidCandidates ?? []).length === 0
+    ? '<p class="note">Recovered compilation retains original candidate count, invalid count, and raw proposal hash. Invalid raw candidate bodies were never materialized into authority and therefore are not reconstructed here.</p>' : '';
+  $('preflight').innerHTML = `<div class="ok"><strong>Compiler preflight:</strong> total ${esc(p.total)} · reviewable ${esc(p.reviewable)} · invalid ${esc(p.invalid)}<br><span class="mono">raw proposal hash: ${esc(p.importPayloadHash)}</span>${payload.recovered ? '<br><strong>RECOVERED READ-ONLY:</strong> no re-import performed.' : ''}</div>${recoveredNote}${invalid ? `<h3>Invalid candidates — not materialized</h3>${invalid}` : ''}`;
 }
 
 function renderCandidates(payload) {
@@ -319,7 +413,7 @@ function renderCandidates(payload) {
 
 window.jumpToPage = jumpToPage;
 window.submitReview = async (index, disposition) => {
-  const candidate = currentCompilation?.candidates?.[index]; if (!candidate) return;
+  const candidate = currentCompilation?.candidates?.[index]; if (!candidate || candidate.review) return;
   const card = $(`candidate-${index}`); const rationale = card.querySelector('.rationale').value.trim();
   const contextAdjudication = Object.fromEntries(FAMILIES.map(f => [f, []]));
   if (disposition === 'ACCEPT_SOURCE_FAITHFUL') {
@@ -347,6 +441,14 @@ window.submitReview = async (index, disposition) => {
       })
     });
     const payload = await response.json(); if (!response.ok) throw new Error(JSON.stringify(payload));
+    candidate.review = {
+      reviewRef: payload.reviewRef,
+      disposition: payload.disposition,
+      reasonCodes,
+      rationale: rationale || null,
+      claimRef: payload.claimRef,
+      sourceContextRef: payload.sourceContextRef
+    };
     card.classList.add('reviewed'); card.querySelector('.review-status').textContent = `${payload.disposition} → ${payload.claimRef ? 'Claim minted' : 'no Claim minted'}`;
     setResult(payload);
   } catch (error) {
@@ -375,6 +477,7 @@ $('importProposal').addEventListener('click', async () => {
     $('importSummary').textContent = `TOTAL=${payload.preflight.total} REVIEWABLE=${payload.preflight.reviewable} INVALID=${payload.preflight.invalid} HASH=${payload.preflight.importPayloadHash}`;
     setResult(payload);
     renderCandidates(payload);
+    await loadRecoverableCompilations();
   } catch (error) {
     $('status').textContent = 'MANUAL_IMPORT_FAILED'; $('importSummary').textContent = 'FAILED'; setResult(error.message);
   } finally { refreshButtons(); }
@@ -390,6 +493,7 @@ $('extract').addEventListener('click', async () => {
     });
     const payload = await response.json(); if (!response.ok) throw new Error(JSON.stringify(payload));
     $('status').textContent = `CANDIDATES_READY (${payload.candidateCount})`; setResult(payload); renderCandidates(payload);
+    await loadRecoverableCompilations();
   } catch (error) { $('status').textContent = 'EXTRACTION_FAILED'; setResult(error.message); }
   finally { refreshButtons(); }
 });
