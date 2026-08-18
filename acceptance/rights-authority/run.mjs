@@ -12,6 +12,7 @@ import {
   publishRightsPolicy,
   publishRightsRevocation,
   validateRightsDecision,
+  validateRightsGrant,
   validateRightsRevocation
 } from '../../packages/rights-authority/src/index.mjs';
 
@@ -20,15 +21,19 @@ function principal(principalId, organizationId = 'org-a', tenantId = 'tenant-a',
 }
 
 const OWNER = principal('rights-admin');
+const NON_OWNER = principal('rights-admin-2');
 const ACTOR = principal('scientist-1');
 const OTHER_TENANT_ACTOR = principal('scientist-other', 'org-a', 'tenant-b');
 const EVALUATOR = principal('rights-engine', 'org-a', 'tenant-a', 'SERVICE_ACCOUNT');
+const FOREIGN_EVALUATOR = principal('rights-engine-foreign', 'org-a', 'tenant-b', 'SERVICE_ACCOUNT');
+const OBLIGATIONS = ['NO_MODEL_TRAINING'];
 
-function audit(eventId, who, occurredAt) {
+function audit(eventId, who, occurredAt, inputRefs = []) {
   return {
     eventId,
     occurredAt,
     actor: { type: who.type, id: who.principalId },
+    inputRefs,
     details: { channel: 'rights-authority-acceptance' }
   };
 }
@@ -86,7 +91,8 @@ function allowGrant(env, {
   operation = 'READ_FOR_EXTRACTION',
   purposes = ['SCIENTIFIC_CLAIM_EXTRACTION'],
   jurisdictions = ['US'],
-  obligations = ['NO_MODEL_TRAINING']
+  obligations = OBLIGATIONS,
+  grantorPrincipal = OWNER
 } = {}) {
   return publishRightsGrant({
     ledger: env.ledger,
@@ -98,16 +104,17 @@ function allowGrant(env, {
     rules: [{ operation, purposes, jurisdictions, obligations }],
     validFrom,
     validUntil,
-    grantorPrincipal: OWNER,
-    audit: audit(`evt-${logicalId}`, OWNER, issuedAt)
+    grantorPrincipal,
+    audit: audit(`evt-${logicalId}`, grantorPrincipal, issuedAt)
   });
 }
 
 function decide(env, {
-  logicalId = `rights.decision.${Math.random().toString(16).slice(2)}`,
+  logicalId = 'rights.decision.default',
   at = '2026-08-18T02:00:00Z',
   subjectRef = env.artifact.ref,
   actor = ACTOR,
+  evaluatorPrincipal = EVALUATOR,
   operation = 'READ_FOR_EXTRACTION',
   purpose = 'SCIENTIFIC_CLAIM_EXTRACTION',
   jurisdiction = 'US'
@@ -119,12 +126,34 @@ function decide(env, {
     rightsPolicyRef: env.policy.ref,
     subjectRef,
     actor,
-    evaluatorPrincipal: EVALUATOR,
+    evaluatorPrincipal,
     operation,
     purpose,
     jurisdiction,
     evaluatedAt: at,
-    audit: audit(`evt-${logicalId}`, EVALUATOR, at)
+    audit: audit(`evt-${logicalId}`, evaluatorPrincipal, at)
+  });
+}
+
+function assertAllowed(env, decision, {
+  at = '2026-08-18T02:00:00Z',
+  subjectRef = env.artifact.ref,
+  actor = ACTOR,
+  operation = 'READ_FOR_EXTRACTION',
+  purpose = 'SCIENTIFIC_CLAIM_EXTRACTION',
+  jurisdiction = 'US',
+  enforceableObligations = OBLIGATIONS
+} = {}) {
+  return assertRightsAllowed({
+    ledger: env.ledger,
+    rightsDecisionRef: decision.ref,
+    subjectRef,
+    actor,
+    operation,
+    purpose,
+    jurisdiction,
+    requiredAt: at,
+    enforceableObligations
   });
 }
 
@@ -156,6 +185,25 @@ test('UNKNOWN/no applicable grant is an auditable DENY, never implicit allow', (
   assert.deepEqual(decision.semanticPayload.reasonCodes, ['NO_APPLICABLE_GRANT']);
   assert.equal(decision.semanticPayload.decisionAuthorityClaim, RIGHTS_DECISION_AUTHORITY_CLAIM);
   assert.equal(decision.semanticPayload.decisionTimeSemantics, RIGHTS_DECISION_TIME_SEMANTICS);
+  expectError(() => assertAllowed(env, decision), RightsAuthorityError, 'RIGHTS_DENIED');
+});
+
+test('exact matching grant yields ALLOW with exact grant authority and mandatory obligations', () => {
+  const env = world('allow');
+  const grant = allowGrant(env, { logicalId: 'rights.grant.allow' });
+  const decision = decide(env, { logicalId: 'rights.decision.allow' });
+  assert.equal(decision.semanticPayload.outcome, 'ALLOW');
+  assert.deepEqual(decision.semanticPayload.reasonCodes, []);
+  assert.deepEqual(decision.semanticPayload.obligations, OBLIGATIONS);
+  assert.equal(decision.semanticPayload.grantRefs.length, 1);
+  assert.equal(decision.semanticPayload.grantRefs[0].semanticHash, grant.ref.semanticHash);
+  assertAllowed(env, decision);
+});
+
+test('ALLOW obligations cannot be silently ignored by the consuming enforcement point', () => {
+  const env = world('obligations');
+  allowGrant(env, { logicalId: 'rights.grant.obligations' });
+  const decision = decide(env, { logicalId: 'rights.decision.obligations' });
   expectError(() => assertRightsAllowed({
     ledger: env.ledger,
     rightsDecisionRef: decision.ref,
@@ -165,43 +213,18 @@ test('UNKNOWN/no applicable grant is an auditable DENY, never implicit allow', (
     purpose: 'SCIENTIFIC_CLAIM_EXTRACTION',
     jurisdiction: 'US',
     requiredAt: '2026-08-18T02:00:00Z'
-  }), RightsAuthorityError, 'RIGHTS_DENIED');
-});
-
-test('exact matching grant yields ALLOW with obligations and exact grant lineage', () => {
-  const env = world('allow');
-  const grant = allowGrant(env, { logicalId: 'rights.grant.allow' });
-  const decision = decide(env, { logicalId: 'rights.decision.allow' });
-  assert.equal(decision.semanticPayload.outcome, 'ALLOW');
-  assert.deepEqual(decision.semanticPayload.reasonCodes, []);
-  assert.deepEqual(decision.semanticPayload.obligations, ['NO_MODEL_TRAINING']);
-  assert.equal(decision.semanticPayload.grantRefs.length, 1);
-  assert.equal(decision.semanticPayload.grantRefs[0].semanticHash, grant.ref.semanticHash);
-  assertRightsAllowed({
-    ledger: env.ledger,
-    rightsDecisionRef: decision.ref,
-    subjectRef: env.artifact.ref,
-    actor: ACTOR,
-    operation: 'READ_FOR_EXTRACTION',
-    purpose: 'SCIENTIFIC_CLAIM_EXTRACTION',
-    jurisdiction: 'US',
-    requiredAt: '2026-08-18T02:00:00Z'
-  });
+  }), RightsAuthorityError, 'RIGHTS_OBLIGATION_CAPABILITY_REQUIRED');
+  expectError(() => assertAllowed(env, decision, { enforceableObligations: [] }), RightsAuthorityError, 'RIGHTS_OBLIGATION_UNSUPPORTED');
+  assertAllowed(env, decision, { enforceableObligations: ['NO_MODEL_TRAINING', 'EXTRA_UNUSED_CAPABILITY'] });
 });
 
 test('Source grant never silently inherits to SourceArtifact', () => {
   const env = world('no-inheritance');
-  allowGrant(env, {
-    logicalId: 'rights.grant.source-only',
-    subjectRef: env.source.ref
-  });
+  allowGrant(env, { logicalId: 'rights.grant.source-only', subjectRef: env.source.ref });
   const artifactDecision = decide(env, { logicalId: 'rights.decision.artifact-no-inheritance' });
   assert.equal(artifactDecision.semanticPayload.outcome, 'DENY');
   assert.deepEqual(artifactDecision.semanticPayload.reasonCodes, ['NO_APPLICABLE_GRANT']);
-  const sourceDecision = decide(env, {
-    logicalId: 'rights.decision.source-exact',
-    subjectRef: env.source.ref
-  });
+  const sourceDecision = decide(env, { logicalId: 'rights.decision.source-exact', subjectRef: env.source.ref });
   assert.equal(sourceDecision.semanticPayload.outcome, 'ALLOW');
 });
 
@@ -222,12 +245,42 @@ test('actor, purpose and jurisdiction scope mismatches fail closed', () => {
   assert.ok(jurisdictionDecision.semanticPayload.reasonCodes.includes('JURISDICTION_NOT_GRANTED'));
 });
 
+test('RA01 permits no implicit same-tenant grant administration delegation', () => {
+  const env = world('grant-owner');
+  expectError(() => allowGrant(env, {
+    logicalId: 'rights.grant.non-owner',
+    grantorPrincipal: NON_OWNER
+  }), RightsAuthorityError, 'RIGHTS_GRANTOR_NOT_POLICY_OWNER');
+  assert.equal(env.ledger.exportSnapshot().records.filter((record) => record.ref.kind === 'RightsGrant').length, 0);
+});
+
+test('RA01 permits no implicit same-tenant revocation administration delegation', () => {
+  const env = world('revoke-owner');
+  const grant = allowGrant(env, { logicalId: 'rights.grant.revocation-owner' });
+  expectError(() => publishRightsRevocation({
+    ledger: env.ledger,
+    logicalId: 'rights.revocation.non-owner',
+    version: '1',
+    rightsGrantRef: grant.ref,
+    effectiveAt: '2026-08-18T02:30:00Z',
+    reasonCodes: ['LICENSE_TERMINATED'],
+    revokerPrincipal: NON_OWNER,
+    audit: audit('evt-rights-revocation-non-owner', NON_OWNER, '2026-08-18T03:00:00Z')
+  }), RightsAuthorityError, 'RIGHTS_REVOKER_NOT_POLICY_OWNER');
+});
+
+test('RightsDecision evaluator is tenant-scoped to the exact RightsPolicy world', () => {
+  const env = world('evaluator-scope');
+  allowGrant(env, { logicalId: 'rights.grant.evaluator-scope' });
+  expectError(() => decide(env, {
+    logicalId: 'rights.decision.foreign-evaluator',
+    evaluatorPrincipal: FOREIGN_EVALUATOR
+  }), RightsAuthorityError, 'RIGHTS_EVALUATOR_SCOPE_MISMATCH');
+});
+
 test('grant expiry blocks new use but does not invalidate historical ALLOW replay', () => {
   const env = world('expiry');
-  allowGrant(env, {
-    logicalId: 'rights.grant.expiry',
-    validUntil: '2026-08-18T03:00:00Z'
-  });
+  allowGrant(env, { logicalId: 'rights.grant.expiry', validUntil: '2026-08-18T03:00:00Z' });
   const historical = decide(env, { logicalId: 'rights.decision.before-expiry', at: '2026-08-18T02:00:00Z' });
   assert.equal(historical.semanticPayload.outcome, 'ALLOW');
   const current = decide(env, { logicalId: 'rights.decision.after-expiry', at: '2026-08-18T03:00:00Z' });
@@ -280,16 +333,7 @@ test('point-in-time ALLOW cannot be replayed as authority for a later action tim
   const env = world('stale');
   allowGrant(env, { logicalId: 'rights.grant.stale' });
   const decision = decide(env, { logicalId: 'rights.decision.stale', at: '2026-08-18T02:00:00Z' });
-  expectError(() => assertRightsAllowed({
-    ledger: env.ledger,
-    rightsDecisionRef: decision.ref,
-    subjectRef: env.artifact.ref,
-    actor: ACTOR,
-    operation: 'READ_FOR_EXTRACTION',
-    purpose: 'SCIENTIFIC_CLAIM_EXTRACTION',
-    jurisdiction: 'US',
-    requiredAt: '2026-08-18T02:00:01Z'
-  }), RightsAuthorityError, 'STALE_RIGHTS_DECISION_FOR_ACTION');
+  expectError(() => assertAllowed(env, decision, { at: '2026-08-18T02:00:01Z' }), RightsAuthorityError, 'STALE_RIGHTS_DECISION_FOR_ACTION');
 });
 
 test('unknown operation fails closed before a RightsDecision can be published', () => {
@@ -299,6 +343,54 @@ test('unknown operation fails closed before a RightsDecision can be published', 
     operation: 'DO_WHATEVER_THE_MODEL_WANTS'
   }), RightsAuthorityError, 'UNKNOWN_RIGHTS_OPERATION');
   assert.equal(env.ledger.exportSnapshot().records.filter((record) => record.ref.kind === 'RightsDecision').length, 0);
+});
+
+test('generic AuthorityLedger cannot smuggle hidden RightsGrant semantics past the hardened evaluator', () => {
+  const env = world('semantic-smuggling');
+  const valid = allowGrant(env, { logicalId: 'rights.grant.valid-template' });
+  const injected = env.ledger.publish({
+    kind: 'RightsGrant',
+    logicalId: 'rights.grant.injected-hidden-field',
+    version: '1',
+    semanticPayload: {
+      ...valid.semanticPayload,
+      hiddenOverride: 'ALLOW_EVERYTHING'
+    },
+    audit: audit(
+      'evt-rights-grant-injected-hidden-field',
+      OWNER,
+      valid.semanticPayload.issuedAt,
+      [env.policy.ref, env.artifact.ref]
+    )
+  });
+  expectError(() => validateRightsGrant({
+    ledger: env.ledger,
+    rightsGrantRef: injected.ref
+  }), RightsAuthorityError, 'RIGHTS_SEMANTIC_FIELD_FORBIDDEN');
+  expectError(() => decide(env, {
+    logicalId: 'rights.decision.block-smuggled-world'
+  }), RightsAuthorityError, 'RIGHTS_SEMANTIC_FIELD_FORBIDDEN');
+});
+
+test('semantic publication timestamps are authority-bound to direct audit time', () => {
+  const env = world('audit-time');
+  const valid = allowGrant(env, { logicalId: 'rights.grant.audit-template' });
+  const injected = env.ledger.publish({
+    kind: 'RightsGrant',
+    logicalId: 'rights.grant.audit-time-forged',
+    version: '1',
+    semanticPayload: {
+      ...valid.semanticPayload,
+      issuedAt: '2026-08-18T01:30:00Z'
+    },
+    audit: audit(
+      'evt-rights-grant-audit-time-forged',
+      OWNER,
+      '2026-08-18T01:00:00Z',
+      [env.policy.ref, env.artifact.ref]
+    )
+  });
+  expectError(() => validateRightsGrant({ ledger: env.ledger, rightsGrantRef: injected.ref }), RightsAuthorityError, 'RIGHTS_GRANT_AUDIT_TIME_MISMATCH');
 });
 
 test('Rights authority objects inherit immutable semantic identity from AuthorityLedger', () => {
