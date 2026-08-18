@@ -17,6 +17,11 @@ import {
 } from '../../../packages/scientific-compiler/src/index.mjs';
 import { SourceFaithfulReviewError } from '../../../packages/knowledge-registry/src/source-faithful.mjs';
 import { materializePilotOpenApi } from '../../../packages/public-api/src/index.mjs';
+import { RightsAuthorityError } from '../../../packages/rights-authority/src/index.mjs';
+import {
+  RightsEnforcementError,
+  bindExtractionRightsToCompilation
+} from '../../../packages/rights-enforcement/src/index.mjs';
 import {
   ADR_EXTRACTION_PROMPT_VERSION,
   ADR_EXTRACTION_PROVIDER,
@@ -27,6 +32,7 @@ import {
 import { ManualExternalProposalImportService } from './extraction/manual-import.mjs';
 import { PilotReviewAdapter } from './review/pilot-review.mjs';
 import { listRecoverableCompilations } from './recovery/compilation-recovery.mjs';
+import { PilotRightsRuntime } from './rights/runtime.mjs';
 import {
   PilotCheckpointError,
   loadPilotCheckpoint,
@@ -62,6 +68,13 @@ const ingestion = new PilotSourceIngestionService({
   maxUploadBytes: MAX_UPLOAD_BYTES,
   snapshot: restoredCheckpoint?.ingestion ?? null
 });
+const pilotRights = new PilotRightsRuntime({
+  ledger,
+  sourceRegistry,
+  ingestion,
+  operatorId: OPERATOR_ID,
+  snapshot: restoredCheckpoint?.rightsGovernance ?? null
+});
 const compiler = new ScientificCompiler({ ledger, sourceRegistry });
 const manualProposalImporter = new ManualExternalProposalImportService({ ledger, sourceRegistry, artifactStore });
 const reviewAdapter = new PilotReviewAdapter({ ledger, operatorId: OPERATOR_ID });
@@ -69,7 +82,12 @@ let compilerDefinition = null;
 let checkpointHash = restoredCheckpoint ? 'RESTORED_AND_VERIFIED' : 'EMPTY_RUNTIME';
 
 function checkpointRuntime() {
-  checkpointHash = savePilotCheckpoint({ path: CHECKPOINT_PATH, ledger, ingestion });
+  checkpointHash = savePilotCheckpoint({
+    path: CHECKPOINT_PATH,
+    ledger,
+    ingestion,
+    rightsGovernance: pilotRights
+  });
   return checkpointHash;
 }
 
@@ -122,7 +140,7 @@ function audit(eventId, { actorType = 'USER', channel = 'pilot-api-source-ingest
 }
 
 function uploadPath(pathname) {
-  const match = pathname.match(/^\/operator\/source-uploads\/([^/]+)(?:\/(content|finalize|extract|import-proposal|review))?$/);
+  const match = pathname.match(/^\/operator\/source-uploads\/([^/]+)(?:\/(content|finalize|extract|import-proposal|review|rights-grants))?$/);
   if (!match) return null;
   return { uploadId: decodeURIComponent(match[1]), action: match[2] ?? null };
 }
@@ -134,6 +152,16 @@ function recoveryPath(pathname) {
 }
 
 function extractionConfigured() { return Boolean(OPENAI_API_KEY && EXTRACTION_MODEL); }
+
+function governedOrLegacyUpload(uploadId) {
+  try {
+    const governed = pilotRights.getGovernedUpload(uploadId);
+    return { ...governed.upload, rightsGovernance: governed.governance };
+  } catch (error) {
+    if (!(error instanceof RightsEnforcementError) || error.code !== 'RIGHTS_GOVERNED_UPLOAD_NOT_FOUND') throw error;
+    return { ...ingestion.getUpload(uploadId), rightsGovernance: null };
+  }
+}
 
 function extractionCompilerDefinition() {
   if (!extractionConfigured()) throw new OpenAIExtractionError('EXTRACTION_PROVIDER_NOT_CONFIGURED', 'OPENAI_API_KEY and ADR_EXTRACTION_MODEL are required');
@@ -165,6 +193,7 @@ function errorStatus(error) {
     if (error.code === 'SOURCE_UPLOAD_STATE_INVALID') return 409;
     return 400;
   }
+  if (error instanceof RightsAuthorityError || error instanceof RightsEnforcementError) return 409;
   if (error instanceof OpenAIExtractionError) return error.code === 'EXTRACTION_PROVIDER_NOT_CONFIGURED' ? 503 : 502;
   if (error instanceof ScientificCompilerError || error instanceof SourceFaithfulReviewError) return 409;
   if (error instanceof PilotCheckpointError) return 500;
@@ -195,6 +224,13 @@ const server = createServer(async (req, res) => {
         artifactPersistence: 'FILESYSTEM_SCOPED_CONTENT_ADDRESSABLE',
         checkpoint: { path: CHECKPOINT_PATH, state: checkpointHash },
         maxSourceUploadBytes: MAX_UPLOAD_BYTES,
+        rightsEnforcement: {
+          version: 'adr.pilot.rights-runtime.v1',
+          newUploadsRequireExactRightsPolicy: true,
+          retentionGate: 'RETAIN_FULLTEXT_BEFORE_CAS',
+          configuredExternalExtractionGates: ['READ_FOR_EXTRACTION', 'MODEL_EGRESS'],
+          legacySessionsAutoAuthorized: false
+        },
         extraction: {
           configured: extractionConfigured(),
           provider: ADR_EXTRACTION_PROVIDER,
@@ -220,9 +256,17 @@ const server = createServer(async (req, res) => {
       if (!operatorAuthorized(req)) return json(res, 401, { error: 'OPERATOR_AUTH_REQUIRED' });
 
       if (req.method === 'POST' && url.pathname === '/operator/source-uploads') {
-        const created = ingestion.createUpload(await readJson(req));
+        const body = await readJson(req);
+        const created = pilotRights.createUpload(
+          body,
+          audit(`evt-source-upload:create:${Date.now()}`, { channel: 'pilot-api-rights-governed-source-create' })
+        );
         checkpointRuntime();
-        return json(res, 201, created);
+        return json(res, 201, {
+          ...created.upload,
+          sourceRef: created.source.ref,
+          rightsGovernance: created.governance
+        });
       }
 
       const recovery = recoveryPath(url.pathname);
@@ -235,24 +279,52 @@ const server = createServer(async (req, res) => {
       }
 
       const parsed = uploadPath(url.pathname);
-      if (parsed && req.method === 'GET' && parsed.action === null) return json(res, 200, ingestion.getUpload(parsed.uploadId));
+      if (parsed && req.method === 'GET' && parsed.action === null) return json(res, 200, governedOrLegacyUpload(parsed.uploadId));
+
+      if (parsed && req.method === 'POST' && parsed.action === 'rights-grants') {
+        const body = await readJson(req);
+        const grantAudit = audit(`evt-rights-grant:${parsed.uploadId}:${Date.now()}`, { channel: 'pilot-api-rights-grant' });
+        const provisioned = pilotRights.publishGrant({
+          uploadId: parsed.uploadId,
+          subject: body.subject,
+          rules: body.rules,
+          validFrom: body.validFrom ?? grantAudit.occurredAt,
+          validUntil: body.validUntil,
+          grantAudit
+        });
+        checkpointRuntime();
+        return json(res, 201, {
+          rightsGrantRef: provisioned.grant.ref,
+          rightsPolicyRef: provisioned.rightsPolicyRef,
+          subjectRef: provisioned.subjectRef,
+          authorityClaim: 'RIGHTS_GRANT_AUTHORITY_ONLY'
+        });
+      }
+
       if (parsed && req.method === 'PUT' && parsed.action === 'content') {
         const contentType = String(req.headers['content-type'] ?? '').split(';')[0].trim().toLowerCase();
         if (contentType !== 'application/pdf') return json(res, 415, { error: 'PDF_CONTENT_TYPE_REQUIRED' });
+        const jurisdiction = url.searchParams.get('rightsJurisdiction');
+        if (!jurisdiction) return json(res, 409, { error: 'RIGHTS_JURISDICTION_REQUIRED', message: 'rightsJurisdiction is required for RETAIN_FULLTEXT evaluation' });
         try {
-          const stored = await ingestion.uploadPdf({ uploadId: parsed.uploadId, readable: req });
+          const stored = await pilotRights.uploadPdf({
+            uploadId: parsed.uploadId,
+            readable: req,
+            jurisdiction,
+            at: new Date().toISOString()
+          });
           checkpointRuntime();
-          return json(res, 201, stored);
+          return json(res, 201, { ...stored.upload, rightsGovernance: stored.governance });
         } catch (error) {
           checkpointRuntime();
           throw error;
         }
       }
+
       if (parsed && req.method === 'POST' && parsed.action === 'finalize') {
-        const result = ingestion.finalizeUpload({
+        const result = pilotRights.finalizeUpload({
           uploadId: parsed.uploadId,
-          sourceAudit: audit(`evt-source-upload:${parsed.uploadId}:source`),
-          artifactAudit: audit(`evt-source-upload:${parsed.uploadId}:artifact`)
+          artifactAudit: audit(`evt-source-upload:${parsed.uploadId}:artifact`, { channel: 'pilot-api-rights-governed-source-finalize' })
         });
         checkpointRuntime();
         return json(res, 201, {
@@ -260,70 +332,99 @@ const server = createServer(async (req, res) => {
           sourceRef: result.source.ref,
           sourceArtifactRef: result.sourceArtifact.ref,
           contentHash: result.sourceArtifact.semanticPayload.contentHash,
-          byteLength: result.sourceArtifact.semanticPayload.byteLength
+          byteLength: result.sourceArtifact.semanticPayload.byteLength,
+          rightsGovernance: result.governance
         });
       }
+
       if (parsed && req.method === 'POST' && parsed.action === 'extract') {
         if (!extractionConfigured()) return json(res, 503, { error: 'EXTRACTION_PROVIDER_NOT_CONFIGURED', required: ['OPENAI_API_KEY', 'ADR_EXTRACTION_MODEL'] });
         const body = await readJson(req);
         if (body.externalProcessingAuthorized !== true) {
           return json(res, 409, {
             error: 'EXTERNAL_MODEL_PROCESSING_AUTHORIZATION_REQUIRED',
-            message: 'set externalProcessingAuthorized=true only when this SourceArtifact may be sent to the configured external model provider'
+            message: 'externalProcessingAuthorized=true is required in addition to RightsDecision authority'
           });
+        }
+        if (typeof body.rightsJurisdiction !== 'string' || !body.rightsJurisdiction.trim()) {
+          return json(res, 409, { error: 'RIGHTS_JURISDICTION_REQUIRED', message: 'rightsJurisdiction is required for external extraction rights evaluation' });
         }
         const upload = ingestion.getUpload(parsed.uploadId);
         if (upload.state !== 'SOURCE_MATERIALIZED' || !upload.sourceArtifactRef) {
           return json(res, 409, { error: 'SOURCE_UPLOAD_STATE_INVALID', message: `extract requires SOURCE_MATERIALIZED, received ${upload.state}` });
         }
         const artifact = sourceRegistry.resolveArtifact(upload.sourceArtifactRef);
-        const providerResult = await extractCompilationProposalWithOpenAI({
-          readable: sourceRegistry.readArtifactStream(artifact.ref),
-          byteLength: artifact.semanticPayload.byteLength,
-          filename: upload.filename,
-          model: EXTRACTION_MODEL,
-          apiKey: OPENAI_API_KEY
-        });
-        const definition = extractionCompilerDefinition();
-        const compilationVersion = typeof body.compilationVersion === 'string' && body.compilationVersion.trim()
-          ? body.compilationVersion.trim() : `run-${new Date().toISOString()}`;
-        const compilationLogicalId = typeof body.compilationLogicalId === 'string' && body.compilationLogicalId.trim()
-          ? body.compilationLogicalId.trim() : `compilation.${artifact.ref.logicalId}`;
-        const compiled = compiler.materializeCompilationProposal({
-          compilationLogicalId,
-          version: compilationVersion,
-          sourceArtifactRef: artifact.ref,
-          compilerDefinitionRef: definition.ref,
-          proposal: providerResult.proposal,
-          audit: audit(`evt-compilation:${parsed.uploadId}:${compilationVersion}`, { actorType: 'SERVICE', channel: 'pilot-api-source-extraction' })
-        });
-        checkpointRuntime();
-        const candidates = compiled.claimCandidates.map((claimRecord, index) => {
-          const contextRecord = compiled.sourceContextCandidates[index];
-          return {
-            claimCandidateRef: claimRecord.ref,
-            sourceContextCandidateRef: contextRecord.ref,
-            claimType: claimRecord.semanticPayload.claimType,
-            assertion: claimRecord.semanticPayload.assertion,
-            sourceLocator: claimRecord.semanticPayload.sourceLocator,
-            extractionConfidence: claimRecord.semanticPayload.extractionConfidence ?? null,
-            contextFamilies: contextRecord.semanticPayload.contextFamilies
-          };
-        });
-        return json(res, 201, {
-          compilationResultRef: compiled.result.ref,
-          candidateCount: candidates.length,
-          candidates,
-          providerTrace: {
-            provider: providerResult.providerTrace.provider,
-            model: providerResult.providerTrace.model,
-            responseId: providerResult.providerTrace.responseId,
-            uploadedBytes: providerResult.providerTrace.uploadedBytes,
-            fileDeletedAfterExtraction: providerResult.providerTrace.fileDeletedAfterExtraction
-          },
-          authorityClaim: 'PROPOSAL_ONLY'
-        });
+        try {
+          const rightsExtracted = await pilotRights.extractExternal({
+            uploadId: parsed.uploadId,
+            jurisdiction: body.rightsJurisdiction.trim(),
+            at: new Date().toISOString(),
+            enforceableObligations: [],
+            provider: ({ readable }) => extractCompilationProposalWithOpenAI({
+              readable,
+              byteLength: artifact.semanticPayload.byteLength,
+              filename: upload.filename,
+              model: EXTRACTION_MODEL,
+              apiKey: OPENAI_API_KEY
+            })
+          });
+          const providerResult = rightsExtracted.providerResult;
+          const definition = extractionCompilerDefinition();
+          const compilationVersion = typeof body.compilationVersion === 'string' && body.compilationVersion.trim()
+            ? body.compilationVersion.trim() : `run-${new Date().toISOString()}`;
+          const compilationLogicalId = typeof body.compilationLogicalId === 'string' && body.compilationLogicalId.trim()
+            ? body.compilationLogicalId.trim() : `compilation.${artifact.ref.logicalId}`;
+          const compilationAudit = audit(
+            `evt-compilation:${parsed.uploadId}:${compilationVersion}`,
+            { actorType: 'SERVICE', channel: 'pilot-api-source-extraction' }
+          );
+          const rightsBound = bindExtractionRightsToCompilation({
+            ledger,
+            proposal: providerResult.proposal,
+            audit: compilationAudit,
+            rightsDecisionRefs: rightsExtracted.rightsDecisionRefs
+          });
+          const compiled = compiler.materializeCompilationProposal({
+            compilationLogicalId,
+            version: compilationVersion,
+            sourceArtifactRef: artifact.ref,
+            compilerDefinitionRef: definition.ref,
+            proposal: rightsBound.proposal,
+            audit: rightsBound.audit
+          });
+          checkpointRuntime();
+          const candidates = compiled.claimCandidates.map((claimRecord, index) => {
+            const contextRecord = compiled.sourceContextCandidates[index];
+            return {
+              claimCandidateRef: claimRecord.ref,
+              sourceContextCandidateRef: contextRecord.ref,
+              claimType: claimRecord.semanticPayload.claimType,
+              assertion: claimRecord.semanticPayload.assertion,
+              sourceLocator: claimRecord.semanticPayload.sourceLocator,
+              extractionConfidence: claimRecord.semanticPayload.extractionConfidence ?? null,
+              contextFamilies: contextRecord.semanticPayload.contextFamilies
+            };
+          });
+          return json(res, 201, {
+            compilationResultRef: compiled.result.ref,
+            candidateCount: candidates.length,
+            candidates,
+            rightsDecisionRefs: rightsExtracted.rightsDecisionRefs,
+            providerTrace: {
+              provider: providerResult.providerTrace.provider,
+              model: providerResult.providerTrace.model,
+              responseId: providerResult.providerTrace.responseId,
+              uploadedBytes: providerResult.providerTrace.uploadedBytes,
+              fileDeletedAfterExtraction: providerResult.providerTrace.fileDeletedAfterExtraction
+            },
+            authorityClaim: 'PROPOSAL_ONLY'
+          });
+        } catch (error) {
+          checkpointRuntime();
+          throw error;
+        }
       }
+
       if (parsed && req.method === 'POST' && parsed.action === 'import-proposal') {
         const body = await readJson(req);
         const upload = ingestion.getUpload(parsed.uploadId);
@@ -354,6 +455,7 @@ const server = createServer(async (req, res) => {
           authorityClaim: imported.materialized ? 'PROPOSAL_ONLY' : 'NO_AUTHORITY_MATERIALIZED'
         });
       }
+
       if (parsed && req.method === 'POST' && parsed.action === 'review') {
         const body = await readJson(req);
         const reviewed = reviewAdapter.review({
@@ -393,6 +495,7 @@ server.listen(PORT, HOST, () => {
   console.log(`Checkpoint: ${CHECKPOINT_PATH} (${checkpointHash})`);
   console.log(`Max source upload bytes: ${MAX_UPLOAD_BYTES}`);
   console.log(`Extraction provider: ${extractionConfigured() ? `${ADR_EXTRACTION_PROVIDER}/${EXTRACTION_MODEL}` : 'NOT_CONFIGURED'}`);
+  console.log('Rights enforcement: GOVERNED_RETENTION_AND_EXTERNAL_EGRESS_V1');
   console.log('Manual external proposal import: ENABLED');
   console.log('Source-faithful review: ENABLED');
   console.log('Authority persistence: LOCAL_CHECKPOINT_RESTART_DURABLE_V1');
