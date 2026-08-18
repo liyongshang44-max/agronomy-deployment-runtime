@@ -60,6 +60,14 @@ function exactObject(value, allowedKeys, name) {
   }
 }
 
+function typedRecord(ledger, ref, kind, code) {
+  const record = ledger.resolve(ref);
+  if (!record?.ref || record.ref.kind !== kind) {
+    throw new RightsAuthorityError(code, `expected ${kind}, received ${record?.ref?.kind ?? 'UNKNOWN'}`);
+  }
+  return record;
+}
+
 function assertStrictOwnership(value, name) {
   exactObject(value, OWNERSHIP_KEYS, name);
 }
@@ -153,16 +161,16 @@ export function publishRightsPolicy(args) {
 }
 
 export function validateRightsPolicy(args) {
-  const result = rawValidateRightsPolicy(args);
-  assertStrictPolicyPayload(result.record.semanticPayload);
+  const record = typedRecord(args.ledger, args.rightsPolicyRef, 'RightsPolicy', 'RIGHTS_POLICY_REQUIRED');
+  assertStrictPolicyPayload(record.semanticPayload);
   assertAuditTimeEquals(
     args.ledger,
-    result.record,
+    record,
     'PUBLISH_RIGHTS_POLICY',
-    result.record.semanticPayload.publishedAt,
+    record.semanticPayload.publishedAt,
     'RIGHTS_POLICY_AUDIT_TIME_MISMATCH'
   );
-  return result;
+  return rawValidateRightsPolicy(args);
 }
 
 export function publishRightsGrant(args) {
@@ -174,16 +182,17 @@ export function publishRightsGrant(args) {
 }
 
 export function validateRightsGrant(args) {
-  const result = rawValidateRightsGrant(args);
-  assertStrictGrantPayload(result.record.semanticPayload);
-  exactPolicyOwner(result.policy, result.grantorPrincipal, 'RIGHTS_GRANTOR_NOT_POLICY_OWNER');
+  const record = typedRecord(args.ledger, args.rightsGrantRef, 'RightsGrant', 'RIGHTS_GRANT_REQUIRED');
+  assertStrictGrantPayload(record.semanticPayload);
   assertAuditTimeEquals(
     args.ledger,
-    result.record,
+    record,
     'PUBLISH_RIGHTS_GRANT',
-    result.record.semanticPayload.issuedAt,
+    record.semanticPayload.issuedAt,
     'RIGHTS_GRANT_AUDIT_TIME_MISMATCH'
   );
+  const result = rawValidateRightsGrant(args);
+  exactPolicyOwner(result.policy, result.grantorPrincipal, 'RIGHTS_GRANTOR_NOT_POLICY_OWNER');
   return result;
 }
 
@@ -196,16 +205,17 @@ export function publishRightsRevocation(args) {
 }
 
 export function validateRightsRevocation(args) {
-  const result = rawValidateRightsRevocation(args);
-  assertStrictRevocationPayload(result.record.semanticPayload);
-  exactPolicyOwner(result.grant.policy, result.revokerPrincipal, 'RIGHTS_REVOKER_NOT_POLICY_OWNER');
+  const record = typedRecord(args.ledger, args.rightsRevocationRef, 'RightsRevocation', 'RIGHTS_REVOCATION_REQUIRED');
+  assertStrictRevocationPayload(record.semanticPayload);
   assertAuditTimeEquals(
     args.ledger,
-    result.record,
+    record,
     'PUBLISH_RIGHTS_REVOCATION',
-    result.record.semanticPayload.recordedAt,
+    record.semanticPayload.recordedAt,
     'RIGHTS_REVOCATION_AUDIT_TIME_MISMATCH'
   );
+  const result = rawValidateRightsRevocation(args);
+  exactPolicyOwner(result.grant.policy, result.revokerPrincipal, 'RIGHTS_REVOKER_NOT_POLICY_OWNER');
   return result;
 }
 
@@ -227,28 +237,27 @@ export function publishRightsDecision(args) {
 }
 
 export function validateRightsDecision(args) {
-  const raw = args.ledger.resolve(args.rightsDecisionRef);
-  assertStrictDecisionPayload(raw.semanticPayload);
+  const record = typedRecord(args.ledger, args.rightsDecisionRef, 'RightsDecision', 'RIGHTS_DECISION_REQUIRED');
+  assertStrictDecisionPayload(record.semanticPayload);
+  assertAuditTimeEquals(
+    args.ledger,
+    record,
+    `RIGHTS_${record.semanticPayload.operation}_${record.semanticPayload.outcome}`,
+    record.semanticPayload.evaluatedAt,
+    'RIGHTS_DECISION_AUDIT_TIME_MISMATCH'
+  );
   const policy = strictPreflightRightsWorld({
     ledger: args.ledger,
-    rightsPolicyRef: raw.semanticPayload.rightsPolicyRef,
-    subjectRef: raw.semanticPayload.subjectRef
+    rightsPolicyRef: record.semanticPayload.rightsPolicyRef,
+    subjectRef: record.semanticPayload.subjectRef
   });
-  if (!ownershipMatchesPrincipal(policy.ownership, raw.semanticPayload.evaluatorPrincipal)) {
+  if (!ownershipMatchesPrincipal(policy.ownership, record.semanticPayload.evaluatorPrincipal)) {
     throw new RightsAuthorityError(
       'RIGHTS_EVALUATOR_SCOPE_MISMATCH',
       'stored RightsDecision evaluator differs from exact RightsPolicy organization/tenant'
     );
   }
-  const result = rawValidateRightsDecision(args);
-  assertAuditTimeEquals(
-    args.ledger,
-    result.record,
-    `RIGHTS_${result.semanticPayload.operation}_${result.semanticPayload.outcome}`,
-    result.semanticPayload.evaluatedAt,
-    'RIGHTS_DECISION_AUDIT_TIME_MISMATCH'
-  );
-  return result;
+  return rawValidateRightsDecision(args);
 }
 
 function normalizedCapabilities(values) {
