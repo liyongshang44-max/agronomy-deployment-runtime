@@ -15,7 +15,7 @@
     "test:authority": "node acceptance/authority/run.mjs",
     "test:authorization": "node acceptance/authorization/run.mjs && node acceptance/authorization/integrity.mjs && node acceptance/authorization/scoped.mjs && node acceptance/authorization/context-write.mjs && node acceptance/authorization/context-write-a03.mjs && node acceptance/authorization/context-write-a04.mjs && node acceptance/authorization/outcome-write.mjs && node acceptance/authorization/runtime-profile.mjs && node acceptance/authorization/deployment.mjs && node acceptance/authorization/specification.mjs && node acceptance/authorization/implementation.mjs && node acceptance/authorization/implementation-conformance.mjs && node acceptance/authorization/security-operations.mjs",
     "test:rights-authority": "node acceptance/rights-authority/run.mjs && node acceptance/rights-authority/import-boundary.mjs",
-    "test:rights-enforcement": "node acceptance/rights-enforcement/run.mjs && node acceptance/rights-enforcement/integration.mjs && node acceptance/rights-enforcement/checkpoint.mjs && node acceptance/rights-enforcement/provenance.mjs",
+    "test:rights-enforcement": "node acceptance/rights-enforcement/run.mjs && node acceptance/rights-enforcement/integration.mjs && node acceptance/rights-enforcement/checkpoint.mjs && node acceptance/rights-enforcement/provenance.mjs && node acceptance/rights-enforcement/pilot-runtime.mjs",
     "test:source": "node acceptance/source-materialization/run.mjs",
     "test:source-ingestion": "node acceptance/source-ingestion/run.mjs",
     "test:source-extraction": "node acceptance/source-extraction/run.mjs && node acceptance/source-extraction/contract-v3.mjs",
