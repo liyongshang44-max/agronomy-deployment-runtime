@@ -24,6 +24,7 @@ import {
   OpenAIExtractionError,
   extractCompilationProposalWithOpenAI
 } from './extraction/openai.mjs';
+import { ManualExternalProposalImportService } from './extraction/manual-import.mjs';
 import { PilotReviewAdapter } from './review/pilot-review.mjs';
 import {
   PilotCheckpointError,
@@ -61,6 +62,7 @@ const ingestion = new PilotSourceIngestionService({
   snapshot: restoredCheckpoint?.ingestion ?? null
 });
 const compiler = new ScientificCompiler({ ledger, sourceRegistry });
+const manualProposalImporter = new ManualExternalProposalImportService({ ledger, sourceRegistry, artifactStore });
 const reviewAdapter = new PilotReviewAdapter({ ledger, operatorId: OPERATOR_ID });
 let compilerDefinition = null;
 let checkpointHash = restoredCheckpoint ? 'RESTORED_AND_VERIFIED' : 'EMPTY_RUNTIME';
@@ -119,7 +121,7 @@ function audit(eventId, { actorType = 'USER', channel = 'pilot-api-source-ingest
 }
 
 function uploadPath(pathname) {
-  const match = pathname.match(/^\/operator\/source-uploads\/([^/]+)(?:\/(content|finalize|extract|review))?$/);
+  const match = pathname.match(/^\/operator\/source-uploads\/([^/]+)(?:\/(content|finalize|extract|import-proposal|review))?$/);
   if (!match) return null;
   return { uploadId: decodeURIComponent(match[1]), action: match[2] ?? null };
 }
@@ -191,6 +193,12 @@ const server = createServer(async (req, res) => {
           provider: ADR_EXTRACTION_PROVIDER,
           model: EXTRACTION_MODEL || null,
           externalProcessingAuthorizationRequired: true,
+          proposalAuthority: 'PROPOSAL_ONLY'
+        },
+        manualExternalProposalImport: {
+          configured: true,
+          transport: 'USER_COPY_PASTE',
+          modelIdentityAuthority: 'OPERATOR_DECLARED_NOT_VERIFIED',
           proposalAuthority: 'PROPOSAL_ONLY'
         },
         sourceFaithfulReview: { configured: true, humanDispositionRequired: true }
@@ -300,6 +308,36 @@ const server = createServer(async (req, res) => {
           authorityClaim: 'PROPOSAL_ONLY'
         });
       }
+      if (parsed && req.method === 'POST' && parsed.action === 'import-proposal') {
+        const body = await readJson(req);
+        const upload = ingestion.getUpload(parsed.uploadId);
+        if (upload.state !== 'SOURCE_MATERIALIZED' || !upload.sourceArtifactRef) {
+          return json(res, 409, { error: 'SOURCE_UPLOAD_STATE_INVALID', message: `manual import requires SOURCE_MATERIALIZED, received ${upload.state}` });
+        }
+        const artifact = sourceRegistry.resolveArtifact(upload.sourceArtifactRef);
+        const compilationVersion = typeof body.compilationVersion === 'string' && body.compilationVersion.trim()
+          ? body.compilationVersion.trim() : `manual-${new Date().toISOString()}`;
+        const compilationLogicalId = typeof body.compilationLogicalId === 'string' && body.compilationLogicalId.trim()
+          ? body.compilationLogicalId.trim() : `compilation.manual-import.${artifact.ref.logicalId}`;
+        const imported = manualProposalImporter.import({
+          sourceArtifactRef: artifact.ref,
+          proposal: body.proposal,
+          providerLabel: body.providerLabel ?? 'EXTERNAL_WEB',
+          modelLabel: body.modelLabel ?? 'UNKNOWN_MODEL',
+          compilationLogicalId,
+          version: compilationVersion,
+          audit: audit(`evt-manual-import:${parsed.uploadId}:${compilationVersion}`, { actorType: 'USER', channel: 'pilot-api-manual-external-proposal-import' })
+        });
+        checkpointRuntime();
+        return json(res, 200, {
+          preflight: imported.preflight,
+          materialized: imported.materialized,
+          compilationResultRef: imported.compilation?.ref ?? null,
+          candidateCount: imported.candidates.length,
+          candidates: imported.candidates,
+          authorityClaim: imported.materialized ? 'PROPOSAL_ONLY' : 'NO_AUTHORITY_MATERIALIZED'
+        });
+      }
       if (parsed && req.method === 'POST' && parsed.action === 'review') {
         const body = await readJson(req);
         const reviewed = reviewAdapter.review({
@@ -339,6 +377,7 @@ server.listen(PORT, HOST, () => {
   console.log(`Checkpoint: ${CHECKPOINT_PATH} (${checkpointHash})`);
   console.log(`Max source upload bytes: ${MAX_UPLOAD_BYTES}`);
   console.log(`Extraction provider: ${extractionConfigured() ? `${ADR_EXTRACTION_PROVIDER}/${EXTRACTION_MODEL}` : 'NOT_CONFIGURED'}`);
+  console.log('Manual external proposal import: ENABLED');
   console.log('Source-faithful review: ENABLED');
   console.log('Authority persistence: LOCAL_CHECKPOINT_RESTART_DURABLE_V1');
 });
