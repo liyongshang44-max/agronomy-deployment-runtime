@@ -9,6 +9,11 @@ import { RightsEnforcementError } from './errors.mjs';
 export { RightsEnforcementError } from './errors.mjs';
 export { RightsGovernedPilotSourceIngestion, RIGHTS_GOVERNED_SOURCE_INGESTION_VERSION } from './pilot-source.mjs';
 export { RightsGovernedExternalExtraction, RIGHTS_GOVERNED_EXTERNAL_EXTRACTION_VERSION } from './external-extraction.mjs';
+export {
+  bindExtractionRightsToCompilation,
+  RIGHTS_COMPILATION_PROVENANCE_VERSION,
+  RIGHTS_COMPILATION_AUTHORITY_CLAIM
+} from './compilation-provenance.mjs';
 
 export const RIGHTS_EFFECT_GATE_VERSION = 'adr.rights.effect-gate.v1';
 export const RIGHTS_EFFECT_GATE_AUTHORITY_CLAIM = 'ENFORCEMENT_ONLY_NOT_DOMAIN_OR_DECISION_AUTHORITY';
