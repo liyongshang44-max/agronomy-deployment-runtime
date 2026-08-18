@@ -3,100 +3,126 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>ADR Pilot — Source Ingestion</title>
+  <title>ADR Pilot — Scientific Review Workbench</title>
   <style>
     :root { font-family: Inter, ui-sans-serif, system-ui, sans-serif; color-scheme: light; }
     body { margin: 0; background: #f6f7f8; color: #1b1f23; }
-    main { max-width: 920px; margin: 40px auto; padding: 0 20px 60px; }
+    main { max-width: 1200px; margin: 32px auto; padding: 0 20px 60px; }
     h1 { font-size: 28px; margin-bottom: 8px; }
+    h2 { margin-top: 0; }
     .sub { color: #59636e; margin-bottom: 28px; }
     .card { background: white; border: 1px solid #d8dee4; border-radius: 12px; padding: 20px; margin: 16px 0; }
     .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .review-grid { display: grid; grid-template-columns: minmax(0,1.15fr) minmax(420px,.85fr); gap: 16px; align-items: start; }
     label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
-    input, select { width: 100%; box-sizing: border-box; padding: 10px 11px; border: 1px solid #c7ced6; border-radius: 8px; background: white; }
+    input, select, textarea { width: 100%; box-sizing: border-box; padding: 9px 10px; border: 1px solid #c7ced6; border-radius: 8px; background: white; }
     input[type=file] { padding: 14px; border-style: dashed; }
     input[type=checkbox] { width: auto; margin-right: 8px; }
     button { border: 0; border-radius: 8px; padding: 10px 16px; font-weight: 700; cursor: pointer; background: #20252b; color: white; }
+    button.secondary { background: #59636e; }
+    button.reject { background: #a40e26; }
     button:disabled { opacity: .45; cursor: default; }
     progress { width: 100%; height: 16px; }
     pre { white-space: pre-wrap; overflow-wrap: anywhere; background: #0d1117; color: #e6edf3; padding: 14px; border-radius: 8px; min-height: 70px; }
-    .status { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+    .status,.provider,.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
     .warn { background: #fff8c5; border: 1px solid #d4a72c; border-radius: 8px; padding: 10px 12px; font-size: 13px; }
     .note { color: #59636e; font-size: 13px; line-height: 1.5; }
-    .provider { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
-    @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
+    iframe { width: 100%; height: 760px; border: 1px solid #d8dee4; border-radius: 10px; background: #eee; }
+    .candidate { border: 1px solid #d8dee4; border-radius: 10px; padding: 14px; margin-bottom: 14px; }
+    .candidate.reviewed { opacity: .62; }
+    .claim { font-size: 16px; line-height: 1.45; margin: 8px 0; }
+    .evidence { background: #f6f8fa; border-left: 3px solid #8c959f; padding: 8px 10px; margin: 8px 0; font-size: 13px; }
+    .family { margin-top: 12px; border-top: 1px solid #d8dee4; padding-top: 10px; }
+    .dimension { display: grid; grid-template-columns: 1.1fr 1fr .8fr; gap: 8px; margin: 8px 0; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    .badge { display:inline-block; background:#eef1f4; border-radius:999px; padding:3px 7px; font-size:11px; margin-right:6px; }
+    @media (max-width: 900px) { .grid,.review-grid { grid-template-columns: 1fr; } iframe { height: 560px; } }
   </style>
 </head>
 <body>
 <main>
-  <h1>ADR Pilot — Scientific Source Ingestion</h1>
-  <div class="sub">Upload exact PDF bytes, materialize SourceArtifact, then generate proposal-only scientific candidates for human review.</div>
-
-  <div class="warn">This first host persists PDF bytes to scoped filesystem storage, but the AuthorityLedger and upload-session journal are still in-memory. Restart durability is intentionally not claimed yet.</div>
+  <h1>ADR Pilot — Scientific Review Workbench</h1>
+  <div class="sub">Exact PDF → proposal-only extraction → human source-faithful ACCEPT/REJECT.</div>
+  <div class="warn">PDF bytes are durable, but AuthorityLedger and upload-session state are still in-memory. Restart durability is not claimed.</div>
 
   <section class="card">
     <h2>Operator</h2>
     <div class="grid">
-      <div><label for="token">Operator bearer token</label><input id="token" type="password" autocomplete="off"></div>
-      <div><label for="org">Organization</label><input id="org" value="org-a"></div>
-      <div><label for="tenant">Tenant</label><input id="tenant" value="tenant-a"></div>
-      <div><label for="sourceType">Source type</label><select id="sourceType"><option>PUBLICATION</option><option>PROTOCOL</option><option>TRIAL_REPORT</option><option>OTHER</option></select></div>
+      <div><label>Operator bearer token</label><input id="token" type="password" autocomplete="off"></div>
+      <div><label>Organization</label><input id="org" value="org-a"></div>
+      <div><label>Tenant</label><input id="tenant" value="tenant-a"></div>
+      <div><label>Source type</label><select id="sourceType"><option>PUBLICATION</option><option>PROTOCOL</option><option>TRIAL_REPORT</option><option>OTHER</option></select></div>
     </div>
   </section>
 
   <section class="card">
-    <h2>1. Select paper</h2>
+    <h2>1. Upload and materialize source</h2>
     <input id="file" type="file" accept="application/pdf,.pdf">
     <div class="grid" style="margin-top:14px">
-      <div><label for="title">Title</label><input id="title" placeholder="Paper title"></div>
-      <div><label for="doi">DOI (optional)</label><input id="doi" placeholder="10.xxxx/..."></div>
-      <div><label for="logicalId">Source logical id</label><input id="logicalId" placeholder="source.paper.my-study"></div>
-      <div><label for="rights">Rights basis</label><select id="rights"><option>INTERNAL_EVALUATION</option><option>LICENSED</option><option>PUBLIC</option><option>OTHER</option></select></div>
+      <div><label>Title</label><input id="title" placeholder="Paper title"></div>
+      <div><label>DOI (optional)</label><input id="doi" placeholder="10.xxxx/..."></div>
+      <div><label>Source logical id</label><input id="logicalId" placeholder="source.paper.my-study"></div>
+      <div><label>Rights basis</label><select id="rights"><option>INTERNAL_EVALUATION</option><option>LICENSED</option><option>PUBLIC</option><option>OTHER</option></select></div>
     </div>
-    <p><button id="upload">Create session & upload PDF</button></p>
+    <p><button id="upload">Create session & upload PDF</button> <button id="finalize" class="secondary" disabled>Finalize Source + SourceArtifact</button></p>
     <progress id="progress" value="0" max="100"></progress>
     <div id="status" class="status">IDLE</div>
   </section>
 
   <section class="card">
-    <h2>2. Finalize exact source authority</h2>
-    <p>Only enabled after the server has retained the PDF and reproduced its SHA-256 / byte count.</p>
-    <button id="finalize" disabled>Finalize Source + SourceArtifact</button>
-  </section>
-
-  <section class="card">
-    <h2>3. Extract scientific candidates</h2>
-    <p class="note">Extraction output is <strong>proposal only</strong>. It does not become a source-faithful Claim or QualifiedKnowledge until the downstream human review and qualification workflow accepts it.</p>
+    <h2>2. Extract candidates</h2>
+    <p class="note">Extraction remains <strong>PROPOSAL_ONLY</strong>. No Claim authority is created here.</p>
     <p class="provider" id="provider">Extraction provider: checking…</p>
     <label style="font-weight:500"><input id="externalAuth" type="checkbox">I confirm this SourceArtifact may be sent to the configured external model provider for this extraction run.</label>
     <p><button id="extract" disabled>Extract Claim Candidates</button></p>
   </section>
 
+  <section id="reviewSection" class="card" hidden>
+    <h2>3. Source-faithful review</h2>
+    <p class="note">Left: the exact local PDF selected for the upload. Right: machine candidates. ACCEPT requires explicit semantic adjudication for every reported context dimension; REJECT requires a reason.</p>
+    <div class="review-grid">
+      <div><iframe id="pdf"></iframe></div>
+      <div id="candidates"></div>
+    </div>
+  </section>
+
   <section class="card">
-    <h2>Result</h2>
+    <h2>Latest result</h2>
     <pre id="result">No source uploaded yet.</pre>
   </section>
 </main>
 <script>
 const $ = (id) => document.getElementById(id);
+const FAMILIES = ['BIOLOGICAL','ENVIRONMENTAL','MANAGEMENT','OPERATIONAL','MEASUREMENT','JURISDICTION_ECONOMIC'];
 let currentUploadId = null;
 let extractionConfigured = false;
 let sourceMaterialized = false;
+let currentCompilation = null;
+let pdfObjectUrl = null;
 
-function authHeaders(extra = {}) {
-  return { Authorization: `Bearer ${$('token').value}`, ...extra };
+function authHeaders(extra = {}) { return { Authorization: `Bearer ${$('token').value}`, ...extra }; }
+function setResult(value) { $('result').textContent = typeof value === 'string' ? value : JSON.stringify(value, null, 2); }
+function sourceIdFromFile(file) { return `source.paper.${file.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'upload'}`; }
+function refreshExtractButton() { $('extract').disabled = !(sourceMaterialized && extractionConfigured && $('externalAuth').checked); }
+function esc(value) { return String(value ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function guessSemanticId(hint) {
+  const clean = String(hint || '').trim().toLowerCase().replace(/[^a-z0-9_.]+/g, '_').replace(/^_+|_+$/g, '');
+  return clean.includes('.') ? clean : `source.${clean || 'dimension'}`;
 }
-
-function setResult(value) {
-  $('result').textContent = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+function guessValueType(value) {
+  if (typeof value === 'boolean') return 'BOOLEAN';
+  if (typeof value === 'number' && Number.isInteger(value)) return 'INTEGER';
+  if (typeof value === 'number') return 'DECIMAL';
+  const s = String(value ?? '');
+  if (/^[+-]?\d+$/.test(s)) return 'INTEGER';
+  if (/^[+-]?(?:0|[1-9]\d*)\.\d+$/.test(s)) return 'DECIMAL';
+  return 'CATEGORY';
 }
-
-function sourceIdFromFile(file) {
-  return `source.paper.${file.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'upload'}`;
-}
-
-function refreshExtractButton() {
-  $('extract').disabled = !(sourceMaterialized && extractionConfigured && $('externalAuth').checked);
+function pageOf(locator) { return locator?.coordinates?.page ?? null; }
+function evidenceOf(locator) { return locator?.coordinates?.evidenceText ?? ''; }
+function jumpToPage(page) {
+  if (!pdfObjectUrl || !page) return;
+  $('pdf').src = `${pdfObjectUrl}#page=${encodeURIComponent(page)}`;
 }
 
 async function loadReadiness() {
@@ -115,131 +141,154 @@ async function loadReadiness() {
 }
 
 $('externalAuth').addEventListener('change', refreshExtractButton);
-
 $('file').addEventListener('change', () => {
   const file = $('file').files[0];
   if (!file) return;
   if (!$('title').value) $('title').value = file.name.replace(/\.pdf$/i, '');
   if (!$('logicalId').value) $('logicalId').value = sourceIdFromFile(file);
+  if (pdfObjectUrl) URL.revokeObjectURL(pdfObjectUrl);
+  pdfObjectUrl = URL.createObjectURL(file);
+  $('pdf').src = pdfObjectUrl;
 });
 
 $('upload').addEventListener('click', async () => {
   const file = $('file').files[0];
   if (!file) return setResult('Select a PDF first.');
   if (!$('token').value) return setResult('Operator token is required.');
-  $('upload').disabled = true;
-  $('finalize').disabled = true;
-  sourceMaterialized = false;
-  refreshExtractButton();
-  $('progress').value = 0;
-  $('status').textContent = 'CREATING SESSION';
+  $('upload').disabled = true; $('finalize').disabled = true; sourceMaterialized = false; currentCompilation = null;
+  $('reviewSection').hidden = true; refreshExtractButton(); $('progress').value = 0; $('status').textContent = 'CREATING SESSION';
   try {
     const logicalId = $('logicalId').value.trim();
     const sessionResponse = await fetch('/operator/source-uploads', {
-      method: 'POST',
-      headers: authHeaders({ 'content-type': 'application/json' }),
+      method: 'POST', headers: authHeaders({ 'content-type': 'application/json' }),
       body: JSON.stringify({
         scope: { organizationId: $('org').value.trim(), tenantId: $('tenant').value.trim() || undefined },
-        filename: file.name,
-        declaredMediaType: 'application/pdf',
+        filename: file.name, declaredMediaType: 'application/pdf',
         source: {
-          logicalId,
-          version: '1',
-          sourceType: $('sourceType').value,
-          title: $('title').value.trim(),
+          logicalId, version: '1', sourceType: $('sourceType').value, title: $('title').value.trim(),
           bibliographic: $('doi').value.trim() ? { doi: $('doi').value.trim() } : {},
           rights: { basis: $('rights').value, trainingUse: 'PROHIBITED' }
         },
         artifact: {
-          logicalId: `${logicalId}.artifact.pdf`,
-          version: '1',
-          mediaType: 'application/pdf',
-          materializationIdentity: `operator-upload:${file.name}`,
+          logicalId: `${logicalId}.artifact.pdf`, version: '1', mediaType: 'application/pdf', materializationIdentity: `operator-upload:${file.name}`,
           acquisition: { method: 'UPLOAD', acquiredAt: new Date().toISOString(), locator: `operator-upload://${file.name}` },
-          rightsSnapshot: { basis: $('rights').value, trainingUse: 'PROHIBITED' },
-          metadata: { originalFilename: file.name }
+          rightsSnapshot: { basis: $('rights').value, trainingUse: 'PROHIBITED' }, metadata: { originalFilename: file.name }
         }
       })
     });
-    const session = await sessionResponse.json();
-    if (!sessionResponse.ok) throw new Error(JSON.stringify(session));
-    currentUploadId = session.uploadId;
-    setResult(session);
-    $('status').textContent = 'UPLOADING';
-
+    const session = await sessionResponse.json(); if (!sessionResponse.ok) throw new Error(JSON.stringify(session));
+    currentUploadId = session.uploadId; setResult(session); $('status').textContent = 'UPLOADING';
     const uploaded = await new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open('PUT', `/operator/source-uploads/${encodeURIComponent(currentUploadId)}/content`);
-      xhr.setRequestHeader('Authorization', `Bearer ${$('token').value}`);
-      xhr.setRequestHeader('Content-Type', 'application/pdf');
+      xhr.setRequestHeader('Authorization', `Bearer ${$('token').value}`); xhr.setRequestHeader('Content-Type', 'application/pdf');
       xhr.upload.onprogress = (event) => {
         if (event.lengthComputable) $('progress').value = Math.round((event.loaded / event.total) * 100);
         $('status').textContent = `UPLOADING ${event.loaded.toLocaleString()} / ${event.lengthComputable ? event.total.toLocaleString() : '?'} bytes`;
       };
       xhr.onerror = () => reject(new Error('network upload failed'));
-      xhr.onload = () => {
-        let payload;
-        try { payload = JSON.parse(xhr.responseText); } catch { payload = xhr.responseText; }
-        if (xhr.status >= 200 && xhr.status < 300) resolve(payload);
-        else reject(new Error(typeof payload === 'string' ? payload : JSON.stringify(payload)));
-      };
+      xhr.onload = () => { let payload; try { payload = JSON.parse(xhr.responseText); } catch { payload = xhr.responseText; }
+        if (xhr.status >= 200 && xhr.status < 300) resolve(payload); else reject(new Error(typeof payload === 'string' ? payload : JSON.stringify(payload))); };
       xhr.send(file);
     });
-
-    $('progress').value = 100;
-    $('status').textContent = 'STORED';
-    setResult(uploaded);
-    $('finalize').disabled = false;
-  } catch (error) {
-    $('status').textContent = 'FAILED';
-    setResult(error.message);
-  } finally {
-    $('upload').disabled = false;
-  }
+    $('progress').value = 100; $('status').textContent = 'STORED'; setResult(uploaded); $('finalize').disabled = false;
+  } catch (error) { $('status').textContent = 'FAILED'; setResult(error.message); }
+  finally { $('upload').disabled = false; }
 });
 
 $('finalize').addEventListener('click', async () => {
   if (!currentUploadId) return;
-  $('finalize').disabled = true;
-  $('status').textContent = 'FINALIZING AUTHORITY';
+  $('finalize').disabled = true; $('status').textContent = 'FINALIZING AUTHORITY';
   try {
-    const response = await fetch(`/operator/source-uploads/${encodeURIComponent(currentUploadId)}/finalize`, {
-      method: 'POST', headers: authHeaders()
+    const response = await fetch(`/operator/source-uploads/${encodeURIComponent(currentUploadId)}/finalize`, { method: 'POST', headers: authHeaders() });
+    const payload = await response.json(); if (!response.ok) throw new Error(JSON.stringify(payload));
+    $('status').textContent = 'SOURCE_MATERIALIZED'; sourceMaterialized = true; refreshExtractButton(); setResult(payload);
+  } catch (error) { $('status').textContent = 'FAILED'; setResult(error.message); $('finalize').disabled = false; }
+});
+
+function candidateHtml(candidate, index) {
+  const page = pageOf(candidate.sourceLocator);
+  let contexts = '';
+  for (const family of FAMILIES) {
+    const data = candidate.contextFamilies?.[family];
+    if (!data || data.status === 'NOT_REPORTED') continue;
+    let dims = '';
+    for (let i = 0; i < data.dimensions.length; i += 1) {
+      const d = data.dimensions[i];
+      dims += `<div class="dimension" data-family="${family}" data-dim="${i}">
+        <input class="semanticId" value="${esc(guessSemanticId(d.semanticHint))}" title="canonical semanticId">
+        <select class="valueType">${['CATEGORY','STRING','DECIMAL','INTEGER','BOOLEAN','DATE','TIMESTAMP','UNKNOWN'].map(v => `<option${v===guessValueType(d.valueCandidate)?' selected':''}>${v}</option>`).join('')}</select>
+        <input class="unit" value="${esc(d.unitCandidate ?? '')}" placeholder="unit / blank">
+      </div><div class="note">${esc(d.semanticHint)} = <strong>${esc(d.valueCandidate)}</strong> · page ${esc(pageOf(d.sourceLocator) ?? '?')} · ${esc(evidenceOf(d.sourceLocator))}</div>`;
+    }
+    contexts += `<div class="family"><strong>${family}</strong>${dims}</div>`;
+  }
+  return `<div class="candidate" id="candidate-${index}">
+    <div><span class="badge">${esc(candidate.claimType)}</span><span class="badge">confidence ${esc(candidate.extractionConfidence ?? 'n/a')}</span></div>
+    <div class="claim">${esc(candidate.assertion)}</div>
+    <div class="evidence"><button class="secondary" onclick="jumpToPage(${Number(page) || 1})">Page ${esc(page ?? '?')}</button> ${esc(evidenceOf(candidate.sourceLocator))}</div>
+    ${contexts}
+    <label style="margin-top:12px">Review rationale / rejection reason</label><textarea class="rationale" rows="2" placeholder="Why accept or reject?"></textarea>
+    <div class="actions"><button onclick="submitReview(${index},'ACCEPT_SOURCE_FAITHFUL')">Accept source-faithful</button><button class="reject" onclick="submitReview(${index},'REJECT_SOURCE_FAITHFUL')">Reject</button></div>
+    <div class="status review-status"></div>
+  </div>`;
+}
+
+function renderCandidates(payload) {
+  currentCompilation = payload;
+  $('candidates').innerHTML = payload.candidates.map(candidateHtml).join('') || '<p>No candidates returned.</p>';
+  $('reviewSection').hidden = false;
+}
+
+window.submitReview = async (index, disposition) => {
+  const candidate = currentCompilation?.candidates?.[index]; if (!candidate) return;
+  const card = $(`candidate-${index}`); const rationale = card.querySelector('.rationale').value.trim();
+  const contextAdjudication = Object.fromEntries(FAMILIES.map(f => [f, []]));
+  if (disposition === 'ACCEPT_SOURCE_FAITHFUL') {
+    for (const row of card.querySelectorAll('.dimension')) {
+      const family = row.dataset.family;
+      const semanticId = row.querySelector('.semanticId').value.trim();
+      const valueType = row.querySelector('.valueType').value;
+      const unit = row.querySelector('.unit').value.trim();
+      contextAdjudication[family].push({ semanticId, valueType, ...(unit ? { unit } : {}) });
+    }
+  }
+  const reasonCodes = disposition === 'REJECT_SOURCE_FAITHFUL'
+    ? [rationale ? 'REVIEWER_SOURCE_FAITHFUL_REJECTION' : 'SOURCE_LOCATOR_DOES_NOT_SUPPORT_ASSERTION'] : [];
+  card.querySelectorAll('button,input,select,textarea').forEach(el => el.disabled = true);
+  card.querySelector('.review-status').textContent = 'SUBMITTING REVIEW';
+  try {
+    const response = await fetch(`/operator/source-uploads/${encodeURIComponent(currentUploadId)}/review`, {
+      method: 'POST', headers: authHeaders({ 'content-type': 'application/json' }),
+      body: JSON.stringify({
+        compilationResultRef: currentCompilation.compilationResultRef,
+        claimCandidateRef: candidate.claimCandidateRef,
+        sourceContextCandidateRef: candidate.sourceContextCandidateRef,
+        disposition, reasonCodes, rationale: rationale || undefined,
+        ...(disposition === 'ACCEPT_SOURCE_FAITHFUL' ? { contextAdjudication } : {})
+      })
     });
-    const payload = await response.json();
-    if (!response.ok) throw new Error(JSON.stringify(payload));
-    $('status').textContent = 'SOURCE_MATERIALIZED';
-    sourceMaterialized = true;
-    refreshExtractButton();
+    const payload = await response.json(); if (!response.ok) throw new Error(JSON.stringify(payload));
+    card.classList.add('reviewed'); card.querySelector('.review-status').textContent = `${payload.disposition} → ${payload.claimRef ? 'Claim minted' : 'no Claim minted'}`;
     setResult(payload);
   } catch (error) {
-    $('status').textContent = 'FAILED';
-    setResult(error.message);
-    $('finalize').disabled = false;
+    card.querySelectorAll('button,input,select,textarea').forEach(el => el.disabled = false);
+    card.querySelector('.review-status').textContent = 'REVIEW FAILED'; setResult(error.message);
   }
-});
+};
 
 $('extract').addEventListener('click', async () => {
   if (!currentUploadId || !sourceMaterialized) return;
   if (!$('externalAuth').checked) return setResult('Explicit external processing authorization is required.');
-  $('extract').disabled = true;
-  $('status').textContent = 'EXTRACTING CANDIDATES';
+  $('extract').disabled = true; $('status').textContent = 'EXTRACTING CANDIDATES';
   try {
     const response = await fetch(`/operator/source-uploads/${encodeURIComponent(currentUploadId)}/extract`, {
-      method: 'POST',
-      headers: authHeaders({ 'content-type': 'application/json' }),
-      body: JSON.stringify({ externalProcessingAuthorized: true })
+      method: 'POST', headers: authHeaders({ 'content-type': 'application/json' }), body: JSON.stringify({ externalProcessingAuthorized: true })
     });
-    const payload = await response.json();
-    if (!response.ok) throw new Error(JSON.stringify(payload));
-    $('status').textContent = `CANDIDATES_READY (${payload.candidateCount})`;
-    setResult(payload);
-  } catch (error) {
-    $('status').textContent = 'EXTRACTION_FAILED';
-    setResult(error.message);
-  } finally {
-    refreshExtractButton();
-  }
+    const payload = await response.json(); if (!response.ok) throw new Error(JSON.stringify(payload));
+    $('status').textContent = `CANDIDATES_READY (${payload.candidateCount})`; setResult(payload); renderCandidates(payload);
+  } catch (error) { $('status').textContent = 'EXTRACTION_FAILED'; setResult(error.message); }
+  finally { refreshExtractButton(); }
 });
 
 loadReadiness();
