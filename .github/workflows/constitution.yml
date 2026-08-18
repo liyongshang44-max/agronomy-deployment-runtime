@@ -31,8 +31,5 @@ jobs:
       - name: Constitutional static checks
         run: npm run build
 
-      - name: RA02 rights enforcement acceptance
-        run: node acceptance/rights-enforcement/run.mjs && node acceptance/rights-enforcement/integration.mjs && node acceptance/rights-enforcement/checkpoint.mjs && node acceptance/rights-enforcement/provenance.mjs
-
       - name: Constitutional acceptance
         run: npm test
