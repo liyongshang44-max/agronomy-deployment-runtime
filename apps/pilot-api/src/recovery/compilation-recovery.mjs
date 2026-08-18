@@ -15,7 +15,46 @@ function assertLedger(ledger) {
   }
 }
 
-function candidatePayload(claimRecord, contextRecord, review) {
+function authorityForReview(records, kind, reviewRef) {
+  const matches = records.filter((record) => record.ref.kind === kind
+    && record.semanticPayload?.sourceFaithfulReviewRef
+    && sameAuthorityRef(record.semanticPayload.sourceFaithfulReviewRef, reviewRef));
+  if (matches.length > 1) {
+    throw new PilotCompilationRecoveryError(
+      'RECOVERED_REVIEW_AUTHORITY_AMBIGUOUS',
+      `review ${reviewRef.logicalId}@${reviewRef.version} resolves to multiple ${kind} authorities`
+    );
+  }
+  return matches[0] ?? null;
+}
+
+function candidatePayload(claimRecord, contextRecord, review, records) {
+  let reviewPayload = null;
+  if (review) {
+    const claim = authorityForReview(records, 'Claim', review.ref);
+    const sourceContext = authorityForReview(records, 'SourceContext', review.ref);
+    const disposition = review.semanticPayload.disposition;
+    if (disposition === 'ACCEPT_SOURCE_FAITHFUL' && (!claim || !sourceContext)) {
+      throw new PilotCompilationRecoveryError(
+        'RECOVERED_ACCEPT_AUTHORITY_INCOMPLETE',
+        'accepted source-faithful review must recover exact Claim and SourceContext authority'
+      );
+    }
+    if (disposition === 'REJECT_SOURCE_FAITHFUL' && (claim || sourceContext)) {
+      throw new PilotCompilationRecoveryError(
+        'RECOVERED_REJECT_AUTHORITY_FORBIDDEN',
+        'rejected source-faithful review must not recover Claim or SourceContext authority'
+      );
+    }
+    reviewPayload = {
+      reviewRef: review.ref,
+      disposition,
+      reasonCodes: review.semanticPayload.reasonCodes ?? [],
+      rationale: review.semanticPayload.rationale ?? null,
+      claimRef: claim?.ref ?? null,
+      sourceContextRef: sourceContext?.ref ?? null
+    };
+  }
   return {
     claimCandidateRef: claimRecord.ref,
     sourceContextCandidateRef: contextRecord.ref,
@@ -24,12 +63,7 @@ function candidatePayload(claimRecord, contextRecord, review) {
     sourceLocator: claimRecord.semanticPayload.sourceLocator,
     extractionConfidence: claimRecord.semanticPayload.extractionConfidence ?? null,
     contextFamilies: contextRecord.semanticPayload.contextFamilies,
-    review: review ? {
-      reviewRef: review.ref,
-      disposition: review.semanticPayload.disposition,
-      reasonCodes: review.semanticPayload.reasonCodes ?? [],
-      rationale: review.semanticPayload.rationale ?? null
-    } : null
+    review: reviewPayload
   };
 }
 
@@ -44,7 +78,7 @@ function matchingReview(reviewRecords, compilationRef, claimRef, contextRef) {
   return [...matches].sort((a, b) => String(a.ref.version).localeCompare(String(b.ref.version))).at(-1);
 }
 
-function materializeRecoveredCompilation({ ledger, result, reviewRecords }) {
+function materializeRecoveredCompilation({ ledger, result, records, reviewRecords }) {
   const claimRefs = result.semanticPayload.claimCandidateRefs;
   const contextRefs = result.semanticPayload.sourceContextCandidateRefs;
   if (!Array.isArray(claimRefs) || !Array.isArray(contextRefs) || claimRefs.length !== contextRefs.length) {
@@ -65,7 +99,7 @@ function materializeRecoveredCompilation({ ledger, result, reviewRecords }) {
       throw new PilotCompilationRecoveryError('COMPILATION_CANDIDATE_PAIR_MISMATCH', 'recovered SourceContextCandidate does not bind the paired ClaimCandidate');
     }
     const review = matchingReview(reviewRecords, result.ref, claim.ref, context.ref);
-    return candidatePayload(claim, context, review);
+    return candidatePayload(claim, context, review, records);
   });
 
   const runMetadata = result.semanticPayload.runMetadata ?? {};
@@ -76,6 +110,8 @@ function materializeRecoveredCompilation({ ledger, result, reviewRecords }) {
     runMetadata,
     candidateCount: candidates.length,
     reviewedCount: candidates.filter((candidate) => candidate.review).length,
+    acceptedCount: candidates.filter((candidate) => candidate.review?.disposition === 'ACCEPT_SOURCE_FAITHFUL').length,
+    rejectedCount: candidates.filter((candidate) => candidate.review?.disposition === 'REJECT_SOURCE_FAITHFUL').length,
     candidates,
     authorityClaim: 'PROPOSAL_ONLY'
   };
@@ -97,11 +133,12 @@ export function listRecoverableCompilations({ ledger, sourceArtifactRef }) {
   }
 
   const snapshot = ledger.exportSnapshot();
-  const reviews = snapshot.records.filter((record) => record.ref.kind === 'SourceFaithfulReviewDecision');
-  const results = snapshot.records
+  const records = snapshot.records;
+  const reviews = records.filter((record) => record.ref.kind === 'SourceFaithfulReviewDecision');
+  const results = records
     .filter((record) => record.ref.kind === 'ScientificCompilationResult')
     .filter((record) => sameAuthorityRef(record.semanticPayload.sourceArtifactRef, artifact.ref))
-    .map((result) => materializeRecoveredCompilation({ ledger, result, reviewRecords: reviews }))
+    .map((result) => materializeRecoveredCompilation({ ledger, result, records, reviewRecords: reviews }))
     .sort((a, b) => String(b.version).localeCompare(String(a.version)));
 
   return {
