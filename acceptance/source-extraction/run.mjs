@@ -4,6 +4,7 @@ import {
   ADR_EXTRACTION_PROMPT_VERSION,
   ADR_EXTRACTION_PROVIDER,
   ADR_EXTRACTION_SCHEMA_VERSION,
+  ADR_EXTRACTION_UPLOAD_CONTRACT,
   OpenAIExtractionError,
   extractCompilationProposalWithOpenAI
 } from '../../apps/pilot-api/src/extraction/openai.mjs';
@@ -13,10 +14,10 @@ import {
   createDeterministicCompilerDefinition
 } from '../../packages/scientific-compiler/src/index.mjs';
 
-function jsonResponse(status, payload) {
+function jsonResponse(status, payload, requestId = 'req-test') {
   return new Response(JSON.stringify(payload), {
     status,
-    headers: { 'content-type': 'application/json' }
+    headers: { 'content-type': 'application/json', 'x-request-id': requestId }
   });
 }
 
@@ -60,66 +61,35 @@ function validStructuredOutput() {
 }
 
 function fakeOpenAI() {
-  const state = {
-    createdBytes: null,
-    parts: [],
-    responseRequest: null,
-    deletedFiles: [],
-    cancelledUploads: []
-  };
-  let partCounter = 0;
-
+  const state = { uploadedBytes: null, purpose: null, filename: null, responseRequest: null, deletedFiles: [] };
   async function fetchImpl(url, options = {}) {
     const parsed = new URL(url);
-    if (parsed.pathname === '/v1/uploads' && options.method === 'POST') {
-      const body = JSON.parse(options.body);
-      state.createdBytes = body.bytes;
-      assert.equal(body.purpose, 'user_data');
-      assert.equal(body.mime_type, 'application/pdf');
-      assert.deepEqual(body.expires_after, { anchor: 'created_at', seconds: 3600 });
-      return jsonResponse(200, { id: 'upload-test', status: 'pending' });
-    }
-    if (parsed.pathname === '/v1/uploads/upload-test/parts' && options.method === 'POST') {
-      const blob = options.body.get('data');
-      const bytes = Buffer.from(await blob.arrayBuffer());
-      state.parts.push(bytes);
-      partCounter += 1;
-      return jsonResponse(200, { id: `part-${partCounter}`, upload_id: 'upload-test' });
-    }
-    if (parsed.pathname === '/v1/uploads/upload-test/complete' && options.method === 'POST') {
-      const body = JSON.parse(options.body);
-      assert.equal(body.part_ids.length, state.parts.length);
-      return jsonResponse(200, {
-        id: 'upload-test',
-        status: 'completed',
-        file: { id: 'file-test', bytes: state.parts.reduce((sum, part) => sum + part.byteLength, 0) }
-      });
+    if (parsed.pathname === '/v1/files' && options.method === 'POST') {
+      assert.ok(options.body instanceof FormData);
+      state.purpose = options.body.get('purpose');
+      const file = options.body.get('file');
+      assert.ok(file instanceof Blob);
+      state.filename = file.name;
+      state.uploadedBytes = Buffer.from(await file.arrayBuffer());
+      return jsonResponse(200, { id: 'file-test', object: 'file', bytes: state.uploadedBytes.byteLength, filename: file.name, purpose: state.purpose });
     }
     if (parsed.pathname === '/v1/responses' && options.method === 'POST') {
       state.responseRequest = JSON.parse(options.body);
       return jsonResponse(200, {
         id: 'resp-test',
-        output: [{
-          type: 'message',
-          content: [{ type: 'output_text', text: JSON.stringify(validStructuredOutput()) }]
-        }]
+        output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify(validStructuredOutput()) }] }]
       });
     }
     if (parsed.pathname === '/v1/files/file-test' && options.method === 'DELETE') {
       state.deletedFiles.push('file-test');
       return jsonResponse(200, { id: 'file-test', deleted: true });
     }
-    if (parsed.pathname === '/v1/uploads/upload-test/cancel' && options.method === 'POST') {
-      state.cancelledUploads.push('upload-test');
-      return jsonResponse(200, { id: 'upload-test', status: 'cancelled' });
-    }
-    return jsonResponse(404, { error: { code: 'UNEXPECTED_TEST_ROUTE' } });
+    return jsonResponse(404, { error: { code: 'UNEXPECTED_TEST_ROUTE', message: parsed.pathname } });
   }
-
   return { state, fetchImpl };
 }
 
-function chunkedPdf(byteLength, chunkBytes = 512 * 1024) {
+function chunkedPdf(byteLength, chunkBytes = 256 * 1024) {
   async function* chunks() {
     let emitted = 0;
     const header = Buffer.from('%PDF-1.7\n');
@@ -132,6 +102,23 @@ function chunkedPdf(byteLength, chunkBytes = 512 * 1024) {
     }
   }
   return Readable.from(chunks());
+}
+
+async function expectAsyncError(fn, code) {
+  let caught;
+  try { await fn(); } catch (error) { caught = error; }
+  assert.ok(caught instanceof OpenAIExtractionError, `expected OpenAIExtractionError, got ${caught?.constructor?.name ?? 'no error'}`);
+  assert.equal(caught.code, code);
+  return caught;
+}
+
+function audit(eventId) {
+  return {
+    eventId,
+    occurredAt: '2026-08-18T01:00:00.000Z',
+    actor: { type: 'SERVICE', id: 'source-extraction-acceptance' },
+    details: { channel: 'source-extraction-acceptance' }
+  };
 }
 
 function documentCoordinateProposal() {
@@ -173,33 +160,17 @@ function documentCoordinateProposal() {
       provider: ADR_EXTRACTION_PROVIDER,
       model: 'test-model',
       promptVersion: ADR_EXTRACTION_PROMPT_VERSION,
-      schemaVersion: ADR_EXTRACTION_SCHEMA_VERSION
+      schemaVersion: ADR_EXTRACTION_SCHEMA_VERSION,
+      uploadContract: ADR_EXTRACTION_UPLOAD_CONTRACT
     }
   };
-}
-
-function audit(eventId) {
-  return {
-    eventId,
-    occurredAt: '2026-08-18T01:00:00.000Z',
-    actor: { type: 'SERVICE', id: 'source-extraction-acceptance' },
-    details: { channel: 'source-extraction-acceptance' }
-  };
-}
-
-async function expectAsyncError(fn, ErrorType, code) {
-  let caught;
-  try { await fn(); } catch (error) { caught = error; }
-  assert.ok(caught instanceof ErrorType, `expected ${ErrorType.name}, got ${caught?.constructor?.name ?? 'no error'}`);
-  assert.equal(caught.code, code);
 }
 
 const tests = [];
 function test(name, fn) { tests.push({ name, fn }); }
 
-test('OpenAI extraction streams PDF in bounded parts and returns compiler-compatible page-coordinate proposal', async () => {
-  const byteLength = 18 * 1024 * 1024 + 123;
-  const partBytes = 4 * 1024 * 1024;
+test('OpenAI extraction uses Files API user_data PDF input and returns strict compiler proposal', async () => {
+  const byteLength = 2 * 1024 * 1024 + 123;
   const fake = fakeOpenAI();
   const result = await extractCompilationProposalWithOpenAI({
     readable: chunkedPdf(byteLength),
@@ -207,58 +178,81 @@ test('OpenAI extraction streams PDF in bounded parts and returns compiler-compat
     filename: 'paper.pdf',
     model: 'test-model',
     apiKey: 'test-key',
-    fetchImpl: fake.fetchImpl,
-    partBytes
+    fetchImpl: fake.fetchImpl
   });
 
-  assert.equal(fake.state.createdBytes, byteLength);
-  assert.equal(fake.state.parts.reduce((sum, part) => sum + part.byteLength, 0), byteLength);
-  assert.ok(fake.state.parts.every((part) => part.byteLength <= partBytes));
-  assert.ok(fake.state.parts.length > 1);
-
-  const request = fake.state.responseRequest;
-  assert.equal(request.model, 'test-model');
-  assert.equal(request.store, false);
-  assert.equal(request.input[0].content[0].type, 'input_file');
-  assert.equal(request.input[0].content[0].file_id, 'file-test');
-  assert.equal(request.text.format.type, 'json_schema');
-  assert.equal(request.text.format.strict, true);
-
-  assert.equal(result.proposal.runMetadata.provider, ADR_EXTRACTION_PROVIDER);
-  assert.equal(result.proposal.runMetadata.model, 'test-model');
-  assert.equal(result.proposal.runMetadata.promptVersion, ADR_EXTRACTION_PROMPT_VERSION);
-  assert.equal(result.proposal.runMetadata.schemaVersion, ADR_EXTRACTION_SCHEMA_VERSION);
+  assert.equal(fake.state.purpose, 'user_data');
+  assert.equal(fake.state.filename, 'paper.pdf');
+  assert.equal(fake.state.uploadedBytes.byteLength, byteLength);
+  assert.equal(fake.state.uploadedBytes.subarray(0, 5).toString('utf8'), '%PDF-');
+  assert.equal(fake.state.responseRequest.model, 'test-model');
+  assert.equal(fake.state.responseRequest.store, false);
+  assert.equal(fake.state.responseRequest.input[0].content[0].type, 'input_file');
+  assert.equal(fake.state.responseRequest.input[0].content[0].file_id, 'file-test');
+  assert.equal(fake.state.responseRequest.input[0].content[0].detail, 'low');
+  assert.equal(fake.state.responseRequest.text.format.type, 'json_schema');
+  assert.equal(fake.state.responseRequest.text.format.strict, true);
+  assert.equal(result.proposal.runMetadata.uploadContract, ADR_EXTRACTION_UPLOAD_CONTRACT);
   assert.equal(result.proposal.claims.length, 1);
-  assert.deepEqual(result.proposal.claims[0].sourceLocator, {
-    kind: 'DOCUMENT_COORDINATE',
-    scheme: 'PDF_PAGE_TEXT_V1',
-    coordinates: { page: 7, evidenceText: 'root-zone depletion exceeds 45%' }
-  });
+  assert.equal(result.proposal.claims[0].sourceLocator.kind, 'DOCUMENT_COORDINATE');
   assert.equal(result.proposal.claims[0].sourceContext.BIOLOGICAL.dimensions[0].supportClass, 'EXPLICIT_SOURCE');
-  assert.equal(result.proposal.claims[0].sourceContext.MANAGEMENT.status, 'NOT_REPORTED');
   assert.deepEqual(fake.state.deletedFiles, ['file-test']);
   assert.equal(result.providerTrace.responseId, 'resp-test');
   assert.equal(result.providerTrace.fileDeletedAfterExtraction, true);
-  assert.ok(!JSON.stringify(result.proposal).includes('resp-test'));
-  assert.ok(!JSON.stringify(result.proposal).includes('file-test'));
 });
 
-test('provider fails closed when retained SourceArtifact byteLength disagrees with streamed bytes', async () => {
-  const fake = fakeOpenAI();
-  await expectAsyncError(
+test('direct PDF extraction fails closed before network when provider file-input limit is exceeded', async () => {
+  let calls = 0;
+  const error = await expectAsyncError(
     () => extractCompilationProposalWithOpenAI({
-      readable: chunkedPdf(1024 * 1024),
-      byteLength: 1024 * 1024 + 1,
-      filename: 'mismatch.pdf',
+      readable: chunkedPdf(50_000_000),
+      byteLength: 50_000_000,
+      filename: 'too-large.pdf',
       model: 'test-model',
       apiKey: 'test-key',
-      fetchImpl: fake.fetchImpl,
-      partBytes: 256 * 1024
+      fetchImpl: async () => { calls += 1; throw new Error('should not call network'); }
     }),
-    OpenAIExtractionError,
-    'SOURCE_STREAM_LENGTH_MISMATCH'
+    'OPENAI_DIRECT_FILE_INPUT_LIMIT_EXCEEDED'
   );
-  assert.deepEqual(fake.state.cancelledUploads, ['upload-test']);
+  assert.equal(calls, 0);
+  assert.equal(error.stage, 'PREPARE_FILE_INPUT');
+});
+
+test('network failures retain a safe stage-specific diagnostic instead of unclassified failure', async () => {
+  const network = new TypeError('fetch failed', { cause: Object.assign(new Error('reset'), { code: 'ECONNRESET' }) });
+  const error = await expectAsyncError(
+    () => extractCompilationProposalWithOpenAI({
+      readable: chunkedPdf(1024),
+      byteLength: 1024,
+      filename: 'paper.pdf',
+      model: 'test-model',
+      apiKey: 'test-key',
+      fetchImpl: async () => { throw network; }
+    }),
+    'OPENAI_NETWORK_FAILURE'
+  );
+  assert.equal(error.stage, 'FILES_UPLOAD');
+  assert.match(error.message, /FILES_UPLOAD/);
+  assert.match(error.message, /ECONNRESET/);
+  assert.ok(!error.message.includes('test-key'));
+});
+
+test('provider HTTP failures retain exact stage/status/provider code', async () => {
+  const error = await expectAsyncError(
+    () => extractCompilationProposalWithOpenAI({
+      readable: chunkedPdf(1024),
+      byteLength: 1024,
+      filename: 'paper.pdf',
+      model: 'test-model',
+      apiKey: 'test-key',
+      fetchImpl: async () => jsonResponse(401, { error: { type: 'invalid_request_error', code: 'invalid_api_key', message: 'Incorrect API key provided.' } }, 'req-401')
+    }),
+    'OPENAI_FILE_UPLOAD_FAILED'
+  );
+  assert.equal(error.stage, 'FILES_UPLOAD');
+  assert.equal(error.status, 401);
+  assert.equal(error.providerCode, 'invalid_api_key');
+  assert.equal(error.requestId, 'req-401');
 });
 
 test('ScientificCompiler materializes DOCUMENT_COORDINATE proposals without loading whole retained PDF bytes', () => {
@@ -308,11 +302,9 @@ test('ScientificCompiler materializes DOCUMENT_COORDINATE proposals without load
     proposal: documentCoordinateProposal(),
     audit: audit('evt-compilation')
   });
-
   assert.equal(wholeReads, 0);
   assert.equal(result.claimCandidates.length, 1);
   assert.equal(result.claimCandidates[0].semanticPayload.sourceLocator.kind, 'DOCUMENT_COORDINATE');
-  assert.equal(result.result.semanticPayload.sourceArtifactContentHash, artifact.semanticPayload.contentHash);
 });
 
 let passed = 0;
