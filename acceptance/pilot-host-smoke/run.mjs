@@ -82,6 +82,17 @@ function headers(extra = {}) {
   return { authorization: `Bearer ${TOKEN}`, ...extra };
 }
 
+function notReportedContext() {
+  return {
+    BIOLOGICAL: { status: 'NOT_REPORTED', dimensions: [] },
+    ENVIRONMENTAL: { status: 'NOT_REPORTED', dimensions: [] },
+    MANAGEMENT: { status: 'NOT_REPORTED', dimensions: [] },
+    OPERATIONAL: { status: 'NOT_REPORTED', dimensions: [] },
+    MEASUREMENT: { status: 'NOT_REPORTED', dimensions: [] },
+    JURISDICTION_ECONOMIC: { status: 'NOT_REPORTED', dimensions: [] }
+  };
+}
+
 let first = null;
 let second = null;
 try {
@@ -129,6 +140,66 @@ try {
   assert.match(finalized.contentHash, /^sha256:[0-9a-f]{64}$/);
   const exactArtifactRef = finalized.sourceArtifactRef;
 
+  const importResponse = await fetch(`${base1}/operator/source-uploads/${encodeURIComponent(created.uploadId)}/import-proposal`, {
+    method: 'POST',
+    headers: headers({ 'content-type': 'application/json' }),
+    body: JSON.stringify({
+      providerLabel: 'MODEL_C_WEB',
+      modelLabel: 'UNKNOWN_MODEL',
+      compilationVersion: 'manual-http-smoke-1',
+      proposal: {
+        claims: [{
+          key: 'http-smoke-boundary',
+          claimType: 'BOUNDARY_CONSTRAINT',
+          assertion: 'HTTP smoke candidate remains proposal-only until review.',
+          confidence: 0.9,
+          sourceLocator: {
+            kind: 'DOCUMENT_COORDINATE',
+            scheme: 'PDF_PAGE_TEXT_V1',
+            coordinates: { page: 1, evidenceText: 'HTTP restart smoke' }
+          },
+          sourceContext: notReportedContext()
+        }]
+      }
+    })
+  });
+  assert.equal(importResponse.status, 200);
+  const imported = await importResponse.json();
+  assert.equal(imported.candidateCount, 1);
+  assert.equal(imported.preflight.total, 1);
+  assert.equal(imported.preflight.reviewable, 1);
+  const exactCompilationRef = imported.compilationResultRef;
+  const exactClaimCandidateRef = imported.candidates[0].claimCandidateRef;
+  const exactContextCandidateRef = imported.candidates[0].sourceContextCandidateRef;
+
+  const reviewResponse = await fetch(`${base1}/operator/source-uploads/${encodeURIComponent(created.uploadId)}/review`, {
+    method: 'POST',
+    headers: headers({ 'content-type': 'application/json' }),
+    body: JSON.stringify({
+      compilationResultRef: exactCompilationRef,
+      claimCandidateRef: exactClaimCandidateRef,
+      sourceContextCandidateRef: exactContextCandidateRef,
+      disposition: 'REJECT_SOURCE_FAITHFUL',
+      reasonCodes: ['REVIEWER_SOURCE_FAITHFUL_REJECTION'],
+      rationale: 'HTTP restart smoke rejection',
+      reviewVersion: 'review-http-smoke-1'
+    })
+  });
+  assert.equal(reviewResponse.status, 201);
+  const reviewed = await reviewResponse.json();
+  assert.equal(reviewed.disposition, 'REJECT_SOURCE_FAITHFUL');
+  assert.equal(reviewed.claimRef, null);
+
+  const recoveryBeforeResponse = await fetch(`${base1}/operator/source-uploads/${encodeURIComponent(created.uploadId)}/compilations`, {
+    headers: headers()
+  });
+  assert.equal(recoveryBeforeResponse.status, 200);
+  const recoveryBefore = await recoveryBeforeResponse.json();
+  assert.equal(recoveryBefore.compilationCount, 1);
+  assert.deepEqual(recoveryBefore.compilations[0].compilationResultRef, exactCompilationRef);
+  assert.equal(recoveryBefore.compilations[0].reviewedCount, 1);
+  assert.equal(recoveryBefore.compilations[0].candidates[0].review.disposition, 'REJECT_SOURCE_FAITHFUL');
+
   await stopHost(first.child);
   first = null;
 
@@ -146,6 +217,30 @@ try {
   const restored = await restoredResponse.json();
   assert.equal(restored.state, 'SOURCE_MATERIALIZED');
   assert.deepEqual(restored.sourceArtifactRef, exactArtifactRef);
+
+  const recoveryAfterResponse = await fetch(`${base2}/operator/source-uploads/${encodeURIComponent(created.uploadId)}/compilations`, {
+    headers: headers()
+  });
+  assert.equal(recoveryAfterResponse.status, 200);
+  const recoveryAfter = await recoveryAfterResponse.json();
+  assert.equal(recoveryAfter.compilationCount, 1, 'restart recovery must not create a second compilation');
+  const recoveredCompilation = recoveryAfter.compilations[0];
+  assert.deepEqual(recoveredCompilation.compilationResultRef, exactCompilationRef);
+  assert.equal(recoveredCompilation.runMetadata.providerLabel, 'MODEL_C_WEB');
+  assert.equal(recoveredCompilation.runMetadata.modelLabel, 'UNKNOWN_MODEL');
+  assert.equal(recoveredCompilation.reviewedCount, 1);
+  assert.deepEqual(recoveredCompilation.candidates[0].claimCandidateRef, exactClaimCandidateRef);
+  assert.deepEqual(recoveredCompilation.candidates[0].sourceContextCandidateRef, exactContextCandidateRef);
+  assert.equal(recoveredCompilation.candidates[0].review.disposition, 'REJECT_SOURCE_FAITHFUL');
+  assert.equal(recoveredCompilation.candidates[0].review.rationale, 'HTTP restart smoke rejection');
+
+  const recoveryRepeatResponse = await fetch(`${base2}/operator/source-uploads/${encodeURIComponent(created.uploadId)}/compilations`, {
+    headers: headers()
+  });
+  assert.equal(recoveryRepeatResponse.status, 200);
+  const recoveryRepeat = await recoveryRepeatResponse.json();
+  assert.equal(recoveryRepeat.compilationCount, 1, 'read-only recovery must be idempotent');
+  assert.deepEqual(recoveryRepeat.compilations[0].compilationResultRef, exactCompilationRef);
 
   const health = await fetch(`${base2}/healthz`);
   assert.equal(health.status, 200);
