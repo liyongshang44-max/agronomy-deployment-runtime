@@ -1,4 +1,4 @@
-import { createReadStream, mkdirSync, writeFileSync } from 'node:fs';
+import { createReadStream, existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { AuthorityLedger } from '../../packages/provenance/src/index.mjs';
 import { SourceRegistry } from '../../packages/source-registry/src/index.mjs';
@@ -24,7 +24,7 @@ const AUTHORS = [
   'Yin Wang'
 ];
 const CODE_HEAD = process.env.ADR_CODE_HEAD_SHA ?? process.env.GITHUB_SHA ?? '';
-const PDF_PATH = resolve(process.env.ADR_RP001_PDF_PATH ?? process.argv[2] ?? '');
+const PDF_INPUT = process.env.ADR_RP001_PDF_PATH ?? process.argv[2] ?? '';
 const OUTPUT_DIR = resolve(process.env.ADR_RP001_OUTPUT_DIR ?? '.adr-benchmark/rp001');
 const ACQUISITION_LOCATOR = process.env.ADR_RP001_ACQUISITION_LOCATOR ?? '';
 const OPERATOR_ID = process.env.ADR_RP001_OPERATOR_ID ?? 'rp001-benchmark-materializer';
@@ -43,6 +43,18 @@ function exactCodeHead(value) {
   return head.toLowerCase();
 }
 
+function exactPdfPath(value) {
+  const path = resolve(required(value, 'ADR_RP001_PDF_PATH'));
+  if (!existsSync(path)) throw new Error('ADR_RP001_PDF_PATH does not exist');
+  const stat = statSync(path);
+  if (!stat.isFile() || stat.size <= 0) throw new Error('ADR_RP001_PDF_PATH must be a non-empty regular file');
+  return path;
+}
+
+const codeHeadSha = exactCodeHead(CODE_HEAD);
+const pdfPath = exactPdfPath(PDF_INPUT);
+const acquisitionLocator = required(ACQUISITION_LOCATOR, 'ADR_RP001_ACQUISITION_LOCATOR');
+
 function audit(eventId, { actorType = 'SERVICE_ACCOUNT', inputRefs = [], details = {} } = {}) {
   return {
     eventId,
@@ -52,15 +64,12 @@ function audit(eventId, { actorType = 'SERVICE_ACCOUNT', inputRefs = [], details
     details: {
       channel: 'real-paper-benchmark-rp001-materialization',
       paperId: PAPER_ID,
-      codeHeadSha: codeHeadSha,
+      codeHeadSha,
       ...details
     }
   };
 }
 
-const codeHeadSha = exactCodeHead(CODE_HEAD);
-const acquisitionLocator = required(ACQUISITION_LOCATOR, 'ADR_RP001_ACQUISITION_LOCATOR');
-required(PDF_PATH, 'ADR_RP001_PDF_PATH');
 mkdirSync(OUTPUT_DIR, { recursive: true });
 const artifactDir = join(OUTPUT_DIR, 'artifacts');
 const checkpointPath = join(OUTPUT_DIR, 'runtime-checkpoint.json');
@@ -171,7 +180,7 @@ const retained = await rights.execute({
   effectKey: `source-retention:${created.uploadId}`,
   sideEffect: async () => ingestion.uploadPdf({
     uploadId: created.uploadId,
-    readable: createReadStream(PDF_PATH)
+    readable: createReadStream(pdfPath)
   })
 });
 
