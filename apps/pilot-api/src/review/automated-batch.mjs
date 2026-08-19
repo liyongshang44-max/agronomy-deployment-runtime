@@ -14,6 +14,14 @@ function requiredText(value, name) {
   return value.trim();
 }
 
+function exactRightsDecisionRefs(values) {
+  if (values === undefined || values === null) return [];
+  if (!Array.isArray(values)) {
+    throw new AutomatedSourceFaithfulReviewError('INVALID_AUTOMATED_REVIEW_PREPARATION', 'prepareCandidate rightsDecisionRefs must be an array');
+  }
+  return values;
+}
+
 function matchingAutomatedProposals(ledger, compilationResultRef, claimCandidateRef, sourceContextCandidateRef) {
   return ledger.exportSnapshot().records
     .filter((record) => record.ref.kind === 'AutomatedSourceFaithfulReviewProposal')
@@ -61,12 +69,16 @@ export class PilotAutomatedSourceFaithfulBatchService {
     compilationResultRef,
     filename,
     reviewer,
+    prepareCandidate = null,
     retryEscalated = false,
     versionPrefix = `auto-${new Date().toISOString()}`,
     onCandidateComplete = null
   }) {
     if (typeof reviewer !== 'function') {
       throw new AutomatedSourceFaithfulReviewError('AUTOMATED_REVIEW_PROVIDER_REQUIRED', 'reviewer callback is required');
+    }
+    if (prepareCandidate !== null && typeof prepareCandidate !== 'function') {
+      throw new AutomatedSourceFaithfulReviewError('INVALID_AUTOMATED_REVIEW_PREPARATION', 'prepareCandidate must be a function');
     }
     if (onCandidateComplete !== null && typeof onCandidateComplete !== 'function') {
       throw new AutomatedSourceFaithfulReviewError('INVALID_AUTOMATED_REVIEW_PROGRESS_HANDLER', 'onCandidateComplete must be a function');
@@ -117,13 +129,35 @@ export class PilotAutomatedSourceFaithfulBatchService {
         claimCandidateRef: candidate.claimCandidateRef,
         sourceContextCandidateRef: candidate.sourceContextCandidateRef
       });
-      const readable = this.#sourceRegistry.readArtifactStream(artifact.ref);
+
+      // The optional preparation hook exists so host integrations can complete every
+      // required point-in-time RightsDecision before the retained bytes are opened.
+      // The legacy/default path remains unchanged for deterministic unit fixtures.
+      const prepared = prepareCandidate
+        ? await prepareCandidate({
+          artifact,
+          compilationResultRef: compilation.compilationResultRef,
+          candidate,
+          candidateIndex: index,
+          blindPacket: blind.packet
+        })
+        : null;
+      if (prepared !== null && (typeof prepared !== 'object' || Array.isArray(prepared))) {
+        throw new AutomatedSourceFaithfulReviewError('INVALID_AUTOMATED_REVIEW_PREPARATION', 'prepareCandidate must return an object or null');
+      }
+      const rightsDecisionRefs = exactRightsDecisionRefs(prepared?.rightsDecisionRefs);
+      const readable = prepared?.readable ?? this.#sourceRegistry.readArtifactStream(artifact.ref);
+      if (!readable || typeof readable[Symbol.asyncIterator] !== 'function') {
+        throw new AutomatedSourceFaithfulReviewError('INVALID_AUTOMATED_REVIEW_PREPARATION', 'prepared reviewer input must be an async-iterable readable stream');
+      }
+
       const provider = await reviewer({
         readable,
         byteLength: artifact.semanticPayload.byteLength,
         filename: safeFilename,
         blindPacket: blind.packet,
-        candidateIndex: index
+        candidateIndex: index,
+        rightsDecisionRefs
       });
       if (!provider || typeof provider !== 'object' || !provider.reviewerMetadata || !provider.output) {
         throw new AutomatedSourceFaithfulReviewError('AUTOMATED_REVIEW_PROVIDER_OUTPUT_INVALID', 'reviewer callback must return reviewerMetadata and output');
@@ -135,6 +169,7 @@ export class PilotAutomatedSourceFaithfulBatchService {
         sourceContextCandidateRef: candidate.sourceContextCandidateRef,
         reviewerMetadata: provider.reviewerMetadata,
         output: provider.output,
+        rightsDecisionRefs,
         version
       });
       const status = reviewed.adjudication.effectiveDisposition === 'ACCEPT_SOURCE_FAITHFUL'
@@ -151,6 +186,7 @@ export class PilotAutomatedSourceFaithfulBatchService {
         reviewRef: reviewed.review?.ref ?? null,
         claimRef: reviewed.claim?.ref ?? null,
         sourceContextRef: reviewed.sourceContext?.ref ?? null,
+        rightsDecisionRefs,
         promotionReasons: reviewed.adjudication.promotionReasons,
         providerTrace: provider.providerTrace ?? null
       };
