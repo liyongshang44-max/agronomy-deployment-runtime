@@ -33,7 +33,7 @@ jobs:
           package-manager-cache: false
 
       - name: Benchmark acceptance
-        run: node acceptance/real-paper-benchmark/run.mjs && node acceptance/real-paper-benchmark/recovery-export.mjs && node acceptance/real-paper-benchmark/materialization.mjs && node acceptance/real-paper-benchmark/live-runner.mjs
+        run: node acceptance/real-paper-benchmark/run.mjs && node acceptance/real-paper-benchmark/recovery-export.mjs && node acceptance/real-paper-benchmark/materialization.mjs && node acceptance/real-paper-benchmark/live-runner.mjs && node acceptance/real-paper-benchmark/reference-workflow.mjs
 
       - name: Full ADR regression
         run: npm test
