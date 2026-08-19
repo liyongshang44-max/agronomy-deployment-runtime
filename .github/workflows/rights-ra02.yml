@@ -8,6 +8,8 @@ on:
     paths:
       - "apps/pilot-api/src/rights/**"
       - "apps/pilot-api/src/review/**"
+      - "apps/pilot-api/src/server.mjs"
+      - "apps/pilot-web/**"
       - "packages/source-ingestion/**"
       - "acceptance/rights-enforcement/**"
       - ".github/workflows/rights-ra02.yml"
@@ -32,7 +34,7 @@ jobs:
           package-manager-cache: false
 
       - name: RA02 acceptance
-        run: node acceptance/rights-enforcement/run.mjs && node acceptance/rights-enforcement/ingestion.mjs && node acceptance/rights-enforcement/automated-review.mjs
+        run: node acceptance/rights-enforcement/run.mjs && node acceptance/rights-enforcement/ingestion.mjs && node acceptance/rights-enforcement/automated-review.mjs && node acceptance/rights-enforcement/host-egress.mjs
 
       - name: Full ADR regression
         run: npm test
