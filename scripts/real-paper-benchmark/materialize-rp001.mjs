@@ -156,7 +156,7 @@ const registered = ingestion.preRegisterSource({
 
 const provisioned = rights.provision({
   subjectRef: registered.source.ref,
-  basisClass: 'OPEN_ACCESS_CC_BY_4_0_OPERATOR_PROVISIONED_BENCHMARK_RETENTION',
+  basisClass: 'LICENSE',
   evidenceRefs: [],
   rules: [{
     operation: 'RETAIN_FULLTEXT',
