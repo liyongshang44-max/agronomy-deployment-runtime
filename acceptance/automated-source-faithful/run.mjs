@@ -160,7 +160,7 @@ function output(overrides = {}) {
 const tests = [];
 function test(name, fn) { tests.push({ name, fn }); }
 
-test('blind packet excludes extractor provider/model/confidence/rationale while binding exact candidate and artifact', () => {
+test('blind packet excludes extractor identity/confidence/rationale while preserving opaque exact bindings', () => {
   const env = setup();
   const claim = env.compiled.claimCandidates[0];
   const context = env.compiled.sourceContextCandidates[0];
@@ -174,7 +174,11 @@ test('blind packet excludes extractor provider/model/confidence/rationale while 
   assert.equal(serialized.includes('extract-model-a'), false);
   assert.equal(serialized.includes('0.99'), false, 'extractor confidence must not leak into blind packet');
   assert.equal(serialized.includes('must never enter blind reviewer packet'), false);
-  assert.equal(blind.packet.sourceArtifactRef.semanticHash, claim.semanticPayload.sourceArtifactRef.semanticHash);
+  assert.equal(serialized.includes(claim.ref.logicalId), false, 'candidate logicalId must not leak into provider-facing packet');
+  assert.equal(serialized.includes(claim.semanticPayload.sourceArtifactRef.logicalId), false, 'artifact logicalId must not leak into provider-facing packet');
+  assert.equal(blind.packet.opaqueBinding.claimCandidateSemanticHash, claim.ref.semanticHash);
+  assert.equal(blind.packet.opaqueBinding.sourceContextCandidateSemanticHash, context.ref.semanticHash);
+  assert.equal(blind.packet.opaqueBinding.sourceArtifactContentHash, claim.semanticPayload.sourceArtifactContentHash);
   assert.equal(blind.packet.claim.assertion, claim.semanticPayload.assertion);
 });
 
