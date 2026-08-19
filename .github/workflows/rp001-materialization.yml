@@ -1,6 +1,7 @@
 name: ADR RP001 Materialization
 
 on:
+  workflow_call:
   push:
     branches:
       - "feat/real-paper-benchmark-v1"
@@ -23,13 +24,15 @@ jobs:
       OPENAI_API_KEY: ""
       ADR_EXTRACTION_MODEL: ""
       ADR_SOURCE_FAITHFUL_REVIEW_MODEL: ""
-      ADR_CODE_HEAD_SHA: ${{ github.sha }}
+      ADR_CODE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       ADR_RP001_OUTPUT_DIR: .adr-benchmark/rp001
       ADR_RP001_OPERATOR_ID: rp001-github-materializer
       ADR_RIGHTS_JURISDICTION: UNSPECIFIED
     steps:
-      - name: Checkout exact head
+      - name: Checkout exact product head
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -143,9 +146,10 @@ jobs:
           if (JSON.stringify(evidence.modelExecution) !== JSON.stringify(expected)) {
             throw new Error(`unexpected model execution state: ${JSON.stringify(evidence.modelExecution)}`);
           }
-          if (evidence.codeHeadSha !== process.env.GITHUB_SHA) throw new Error('materialization code head mismatch');
+          if (evidence.codeHeadSha !== process.env.ADR_CODE_HEAD_SHA) throw new Error('materialization code head mismatch');
           console.log(JSON.stringify({
             paperId: evidence.paperId,
+            codeHeadSha: evidence.codeHeadSha,
             contentHash: evidence.source.contentHash,
             byteLength: evidence.source.byteLength,
             sourceArtifactRef: evidence.source.sourceArtifactRef,
@@ -156,7 +160,7 @@ jobs:
       - name: Upload exact materialization authority world
         uses: actions/upload-artifact@v4
         with:
-          name: rp001-materialization-${{ github.sha }}
+          name: rp001-materialization-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
             .adr-benchmark/rp001/
             .adr-benchmark/acquisition/oa-response.xml
