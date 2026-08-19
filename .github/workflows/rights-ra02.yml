@@ -1,0 +1,36 @@
+name: ADR Rights RA02
+
+on:
+  push:
+    branches:
+      - "feat/rights-ra02-source-egress-enforcement"
+  pull_request:
+    paths:
+      - "apps/pilot-api/src/rights/**"
+      - "acceptance/rights-enforcement/**"
+      - ".github/workflows/rights-ra02.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-egress-enforcement:
+    name: Source / read / model-egress enforcement
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          package-manager-cache: false
+
+      - name: RA02 acceptance
+        run: node acceptance/rights-enforcement/run.mjs
+
+      - name: Full ADR regression
+        run: npm test
