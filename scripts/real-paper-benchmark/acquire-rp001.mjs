@@ -1,10 +1,13 @@
+import { createHash } from 'node:crypto';
 import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, join, relative, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const PMCID = 'PMC9656380';
+const PAPER_ID = 'RP001';
 const OA_API = `https://www.ncbi.nlm.nih.gov/pmc/utils/oa/oa.fcgi?id=${PMCID}`;
 const OUTPUT_DIR = resolve(process.env.ADR_RP001_ACQUISITION_DIR ?? '.adr-benchmark/acquisition');
+const CORPUS_PATH = resolve(process.env.ADR_REAL_PAPER_CORPUS_PATH ?? 'docs/implementation/real-paper-benchmark/corpus-v1.json');
 const USER_AGENT = 'ADR-RP001-Benchmark/1.0';
 
 function decodeXml(value) {
@@ -102,7 +105,27 @@ function selectPrimaryPdf(packageDir) {
   return candidates[0];
 }
 
+function exactCorpusPin() {
+  const corpus = JSON.parse(readFileSync(CORPUS_PATH, 'utf8'));
+  if (corpus?.benchmarkId !== 'ADR_REAL_PAPER_BENCHMARK_V1' || !Array.isArray(corpus.papers)) {
+    throw new Error('invalid real-paper corpus authority');
+  }
+  const matches = corpus.papers.filter((paper) => paper.paperId === PAPER_ID);
+  if (matches.length !== 1) throw new Error(`corpus must contain exactly one ${PAPER_ID} record`);
+  const pin = matches[0].exactSourceArtifactPin;
+  if (!pin || pin.pinVersion !== 'adr.real-paper-source-artifact-pin.v1') {
+    throw new Error(`${PAPER_ID} exactSourceArtifactPin is required before acquisition`);
+  }
+  if (!/^sha256:[0-9a-f]{64}$/.test(pin.contentHash)) throw new Error(`${PAPER_ID} pin contentHash is invalid`);
+  if (!Number.isSafeInteger(pin.byteLength) || pin.byteLength <= 0) throw new Error(`${PAPER_ID} pin byteLength is invalid`);
+  if (pin.mismatchDisposition !== 'FAIL_CLOSED_BEFORE_RIGHTS_RETENTION') {
+    throw new Error(`${PAPER_ID} pin must fail closed before Rights retention`);
+  }
+  return pin;
+}
+
 mkdirSync(OUTPUT_DIR, { recursive: true });
+const pin = exactCorpusPin();
 const response = await fetch(OA_API, { headers: { 'user-agent': USER_AGENT } });
 if (!response.ok) throw new Error(`PMC OA API returned HTTP ${response.status}`);
 const xml = await response.text();
@@ -130,13 +153,20 @@ if (pdfBytes.byteLength < 5 || pdfBytes.subarray(0, 5).toString('ascii') !== '%P
   throw new Error('resolved RP001 resource is not a PDF');
 }
 
+const contentHash = `sha256:${createHash('sha256').update(pdfBytes).digest('hex')}`;
+if (contentHash !== pin.contentHash || pdfBytes.byteLength !== pin.byteLength) {
+  throw new Error(
+    `RP001 exact corpus pin mismatch before Rights retention: expected ${pin.contentHash}/${pin.byteLength}, received ${contentHash}/${pdfBytes.byteLength}`
+  );
+}
+
 const pdfPath = join(OUTPUT_DIR, 'rp001.pdf');
 writeFileSync(pdfPath, pdfBytes);
 const acquisitionLocator = memberPath ? `${downloaded.url}#${memberPath}` : downloaded.url;
 writeFileSync(join(OUTPUT_DIR, 'locator.txt'), `${acquisitionLocator}\n`, 'utf8');
 const evidence = {
   schemaVersion: 'adr.rp001-acquisition.v1',
-  paperId: 'RP001',
+  paperId: PAPER_ID,
   pmcid: PMCID,
   oaApi: OA_API,
   oaLicense: oa.license,
@@ -147,7 +177,15 @@ const evidence = {
   packageMember: memberPath,
   acquisitionLocator,
   pdfPath,
+  contentHash,
   byteLength: pdfBytes.byteLength,
+  corpusPin: {
+    pinVersion: pin.pinVersion,
+    contentHash: pin.contentHash,
+    byteLength: pin.byteLength,
+    matched: true,
+    mismatchDisposition: pin.mismatchDisposition
+  },
   authorityClaim: 'ACQUISITION_TRACE_ONLY_NOT_RIGHTS_OR_SCIENTIFIC_AUTHORITY'
 };
 writeFileSync(join(OUTPUT_DIR, 'acquisition.json'), `${JSON.stringify(evidence, null, 2)}\n`, 'utf8');
