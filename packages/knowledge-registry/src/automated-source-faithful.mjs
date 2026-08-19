@@ -26,6 +26,9 @@ export const AUTOMATED_SOURCE_FAITHFUL_REVIEW_CHECKS = deepFreeze([
 ]);
 
 const DISPOSITION_SET = new Set(AUTOMATED_SOURCE_FAITHFUL_PROPOSED_DISPOSITIONS);
+const MANUAL_EXTERNAL_IMPORT_PROVIDER = 'MANUAL_EXTERNAL_PROPOSAL_IMPORT';
+const UNKNOWN_PROVIDER_LABELS = new Set(['EXTERNAL_WEB', 'UNKNOWN_PROVIDER', 'UNKNOWN', 'NOT_REPORTED']);
+const UNKNOWN_MODEL_LABELS = new Set(['UNKNOWN_MODEL', 'UNKNOWN', 'NOT_REPORTED']);
 
 export const DEFAULT_AUTOMATED_SOURCE_FAITHFUL_POLICY = deepFreeze({
   contractVersion: AUTOMATED_SOURCE_FAITHFUL_REVIEW_CONTRACT,
@@ -51,6 +54,10 @@ function requiredText(value, name) {
     throw new AutomatedSourceFaithfulReviewError('INVALID_AUTOMATED_REVIEW_INPUT', `${name} must be a non-empty string`);
   }
   return value.trim();
+}
+
+function optionalText(value) {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
 }
 
 function normalizeConfidence(value) {
@@ -189,13 +196,54 @@ export function buildAutomatedSourceFaithfulBlindPacket({ ledger, compilationRes
 
 function extractorIdentity(result) {
   const metadata = result.semanticPayload?.runMetadata ?? {};
-  const provider = typeof metadata.provider === 'string' && metadata.provider.trim() ? metadata.provider.trim() : null;
-  const model = typeof metadata.model === 'string' && metadata.model.trim() ? metadata.model.trim() : null;
-  return deepFreeze({ provider, model, verifiable: Boolean(provider && model) });
+  const directProvider = optionalText(metadata.provider);
+  const directModel = optionalText(metadata.model);
+  if (directProvider && directModel) {
+    return deepFreeze({
+      provider: directProvider,
+      model: directModel,
+      identityAuthority: 'RUNTIME_RECORDED_PROVIDER_MODEL',
+      identityVerified: true,
+      usableForIndependence: true,
+      verifiable: true,
+      transport: optionalText(metadata.transport) ?? 'DIRECT_PROVIDER'
+    });
+  }
+
+  if (directProvider === MANUAL_EXTERNAL_IMPORT_PROVIDER
+    && metadata.modelIdentityAuthority === 'OPERATOR_DECLARED_NOT_VERIFIED') {
+    const declaredProvider = optionalText(metadata.providerLabel);
+    const declaredModel = optionalText(metadata.modelLabel);
+    const providerKnown = Boolean(declaredProvider && !UNKNOWN_PROVIDER_LABELS.has(declaredProvider.toUpperCase()));
+    const modelKnown = Boolean(declaredModel && !UNKNOWN_MODEL_LABELS.has(declaredModel.toUpperCase()));
+    return deepFreeze({
+      provider: providerKnown ? declaredProvider : null,
+      model: modelKnown ? declaredModel : null,
+      identityAuthority: 'OPERATOR_DECLARED_NOT_VERIFIED',
+      identityVerified: false,
+      usableForIndependence: providerKnown && modelKnown,
+      verifiable: false,
+      transport: 'USER_COPY_PASTE'
+    });
+  }
+
+  return deepFreeze({
+    provider: directProvider,
+    model: directModel,
+    identityAuthority: 'INSUFFICIENT',
+    identityVerified: false,
+    usableForIndependence: false,
+    verifiable: false,
+    transport: optionalText(metadata.transport)
+  });
 }
 
 function sameReviewerIdentity(extractor, reviewer) {
-  return extractor.verifiable && extractor.provider === reviewer.provider && extractor.model === reviewer.model;
+  if (!extractor.usableForIndependence) return false;
+  if (extractor.identityAuthority === 'OPERATOR_DECLARED_NOT_VERIFIED') {
+    return extractor.model === reviewer.model || (extractor.provider === reviewer.provider && extractor.model === reviewer.model);
+  }
+  return extractor.provider === reviewer.provider && extractor.model === reviewer.model;
 }
 
 export function materializeAutomatedSourceFaithfulReviewProposal({
@@ -317,7 +365,7 @@ export function adjudicateAutomatedSourceFaithfulReviewProposal({ ledger, propos
 
   if (policy.requireBlindPacket === true && reviewer.reviewMode !== 'BLIND_FALSIFICATION') reasons.push('REVIEW_NOT_BLIND');
   if (policy.requireIndependentReviewer === true) {
-    if (!extractor.verifiable) reasons.push('EXTRACTOR_IDENTITY_NOT_VERIFIABLE');
+    if (!extractor.usableForIndependence) reasons.push('EXTRACTOR_IDENTITY_NOT_VERIFIABLE');
     else if (sameReviewerIdentity(extractor, reviewer)) reasons.push('REVIEWER_NOT_INDEPENDENT');
   }
 
@@ -345,6 +393,7 @@ export function adjudicateAutomatedSourceFaithfulReviewProposal({ ledger, propos
     failedChecks,
     reviewer,
     extractor,
+    independenceEvidenceClass: extractor.identityAuthority,
     policy: cloneCanonicalValue(policy)
   });
 }
