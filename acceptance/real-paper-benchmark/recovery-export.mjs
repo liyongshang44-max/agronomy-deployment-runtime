@@ -3,7 +3,7 @@ import {
   benchmarkPaperFromRecovery,
   buildBenchmarkRun
 } from '../../scripts/real-paper-benchmark/from-recovery.mjs';
-import { summarizeRealPaperBenchmark } from '../../scripts/real-paper-benchmark/summarize.mjs';
+import { RealPaperBenchmarkError, summarizeRealPaperBenchmark } from '../../scripts/real-paper-benchmark/summarize.mjs';
 
 function ref(id) {
   return {
@@ -58,28 +58,39 @@ assert.equal(noReference.candidates[3].compilerStatus, 'INVALID');
 
 const acceptedKey = noReference.candidates[0].candidateKey;
 const escalatedKey = noReference.candidates[2].candidateKey;
-const withReference = benchmarkPaperFromRecovery({
+const referenceLabels = {
+  annotationVersion: 'adr.real-paper-reference-annotation.v1',
   paperId: 'fixture-paper',
-  compilation,
-  referenceLabels: {
-    annotationVersion: 'adr.real-paper-reference-annotation.v1',
-    adjudications: [
-      {
-        candidateKey: acceptedKey,
-        referenceDisposition: 'REJECT_SOURCE_FAITHFUL',
-        defectCodes: ['TEMPORAL_WINDOW_OMITTED']
-      },
-      {
-        candidateKey: escalatedKey,
-        referenceDisposition: 'REJECT_SOURCE_FAITHFUL',
-        defectCodes: ['EVIDENCE_LOCATOR_INCOMPLETE']
-      }
-    ]
-  }
-});
+  blindToAutomatedDisposition: true,
+  adjudicator: {
+    type: 'HUMAN_OR_INDEPENDENT_REFERENCE',
+    id: 'fixture-reference-reviewer',
+    provider: null,
+    model: null
+  },
+  adjudications: [
+    {
+      candidateKey: acceptedKey,
+      referenceDisposition: 'REJECT_SOURCE_FAITHFUL',
+      defectCodes: ['TEMPORAL_WINDOW_OMITTED']
+    },
+    {
+      candidateKey: escalatedKey,
+      referenceDisposition: 'REJECT_SOURCE_FAITHFUL',
+      defectCodes: ['EVIDENCE_LOCATOR_INCOMPLETE']
+    }
+  ]
+};
+const withReference = benchmarkPaperFromRecovery({ paperId: 'fixture-paper', compilation, referenceLabels });
 assert.equal(withReference.candidates[0].referenceDisposition, 'REJECT_SOURCE_FAITHFUL');
 assert.deepEqual(withReference.candidates[0].defectCodes, ['TEMPORAL_WINDOW_OMITTED']);
 assert.equal(withReference.candidates[2].referenceDisposition, 'REJECT_SOURCE_FAITHFUL');
+
+assert.throws(() => benchmarkPaperFromRecovery({
+  paperId: 'fixture-paper',
+  compilation,
+  referenceLabels: { ...referenceLabels, blindToAutomatedDisposition: false }
+}), (error) => error instanceof RealPaperBenchmarkError && error.code === 'REFERENCE_ANNOTATION_NOT_BLIND');
 
 const run = buildBenchmarkRun({ runId: 'fixture-recovery-export', papers: [withReference] });
 const summary = summarizeRealPaperBenchmark(run);
@@ -92,4 +103,4 @@ assert.equal(summary.totals.falseAcceptCount, 1);
 assert.equal(summary.phaseASafetyGate, 'FAIL');
 assert.equal(summary.authorityClaim, 'BENCHMARK_METRICS_ARE_NOT_SCIENTIFIC_AUTHORITY');
 
-console.log(JSON.stringify({ total: 3, passed: 3, failed: 0 }, null, 2));
+console.log(JSON.stringify({ total: 4, passed: 4, failed: 0 }, null, 2));
