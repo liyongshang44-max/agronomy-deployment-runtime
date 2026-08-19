@@ -37,6 +37,7 @@ function startHost(port) {
       ADR_OPERATOR_TOKEN: TOKEN,
       ADR_OPERATOR_ID: 'automated-review-host',
       ADR_DATA_DIR: root,
+      ADR_RIGHTS_JURISDICTION: 'GB',
       OPENAI_API_KEY: 'dummy-key-must-not-be-used-for-skipped-candidate',
       ADR_EXTRACTION_MODEL: '',
       ADR_SOURCE_FAITHFUL_REVIEW_MODEL: 'review-model-b'
@@ -83,6 +84,28 @@ function headers(extra = {}) {
   return { authorization: `Bearer ${TOKEN}`, ...extra };
 }
 
+function allow(operation) {
+  return { operation, purposes: ['*'], jurisdictions: ['*'], obligations: [] };
+}
+
+async function provisionRights(base, uploadId, subject, rules, version) {
+  const response = await fetch(`${base}/operator/source-uploads/${encodeURIComponent(uploadId)}/rights`, {
+    method: 'POST',
+    headers: headers({ 'content-type': 'application/json' }),
+    body: JSON.stringify({
+      subject,
+      basisClass: 'LICENSE',
+      rules,
+      validFrom: '2026-01-01T00:00:00Z',
+      validUntil: '2027-01-01T00:00:00Z',
+      version
+    })
+  });
+  const payload = await response.json();
+  assert.equal(response.status, 201, JSON.stringify(payload));
+  return payload;
+}
+
 function notReportedContext() {
   return {
     BIOLOGICAL: { status: 'NOT_REPORTED', dimensions: [] },
@@ -105,6 +128,7 @@ try {
   assert.equal(ready.automatedSourceFaithfulReview.mode, 'BLIND_FALSIFICATION');
   assert.equal(ready.sourceFaithfulReview.humanReviewAvailable, true);
   assert.equal(ready.sourceFaithfulReview.automatedBlindReviewAvailable, true);
+  assert.equal(ready.rightsAuthority.enforcement, 'RA02_EXACT_SUBJECT_FAIL_CLOSED');
 
   const createResponse = await fetch(`${base}/operator/source-uploads`, {
     method: 'POST',
@@ -131,18 +155,31 @@ try {
   });
   assert.equal(createResponse.status, 201);
   const created = await createResponse.json();
+  assert.equal(created.sourceRef.kind, 'Source');
 
+  await provisionRights(base, created.uploadId, 'SOURCE', [allow('RETAIN_FULLTEXT')], 'source-retention-v1');
   const uploadResponse = await fetch(`${base}/operator/source-uploads/${encodeURIComponent(created.uploadId)}/content`, {
     method: 'PUT',
     headers: headers({ 'content-type': 'application/pdf' }),
     body: pdf
   });
   assert.equal(uploadResponse.status, 201);
+  assert.equal((await uploadResponse.json()).rightsDecisionRef.kind, 'RightsDecision');
 
   const finalizeResponse = await fetch(`${base}/operator/source-uploads/${encodeURIComponent(created.uploadId)}/finalize`, {
     method: 'POST', headers: headers()
   });
   assert.equal(finalizeResponse.status, 201);
+  const finalized = await finalizeResponse.json();
+  assert.equal(finalized.sourceArtifactRef.kind, 'SourceArtifact');
+
+  await provisionRights(
+    base,
+    created.uploadId,
+    'SOURCE_ARTIFACT',
+    [allow('READ_FOR_EXTRACTION'), allow('RETAIN_DERIVED')],
+    'artifact-manual-v1'
+  );
 
   const importResponse = await fetch(`${base}/operator/source-uploads/${encodeURIComponent(created.uploadId)}/import-proposal`, {
     method: 'POST',
@@ -170,6 +207,7 @@ try {
   assert.equal(importResponse.status, 200);
   const imported = await importResponse.json();
   assert.equal(imported.candidateCount, 1);
+  assert.equal(imported.rightsDecisionRefs.length, 2);
 
   const reviewResponse = await fetch(`${base}/operator/source-uploads/${encodeURIComponent(created.uploadId)}/review`, {
     method: 'POST',
@@ -185,6 +223,7 @@ try {
     })
   });
   assert.equal(reviewResponse.status, 201);
+  assert.equal((await reviewResponse.json()).rightsDecisionRefs.length, 1);
 
   const missingConsent = await fetch(`${base}/operator/source-uploads/${encodeURIComponent(created.uploadId)}/automated-review`, {
     method: 'POST',
@@ -194,6 +233,8 @@ try {
   assert.equal(missingConsent.status, 409);
   assert.equal((await missingConsent.json()).error, 'EXTERNAL_MODEL_PROCESSING_AUTHORIZATION_REQUIRED');
 
+  // The only candidate is already terminal. The batch must skip before any new
+  // READ/MODEL_EGRESS/RETAIN_DERIVED authorization and before the dummy provider.
   const batchResponse = await fetch(`${base}/operator/source-uploads/${encodeURIComponent(created.uploadId)}/automated-review`, {
     method: 'POST',
     headers: headers({ 'content-type': 'application/json' }),
@@ -220,7 +261,12 @@ try {
   assert.equal(recovery.compilations[0].escalatedPendingHumanCount, 0);
   assert.equal(recovery.compilations[0].promotionIncompleteCount, 0);
 
-  console.log(JSON.stringify({ total: 1, passed: 1, failed: 0 }, null, 2));
+  console.log(JSON.stringify({
+    total: 1,
+    passed: 1,
+    failed: 0,
+    skippedCandidateDidNotRequireModelEgress: true
+  }, null, 2));
 } finally {
   if (processState) await stopHost(processState.child);
   rmSync(root, { recursive: true, force: true });
