@@ -1,0 +1,107 @@
+{
+  "candidateSetVersion": "adr.real-paper-expansion-candidates.v1",
+  "authorityClaim": "DISCOVERY_CANDIDATES_ONLY_NOT_CORPUS_AUTHORITY",
+  "selectionPolicy": {
+    "goal": "Candidate papers for future expansion after RP001 establishes the first real benchmark baseline.",
+    "candidateCount": 8,
+    "requirements": [
+      "REAL_PUBLICATION_OR_PREPRINT",
+      "PUBLIC_LANDING_PAGE",
+      "AGRONOMY_OR_PRECISION_AGRICULTURE_RELEVANCE",
+      "NONTRIVIAL_SOURCE_CONTEXT",
+      "AT_LEAST_ONE_HIGH_VALUE_FIDELITY_STRESSOR"
+    ],
+    "promotionRule": "No candidate becomes benchmark corpus authority until explicitly promoted into docs/implementation/real-paper-benchmark/corpus-v1.json or a successor corpus authority file.",
+    "rightsRule": "Candidate inclusion is not a rights grant. Exact acquisition, retention, model egress, excerpt display, and production-use rights remain runtime rights decisions."
+  },
+  "papers": [
+    {
+      "paperId": "cotton-sowing-causal-2022",
+      "title": "Evaluating Digital Agriculture Recommendations with Causal Inference",
+      "cropTags": ["cotton"],
+      "persistentIds": { "doi": "10.48550/arXiv.2211.16938", "arxiv": "2211.16938" },
+      "landingUrl": "https://arxiv.org/abs/2211.16938",
+      "sourceClass": "PREPRINT",
+      "stressDimensions": ["CAUSALITY_FIDELITY", "EVIDENCE_COVERAGE", "MANAGEMENT_CONTEXT", "EXTERNAL_VALIDITY", "OPERATIONAL_DEFINITION"],
+      "candidateRole": "KNOWN_CALIBRATION_PAPER",
+      "rightsAuthority": "RUNTIME_ADJUDICATION_REQUIRED"
+    },
+    {
+      "paperId": "maize-soil-water-thresholds-2018",
+      "title": "Sequence of Changes in Maize Responding to Soil Water Deficit and Related Critical Thresholds",
+      "cropTags": ["maize"],
+      "persistentIds": { "pmcid": "PMC5938554" },
+      "landingUrl": "https://pmc.ncbi.nlm.nih.gov/articles/PMC5938554/",
+      "sourceClass": "PEER_REVIEWED_ARTICLE",
+      "stressDimensions": ["PARAMETER_THRESHOLD", "GROWTH_STAGE_CONTEXT", "SOIL_DEPTH_CONTEXT", "TEMPORAL_FIDELITY", "EXPERIMENTAL_CONDITIONS"],
+      "candidateRole": "WATER_THRESHOLD",
+      "rightsAuthority": "RUNTIME_ADJUDICATION_REQUIRED"
+    },
+    {
+      "paperId": "wheat-water-nitrogen-hexi-2021",
+      "title": "Improving wheat grain yield via promotion of water and nitrogen utilization in arid areas",
+      "cropTags": ["wheat"],
+      "persistentIds": { "pmcid": "PMC8257629" },
+      "landingUrl": "https://pmc.ncbi.nlm.nih.gov/articles/PMC8257629/",
+      "sourceClass": "PEER_REVIEWED_ARTICLE",
+      "stressDimensions": ["IRRIGATION_X_NITROGEN", "CAUSALITY_FIDELITY", "GEOGRAPHY_CONTEXT", "MANAGEMENT_CONTEXT", "COMPARATOR_FIDELITY"],
+      "candidateRole": "WATER_NITROGEN_INTERACTION",
+      "rightsAuthority": "RUNTIME_ADJUDICATION_REQUIRED"
+    },
+    {
+      "paperId": "winter-wheat-drip-nitrogen-2021",
+      "title": "Suitable nitrogen application mode and lateral spacing for drip-irrigated winter wheat in North China Plain",
+      "cropTags": ["winter_wheat"],
+      "persistentIds": { "pmcid": "PMC8589194" },
+      "landingUrl": "https://pmc.ncbi.nlm.nih.gov/articles/PMC8589194/",
+      "sourceClass": "PEER_REVIEWED_ARTICLE",
+      "stressDimensions": ["NITROGEN_SPLIT", "IRRIGATION_GEOMETRY", "MULTI_SEASON_CONTEXT", "YIELD_EFFECT", "WATER_USE_EFFICIENCY"],
+      "candidateRole": "MANAGEMENT_PARAMETER",
+      "rightsAuthority": "RUNTIME_ADJUDICATION_REQUIRED"
+    },
+    {
+      "paperId": "maize-water-deficit-timing-2018",
+      "title": "Timing of Water Deficit Limits Maize Kernel Setting in Association With Changes in the Source-Flow-Sink Relationship",
+      "cropTags": ["maize"],
+      "persistentIds": { "pmcid": "PMC6204571" },
+      "landingUrl": "https://pmc.ncbi.nlm.nih.gov/articles/PMC6204571/",
+      "sourceClass": "PEER_REVIEWED_ARTICLE",
+      "stressDimensions": ["PHENOLOGY_CONTEXT", "WATER_DEFICIT_TIMING", "SOIL_LAYER_MEASUREMENT", "FORMULA_EVIDENCE", "TREATMENT_COMPARISON"],
+      "candidateRole": "PHENOLOGY_WATER_TIMING",
+      "rightsAuthority": "RUNTIME_ADJUDICATION_REQUIRED"
+    },
+    {
+      "paperId": "soil-moisture-irrigation-interval-ethiopia-2024",
+      "title": "Soil moisture-based irrigation interval and irrigation performance evaluation: In the case of lower kulfo catchment, Ethiopia",
+      "cropTags": ["maize", "wheat", "onion", "pepper", "watermelon"],
+      "persistentIds": { "pmcid": "PMC11366907" },
+      "landingUrl": "https://pmc.ncbi.nlm.nih.gov/articles/PMC11366907/",
+      "sourceClass": "PEER_REVIEWED_ARTICLE",
+      "stressDimensions": ["OPERATIONAL_RECOMMENDATION", "MULTI_CROP_CONTEXT", "SOIL_MOISTURE_THRESHOLD", "IRRIGATION_INTERVAL", "LOCAL_SYSTEM_BOUNDARY"],
+      "candidateRole": "OPERATIONAL_THRESHOLD",
+      "rightsAuthority": "RUNTIME_ADJUDICATION_REQUIRED"
+    },
+    {
+      "paperId": "soybean-uav-yield-prediction-2024",
+      "title": "Application of UAV Multispectral Imaging to Monitor Soybean Growth with Yield Prediction through Machine Learning",
+      "cropTags": ["soybean"],
+      "persistentIds": { "doi": "10.3390/agronomy14040672" },
+      "landingUrl": "https://www.mdpi.com/2073-4395/14/4/672",
+      "sourceClass": "PEER_REVIEWED_ARTICLE",
+      "stressDimensions": ["REMOTE_SENSING_MEASUREMENT", "MODEL_EVALUATION", "SPECTRAL_BANDS", "GROWTH_MONITORING", "YIELD_PREDICTION"],
+      "candidateRole": "REMOTE_SENSING_MODEL",
+      "rightsAuthority": "RUNTIME_ADJUDICATION_REQUIRED"
+    },
+    {
+      "paperId": "viticulture-satellite-uav-ndvi-2024",
+      "title": "From Space to Field: Combining Satellite, UAV and Agronomic Data in an Open-Source Methodology for the Validation of NDVI Maps in Precision Viticulture",
+      "cropTags": ["grapevine"],
+      "persistentIds": { "doi": "10.3390/rs16050735" },
+      "landingUrl": "https://www.mdpi.com/2072-4292/16/5/735",
+      "sourceClass": "PEER_REVIEWED_ARTICLE",
+      "stressDimensions": ["SATELLITE_UAV_ALIGNMENT", "NDVI_MEASUREMENT", "VALIDATION_CLAIM", "SPATIAL_CONTEXT", "MEASUREMENT_FIDELITY"],
+      "candidateRole": "SATELLITE_VALIDATION",
+      "rightsAuthority": "RUNTIME_ADJUDICATION_REQUIRED"
+    }
+  ]
+}
