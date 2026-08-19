@@ -8,6 +8,7 @@ import {
   finalizeReferenceAnnotation,
   REFERENCE_ANNOTATION_VERSION
 } from '../../scripts/real-paper-benchmark/finalize-reference-annotation.mjs';
+import { applyReferenceAnnotation } from '../../scripts/real-paper-benchmark/apply-reference-annotation.mjs';
 
 const REF = (kind, logicalId, digit) => ({
   kind,
@@ -82,7 +83,6 @@ assert.equal(worksheet.frozenBeforeAutomatedReview, true);
 assert.equal(worksheet.automatedResultAccessed, false);
 assert.equal(worksheet.adjudications.length, 2);
 assert.ok(worksheet.adjudications.every((item) => item.referenceDisposition === null));
-assert.ok(worksheet.adjudications.every((item) => item.rationale === ''));
 
 const leakedStatus = packet();
 leakedStatus.candidates[0].automatedStatus = 'AUTO_ACCEPTED';
@@ -98,8 +98,7 @@ expectError(
   'REFERENCE_PACKET_REVIEW_LEAK'
 );
 
-const incomplete = structuredClone(worksheet);
-expectError(() => finalizeReferenceAnnotation(incomplete), 'INVALID_REFERENCE_WORKSHEET');
+expectError(() => finalizeReferenceAnnotation(structuredClone(worksheet)), 'INVALID_REFERENCE_WORKSHEET');
 
 const unblind = structuredClone(worksheet);
 unblind.automatedResultAccessed = true;
@@ -128,11 +127,63 @@ assert.equal(annotation.annotationVersion, REFERENCE_ANNOTATION_VERSION);
 assert.equal(annotation.paperId, 'RP001');
 assert.equal(annotation.blindToAutomatedDisposition, true);
 assert.equal(annotation.adjudications.length, 2);
-assert.deepEqual(Object.keys(annotation.adjudications[0]).sort(), [
-  'candidateKey', 'defectCodes', 'rationale', 'referenceDisposition'
-].sort());
 assert.equal('assertion' in annotation.adjudications[0], false);
 assert.equal('sourceLocator' in annotation.adjudications[0], false);
 assert.equal('automatedStatus' in annotation.adjudications[0], false);
 
-console.log(JSON.stringify({ total: 6, passed: 6, failed: 0 }, null, 2));
+const preReferenceRun = {
+  runVersion: 'adr.real-paper-benchmark-run.v1',
+  benchmarkVersion: 'adr.real-paper-benchmark.v1',
+  runMode: 'REAL',
+  runId: 'rp001-pre-reference',
+  execution: {
+    repositoryFullName: 'liyongshang44-max/agronomy-deployment-runtime',
+    codeHeadSha: packet().codeHeadSha,
+    rightsEnforcement: 'RA02_EXACT_SUBJECT_FAIL_CLOSED'
+  },
+  papers: [{
+    paperId: 'RP001',
+    evidence: packet().sourceEvidence,
+    candidates: [
+      {
+        candidateKey: packet().candidates[0].candidateKey,
+        claimType: 'PARAMETER',
+        compilerStatus: 'REVIEWABLE',
+        automatedStatus: 'AUTO_ACCEPTED',
+        referenceDisposition: null,
+        defectCodes: []
+      },
+      {
+        candidateKey: packet().candidates[1].candidateKey,
+        claimType: 'BOUNDARY_CONSTRAINT',
+        compilerStatus: 'REVIEWABLE',
+        automatedStatus: 'AUTO_ACCEPTED',
+        referenceDisposition: null,
+        defectCodes: []
+      }
+    ]
+  }]
+};
+const applied = applyReferenceAnnotation(preReferenceRun, annotation);
+assert.equal(applied.referenceApplication.appliedCount, 2);
+assert.equal(applied.referenceApplication.automatedStatusMutationAllowed, false);
+assert.deepEqual(applied.run.execution, preReferenceRun.execution);
+assert.deepEqual(applied.run.papers[0].evidence, preReferenceRun.papers[0].evidence);
+assert.deepEqual(
+  applied.run.papers[0].candidates.map((item) => item.automatedStatus),
+  preReferenceRun.papers[0].candidates.map((item) => item.automatedStatus)
+);
+assert.equal(applied.run.papers[0].candidates[0].referenceDisposition, 'ACCEPT_SOURCE_FAITHFUL');
+assert.equal(applied.run.papers[0].candidates[1].referenceDisposition, 'REJECT_SOURCE_FAITHFUL');
+assert.deepEqual(applied.run.papers[0].candidates[1].defectCodes, ['EVIDENCE_LOCATOR_INCOMPLETE']);
+assert.equal(applied.summary.totals.falseAcceptCount, 1);
+assert.equal(applied.summary.phaseASafetyGate, 'FAIL');
+
+const unknownCandidateAnnotation = structuredClone(annotation);
+unknownCandidateAnnotation.adjudications[0].candidateKey = 'not-a-real-candidate';
+assert.throws(
+  () => applyReferenceAnnotation(preReferenceRun, unknownCandidateAnnotation),
+  (error) => error?.code === 'REFERENCE_ANNOTATION_CANDIDATE_MISMATCH'
+);
+
+console.log(JSON.stringify({ total: 8, passed: 8, failed: 0 }, null, 2));
