@@ -31,5 +31,8 @@ jobs:
       - name: Constitutional static checks
         run: npm run build
 
+      - name: Automated blind source-faithful review acceptance
+        run: node acceptance/automated-source-faithful/run.mjs
+
       - name: Constitutional acceptance
         run: npm test
