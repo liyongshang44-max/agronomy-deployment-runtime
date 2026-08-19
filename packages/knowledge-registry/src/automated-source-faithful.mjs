@@ -26,7 +26,6 @@ export const AUTOMATED_SOURCE_FAITHFUL_REVIEW_CHECKS = deepFreeze([
 ]);
 
 const DISPOSITION_SET = new Set(AUTOMATED_SOURCE_FAITHFUL_PROPOSED_DISPOSITIONS);
-const CHECK_SET = new Set(AUTOMATED_SOURCE_FAITHFUL_REVIEW_CHECKS);
 
 export const DEFAULT_AUTOMATED_SOURCE_FAITHFUL_POLICY = deepFreeze({
   contractVersion: AUTOMATED_SOURCE_FAITHFUL_REVIEW_CONTRACT,
@@ -54,18 +53,16 @@ function requiredText(value, name) {
   return value.trim();
 }
 
-function confidence(value, name = 'reviewConfidence') {
+function normalizeConfidence(value) {
   if (typeof value !== 'number' || Number.isNaN(value) || value < 0 || value > 1) {
-    throw new AutomatedSourceFaithfulReviewError('INVALID_AUTOMATED_REVIEW_CONFIDENCE', `${name} must be between 0 and 1`);
+    throw new AutomatedSourceFaithfulReviewError('INVALID_AUTOMATED_REVIEW_CONFIDENCE', 'reviewConfidence must be between 0 and 1');
   }
   return value;
 }
 
-function resolveKind(ledger, ref, expectedKind, code) {
+function resolveKind(ledger, ref, kind, code) {
   const record = ledger.resolve(assertAuthorityRef(ref));
-  if (record.ref.kind !== expectedKind) {
-    throw new AutomatedSourceFaithfulReviewError(code, `expected ${expectedKind}, received ${record.ref.kind}`);
-  }
+  if (record.ref.kind !== kind) throw new AutomatedSourceFaithfulReviewError(code, `expected ${kind}, received ${record.ref.kind}`);
   return record;
 }
 
@@ -74,9 +71,7 @@ function includesExactRef(refs, expected) {
 }
 
 function normalizeReasonCodes(values) {
-  if (!Array.isArray(values)) {
-    throw new AutomatedSourceFaithfulReviewError('INVALID_AUTOMATED_REVIEW_REASON', 'reasonCodes must be an array');
-  }
+  if (!Array.isArray(values)) throw new AutomatedSourceFaithfulReviewError('INVALID_AUTOMATED_REVIEW_REASON', 'reasonCodes must be an array');
   return deepFreeze([...new Set(values.map((value) => requiredText(value, 'reasonCode')))].sort());
 }
 
@@ -84,17 +79,13 @@ function normalizeChecks(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new AutomatedSourceFaithfulReviewError('INVALID_AUTOMATED_REVIEW_CHECKS', 'checks must be an object');
   }
-  const keys = Object.keys(value).sort();
+  const actual = Object.keys(value).sort();
   const expected = [...AUTOMATED_SOURCE_FAITHFUL_REVIEW_CHECKS].sort();
-  if (JSON.stringify(keys) !== JSON.stringify(expected)) {
-    throw new AutomatedSourceFaithfulReviewError(
-      'AUTOMATED_REVIEW_CHECK_SET_INCOMPLETE',
-      `checks must contain exactly: ${AUTOMATED_SOURCE_FAITHFUL_REVIEW_CHECKS.join(', ')}`
-    );
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+    throw new AutomatedSourceFaithfulReviewError('AUTOMATED_REVIEW_CHECK_SET_INCOMPLETE', `checks must contain exactly: ${expected.join(', ')}`);
   }
   const output = {};
   for (const key of AUTOMATED_SOURCE_FAITHFUL_REVIEW_CHECKS) {
-    if (!CHECK_SET.has(key)) continue;
     const status = requiredText(value[key], `checks.${key}`);
     if (!['PASS', 'FAIL'].includes(status)) {
       throw new AutomatedSourceFaithfulReviewError('INVALID_AUTOMATED_REVIEW_CHECK', `checks.${key} must be PASS or FAIL`);
@@ -134,7 +125,7 @@ function assertCandidatePair({ ledger, compilationResultRef, claimCandidateRef, 
   for (const name of ['sourceRef', 'sourceArtifactRef', 'compilerDefinitionRef']) {
     if (!sameAuthorityRef(claimCandidate.semanticPayload[name], sourceContextCandidate.semanticPayload[name])
       || !sameAuthorityRef(result.semanticPayload[name], claimCandidate.semanticPayload[name])) {
-      throw new AutomatedSourceFaithfulReviewError('CANDIDATE_PROVENANCE_MISMATCH', `${name} differs across exact compilation/candidate pair`);
+      throw new AutomatedSourceFaithfulReviewError('CANDIDATE_PROVENANCE_MISMATCH', `${name} differs across compilation/candidate pair`);
     }
   }
   if (claimCandidate.semanticPayload.sourceArtifactContentHash !== sourceContextCandidate.semanticPayload.sourceArtifactContentHash
@@ -146,6 +137,27 @@ function assertCandidatePair({ ledger, compilationResultRef, claimCandidateRef, 
     throw new AutomatedSourceFaithfulReviewError('SOURCE_ARTIFACT_HASH_MISMATCH', 'candidate content hash does not equal exact SourceArtifact contentHash');
   }
   return { result, claimCandidate, sourceContextCandidate, artifact };
+}
+
+function blindContextFamilies(contextFamilies) {
+  const output = {};
+  for (const [family, candidateFamily] of Object.entries(contextFamilies ?? {})) {
+    if (candidateFamily.status === 'NOT_REPORTED') {
+      output[family] = { status: 'NOT_REPORTED', dimensions: [] };
+      continue;
+    }
+    output[family] = {
+      status: 'REPORTED',
+      dimensions: (candidateFamily.dimensions ?? []).map((dimension) => ({
+        semanticHint: dimension.semanticHint,
+        valueCandidate: cloneCanonicalValue(dimension.valueCandidate),
+        ...(dimension.unitCandidate !== undefined ? { unitCandidate: dimension.unitCandidate } : {}),
+        supportClass: dimension.supportClass,
+        sourceLocator: cloneCanonicalValue(dimension.sourceLocator)
+      }))
+    };
+  }
+  return deepFreeze(output);
 }
 
 export function buildAutomatedSourceFaithfulBlindPacket({ ledger, compilationResultRef, claimCandidateRef, sourceContextCandidateRef }) {
@@ -161,18 +173,16 @@ export function buildAutomatedSourceFaithfulBlindPacket({ ledger, compilationRes
       assertion: pair.claimCandidate.semanticPayload.assertion,
       sourceLocator: cloneCanonicalValue(pair.claimCandidate.semanticPayload.sourceLocator)
     },
-    sourceContext: cloneCanonicalValue(pair.sourceContextCandidate.semanticPayload.contextFamilies),
+    sourceContext: blindContextFamilies(pair.sourceContextCandidate.semanticPayload.contextFamilies),
     blindness: {
       extractorProviderHidden: true,
       extractorModelHidden: true,
       extractorConfidenceHidden: true,
-      extractorRationaleHidden: true
+      extractorRationaleHidden: true,
+      contextDimensionConfidenceHidden: true
     }
   };
-  return deepFreeze({
-    packet,
-    blindInputHash: semanticHash('ADR-AutomatedSourceFaithfulBlindPacket-v1', packet)
-  });
+  return deepFreeze({ packet, blindInputHash: semanticHash('ADR-AutomatedSourceFaithfulBlindPacket-v1', packet) });
 }
 
 function extractorIdentity(result) {
@@ -221,7 +231,7 @@ export function materializeAutomatedSourceFaithfulReviewProposal({
   }
   const normalizedChecks = normalizeChecks(checks);
   const normalizedReasons = normalizeReasonCodes(reasonCodes);
-  const normalizedConfidence = confidence(reviewConfidence);
+  const normalizedConfidence = normalizeConfidence(reviewConfidence);
   if (disposition === 'REJECT_SOURCE_FAITHFUL' && normalizedReasons.length === 0) {
     throw new AutomatedSourceFaithfulReviewError('AUTOMATED_REJECTION_REASON_REQUIRED', 'automated rejection proposal requires reasonCodes');
   }
@@ -272,11 +282,7 @@ export function materializeAutomatedSourceFaithfulReviewProposal({
   });
 }
 
-export function adjudicateAutomatedSourceFaithfulReviewProposal({
-  ledger,
-  proposalRef,
-  policy = DEFAULT_AUTOMATED_SOURCE_FAITHFUL_POLICY
-}) {
+export function adjudicateAutomatedSourceFaithfulReviewProposal({ ledger, proposalRef, policy = DEFAULT_AUTOMATED_SOURCE_FAITHFUL_POLICY }) {
   const proposal = resolveKind(ledger, proposalRef, 'AutomatedSourceFaithfulReviewProposal', 'AUTOMATED_REVIEW_PROPOSAL_REQUIRED');
   const payload = proposal.semanticPayload;
   if (payload.contractVersion !== AUTOMATED_SOURCE_FAITHFUL_REVIEW_CONTRACT
@@ -302,7 +308,10 @@ export function adjudicateAutomatedSourceFaithfulReviewProposal({
   const reviewer = normalizeReviewerMetadata(payload.reviewerMetadata);
   const extractor = extractorIdentity(pair.result);
   const reasons = [];
-  const failedChecks = Object.entries(normalizeChecks(payload.checks)).filter(([, status]) => status === 'FAIL').map(([name]) => name);
+  const failedChecks = Object.entries(normalizeChecks(payload.checks))
+    .filter(([, status]) => status === 'FAIL')
+    .map(([name]) => name)
+    .sort();
 
   if (policy.requireBlindPacket === true && reviewer.reviewMode !== 'BLIND_FALSIFICATION') reasons.push('REVIEW_NOT_BLIND');
   if (policy.requireIndependentReviewer === true) {
@@ -331,7 +340,7 @@ export function adjudicateAutomatedSourceFaithfulReviewProposal({
     effectiveDisposition,
     promotionAuthority: AUTOMATED_SOURCE_FAITHFUL_REVIEW_PROMOTION,
     promotionReasons: [...new Set(reasons)].sort(),
-    failedChecks: failedChecks.sort(),
+    failedChecks,
     reviewer,
     extractor,
     policy: cloneCanonicalValue(policy)
