@@ -32,7 +32,7 @@ jobs:
         run: npm run build
 
       - name: Automated blind source-faithful review acceptance
-        run: node acceptance/automated-source-faithful/run.mjs && node acceptance/automated-source-faithful/openai-provider.mjs
+        run: node acceptance/automated-source-faithful/run.mjs && node acceptance/automated-source-faithful/openai-provider.mjs && node acceptance/automated-source-faithful/batch.mjs
 
       - name: Constitutional acceptance
         run: npm test
