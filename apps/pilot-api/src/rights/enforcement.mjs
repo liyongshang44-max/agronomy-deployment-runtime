@@ -16,9 +16,15 @@ function requiredText(value, name) {
   return value.trim();
 }
 
-function ownershipFromSubject(record) {
+function ownershipFromSubject(ledger, record) {
   if (record.ref.kind === 'Source') return record.semanticPayload.ownership;
-  if (record.ref.kind === 'SourceArtifact') return record.semanticPayload.ownership;
+  if (record.ref.kind === 'SourceArtifact') {
+    const source = ledger.resolve(record.semanticPayload.sourceRef);
+    if (source?.ref?.kind !== 'Source') {
+      throw new RightsAuthorityError('RIGHTS_SUBJECT_SOURCE_REQUIRED', 'SourceArtifact rights scope requires its exact Source authority');
+    }
+    return source.semanticPayload.ownership;
+  }
   throw new RightsAuthorityError('INVALID_RIGHTS_SUBJECT', 'pilot rights enforcement requires Source or SourceArtifact');
 }
 
@@ -70,7 +76,7 @@ export class PilotRightsEnforcementService {
     version = `grant-${new Date().toISOString()}-${randomUUID()}`
   }) {
     const subject = this.#ledger.resolve(subjectRef);
-    const ownership = ownershipFromSubject(subject);
+    const ownership = ownershipFromSubject(this.#ledger, subject);
     const owner = principal(this.#operatorId, 'USER', ownership);
     const safeVersion = requiredText(version, 'version');
     const now = new Date().toISOString();
@@ -125,7 +131,7 @@ export class PilotRightsEnforcementService {
     version = `decision-${new Date().toISOString()}-${randomUUID()}`
   }) {
     const subject = this.#ledger.resolve(subjectRef);
-    const ownership = ownershipFromSubject(subject);
+    const ownership = ownershipFromSubject(this.#ledger, subject);
     const actor = principal(actorId, actorType, ownership);
     const evaluator = principal(this.#evaluatorId, 'SERVICE_ACCOUNT', ownership);
     const at = new Date(evaluatedAt).toISOString();
@@ -161,7 +167,7 @@ export class PilotRightsEnforcementService {
     enforceableObligations = []
   }) {
     const subject = this.#ledger.resolve(subjectRef);
-    const ownership = ownershipFromSubject(subject);
+    const ownership = ownershipFromSubject(this.#ledger, subject);
     const actor = principal(actorId, actorType, ownership);
     return assertRightsAllowed({
       ledger: this.#ledger,
@@ -226,7 +232,7 @@ export class PilotRightsEnforcementService {
 
 export function assertProvisioningScope({ ledger, subjectRef, ownership }) {
   const subject = ledger.resolve(subjectRef);
-  const subjectOwnership = ownershipFromSubject(subject);
+  const subjectOwnership = ownershipFromSubject(ledger, subject);
   if (!sameScope(subjectOwnership, ownership)) {
     throw new RightsAuthorityError('RIGHTS_PROVISIONING_SCOPE_MISMATCH', 'requested rights provisioning scope differs from exact subject ownership');
   }
