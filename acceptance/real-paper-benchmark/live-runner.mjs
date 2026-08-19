@@ -17,6 +17,7 @@ const pdfPath = join(temp, 'fixture.pdf');
 const codeHead = 'b'.repeat(40);
 const token = 'fixture-operator-token';
 const requests = [];
+let automatedReviewCompleted = false;
 
 function ref(kind, id, version = '1') {
   return {
@@ -91,6 +92,7 @@ try {
       payload = { compilationResultRef: compilationRef, candidateCount: 1, candidates: [], rightsDecisionRefs: [] };
       status = 201;
     } else if (req.method === 'POST' && url.pathname.endsWith('/automated-review')) {
+      automatedReviewCompleted = true;
       payload = {
         total: 1,
         processed: 1,
@@ -108,10 +110,25 @@ try {
             claimCandidateRef: claimRef,
             sourceContextCandidateRef: contextRef,
             claimType: 'BOUNDARY_CONSTRAINT',
-            automatedReview: {
+            assertion: 'Fixture source-faithful assertion.',
+            sourceLocator: {
+              kind: 'DOCUMENT_COORDINATE',
+              scheme: 'PDF_PAGE_TEXT_V1',
+              coordinates: { page: 1, evidenceText: 'RP001 live runner fixture' }
+            },
+            extractionConfidence: 0.99,
+            contextFamilies: {
+              BIOLOGICAL: { status: 'NOT_REPORTED', dimensions: [] },
+              ENVIRONMENTAL: { status: 'NOT_REPORTED', dimensions: [] },
+              MANAGEMENT: { status: 'NOT_REPORTED', dimensions: [] },
+              OPERATIONAL: { status: 'NOT_REPORTED', dimensions: [] },
+              MEASUREMENT: { status: 'NOT_REPORTED', dimensions: [] },
+              JURISDICTION_ECONOMIC: { status: 'NOT_REPORTED', dimensions: [] }
+            },
+            automatedReview: automatedReviewCompleted ? {
               status: 'ESCALATED_PENDING_HUMAN',
               effectiveDisposition: 'ESCALATE_TO_HUMAN'
-            },
+            } : null,
             review: null
           }]
         }]
@@ -149,6 +166,7 @@ try {
       'GET /readyz',
       `POST /operator/source-uploads/${upload.uploadId}/rights`,
       `POST /operator/source-uploads/${upload.uploadId}/extract`,
+      `GET /operator/source-uploads/${upload.uploadId}/compilations`,
       `POST /operator/source-uploads/${upload.uploadId}/automated-review`,
       `GET /operator/source-uploads/${upload.uploadId}/compilations`
     ]
@@ -167,13 +185,27 @@ try {
     assert.deepEqual(rule.purposes, ['SCIENTIFIC_CLAIM_EXTRACTION', 'SOURCE_FAITHFUL_REVIEW']);
   }
   assert.equal(requests[2].body.externalProcessingAuthorized, true);
-  assert.equal(requests[3].body.externalProcessingAuthorized, true);
-  assert.deepEqual(requests[3].body.compilationResultRef, compilationRef);
+  assert.equal(requests[4].body.externalProcessingAuthorized, true);
+  assert.deepEqual(requests[4].body.compilationResultRef, compilationRef);
+
+  const referencePacket = JSON.parse(readFileSync(join(liveDir, 'rp001-reference-packet.json'), 'utf8'));
+  assert.equal(referencePacket.schemaVersion, 'adr.real-paper-reference-packet.v1');
+  assert.equal(referencePacket.blindToAutomatedDisposition, true);
+  assert.equal(referencePacket.frozenBeforeAutomatedReview, true);
+  assert.equal(referencePacket.containsAutomatedDisposition, false);
+  assert.equal(referencePacket.containsExtractionConfidence, false);
+  assert.equal(referencePacket.containsLlm1ProviderModelIdentity, false);
+  assert.equal(referencePacket.candidateCount, 1);
+  assert.equal(referencePacket.candidates[0].assertion, 'Fixture source-faithful assertion.');
+  assert.equal('automatedReview' in referencePacket.candidates[0], false);
+  assert.equal('review' in referencePacket.candidates[0], false);
+  assert.equal('extractionConfidence' in referencePacket.candidates[0], false);
 
   const result = JSON.parse(readFileSync(join(liveDir, 'rp001-live-run.json'), 'utf8'));
   assert.equal(result.paperId, 'RP001');
   assert.equal(result.codeHeadSha, codeHead);
   assert.equal(result.llm1CandidateCount, 1);
+  assert.equal(result.referencePacket.frozenBeforeAutomatedReview, true);
   assert.equal(result.referenceStatus, 'PENDING_BLIND_INDEPENDENT_REFERENCE_ADJUDICATION');
   assert.equal(result.scientificQualificationDecisionCount, 0);
 
