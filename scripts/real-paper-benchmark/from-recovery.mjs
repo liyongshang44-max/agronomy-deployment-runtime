@@ -80,7 +80,7 @@ function referenceIndex(referenceLabels, expectedPaperId) {
   return map;
 }
 
-export function benchmarkPaperFromRecovery({ paperId, compilation, referenceLabels = null }) {
+export function benchmarkPaperFromRecovery({ paperId, compilation, referenceLabels = null, evidence = null }) {
   const safePaperId = requiredText(paperId, 'paperId');
   if (!compilation || typeof compilation !== 'object' || !Array.isArray(compilation.candidates)) {
     throw new RealPaperBenchmarkError('INVALID_RECOVERY_EXPORT', 'compilation with candidates[] is required');
@@ -119,14 +119,20 @@ export function benchmarkPaperFromRecovery({ paperId, compilation, referenceLabe
     }
   }
 
-  return { paperId: safePaperId, candidates };
+  return {
+    paperId: safePaperId,
+    ...(evidence ? { evidence } : {}),
+    candidates
+  };
 }
 
-export function buildBenchmarkRun({ runId, papers }) {
+export function buildBenchmarkRun({ runId, papers, runMode = 'FIXTURE', execution = null }) {
   const run = {
     runVersion: REAL_PAPER_BENCHMARK_RUN_VERSION,
     benchmarkVersion: REAL_PAPER_BENCHMARK_VERSION,
+    runMode,
     runId: requiredText(runId, 'runId'),
+    ...(execution ? { execution } : {}),
     papers
   };
   summarizeRealPaperBenchmark(run);
@@ -134,19 +140,33 @@ export function buildBenchmarkRun({ runId, papers }) {
 }
 
 function main() {
-  const [paperId, recoveryPath, referencePath] = process.argv.slice(2);
+  const [paperId, recoveryPath, referencePath, executionEvidencePath] = process.argv.slice(2);
   if (!paperId || !recoveryPath) {
-    console.error('usage: node scripts/real-paper-benchmark/from-recovery.mjs <paperId> <compilation-recovery.json> [reference-annotation.json]');
+    console.error('usage: node scripts/real-paper-benchmark/from-recovery.mjs <paperId> <compilation-recovery.json> [reference-annotation.json] [real-execution-evidence.json]');
     process.exitCode = 2;
     return;
   }
   const recovery = JSON.parse(readFileSync(recoveryPath, 'utf8'));
   const referenceLabels = referencePath ? JSON.parse(readFileSync(referencePath, 'utf8')) : null;
+  const executionEvidence = executionEvidencePath ? JSON.parse(readFileSync(executionEvidencePath, 'utf8')) : null;
   if (!Array.isArray(recovery.compilations) || recovery.compilations.length !== 1) {
     throw new RealPaperBenchmarkError('RECOVERY_COMPILATION_SELECTION_REQUIRED', 'input recovery JSON must contain exactly one selected compilation');
   }
-  const paper = benchmarkPaperFromRecovery({ paperId, compilation: recovery.compilations[0], referenceLabels });
-  const run = buildBenchmarkRun({ runId: `recovery-${paperId}`, papers: [paper] });
+  if (executionEvidence && executionEvidence.paperId !== paperId) {
+    throw new RealPaperBenchmarkError('REAL_RUN_EVIDENCE_PAPER_MISMATCH', 'real execution evidence paperId must match selected paperId');
+  }
+  const paper = benchmarkPaperFromRecovery({
+    paperId,
+    compilation: recovery.compilations[0],
+    referenceLabels,
+    evidence: executionEvidence?.paperEvidence ?? null
+  });
+  const run = buildBenchmarkRun({
+    runId: `recovery-${paperId}`,
+    papers: [paper],
+    runMode: executionEvidence ? 'REAL' : 'FIXTURE',
+    execution: executionEvidence?.execution ?? null
+  });
   console.log(JSON.stringify({ run, summary: summarizeRealPaperBenchmark(run) }, null, 2));
 }
 
