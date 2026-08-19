@@ -6,7 +6,7 @@ Status: calibration benchmark only. This benchmark does not create scientific au
 
 Measure whether the ADR extraction -> blind LLM2 source-faithful review path can transport agronomy assertions from real papers without silently expanding causal meaning, context, evidence coverage, or applicability.
 
-The benchmark intentionally includes papers that stress crop identity, phenology, water thresholds, nitrogen management, treatment interactions, measurement semantics, remote sensing, model evaluation, and external-validity boundaries.
+The frozen corpus authority is `docs/implementation/real-paper-benchmark/corpus-v1.json`. The first baseline is RP001. `benchmarks/real-paper-v1/expansion-candidates.json` is discovery-only and cannot silently expand the corpus.
 
 ## Authority boundary
 
@@ -30,7 +30,7 @@ The benchmark must never synthesize ScientificQualificationDecision, KnowledgeRe
 
 ### Phase A — safety calibration
 
-For every paper:
+For every paper in the frozen corpus:
 
 - review every AUTO ACCEPT against the exact source with an independent reference adjudication;
 - adjudicate every ESCALATE_TO_HUMAN;
@@ -49,7 +49,7 @@ Automation rate is secondary to false-accept control.
 
 ### Phase B — coverage calibration
 
-After Phase A has zero false accepts on a sufficiently broad corpus, measure whether the system is useful rather than merely conservative:
+After Phase A has zero false accepts on the frozen corpus, explicitly promote additional papers from the discovery candidate set and repeat the same protocol. Measure:
 
 - auto-resolution rate;
 - auto-accept rate;
@@ -75,7 +75,7 @@ A benchmark run JSON must use `adr.real-paper-benchmark-run.v1` and contain:
   "runId": "...",
   "papers": [
     {
-      "paperId": "...",
+      "paperId": "RP001",
       "candidates": [
         {
           "candidateKey": "...",
@@ -138,16 +138,18 @@ An ESCALATE is not scored as an automated error. It is a safe abstention that re
 
 ## Corpus handling
 
-`corpus.json` contains discovery metadata only. It does not grant rights and does not contain publication full text.
+`docs/implementation/real-paper-benchmark/corpus-v1.json` is the only frozen v1 corpus authority. `benchmarks/real-paper-v1/expansion-candidates.json` is discovery-only.
 
-Before any PDF bytes are retained or sent to an external model, the runtime Rights Engine remains authoritative. Corpus membership never overrides `UNKNOWN = DENY` or any explicit rights decision.
+Neither file grants operational rights or contains publication full text. Before any PDF bytes are retained or sent to an external model, the runtime Rights Engine remains authoritative. Corpus membership never overrides `UNKNOWN = DENY` or any explicit rights decision.
 
 ## Benchmark completion criterion
 
-v1 is not considered calibrated until:
+The current frozen corpus is not calibrated until:
 
-1. all eight corpus papers have exact SourceArtifact hashes recorded in run evidence;
+1. every paper in the corpus authority has an exact SourceArtifact content hash recorded in run evidence;
 2. all AUTO ACCEPT candidates have blind independent reference adjudication;
-3. `falseAcceptCount == 0` across the calibration set;
+3. `falseAcceptCount == 0` across the frozen corpus;
 4. escalation reasons are categorized rather than silently repaired;
 5. the report is reproducible from committed run JSON plus exact code head.
+
+Expansion from RP001 to additional papers is a separate explicit corpus-authority change, not an implicit side effect of discovering candidate papers.
