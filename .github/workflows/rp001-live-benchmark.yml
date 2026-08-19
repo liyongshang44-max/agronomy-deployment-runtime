@@ -1,0 +1,38 @@
+name: ADR RP001 Live LLM1-LLM2 Benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      external_processing_authorized:
+        description: "Explicitly authorize sending RP001 PDF to the configured external model provider"
+        required: true
+        type: boolean
+        default: false
+      extraction_model:
+        description: "OpenAI model name for LLM1 scientific extraction"
+        required: true
+        type: string
+      review_model:
+        description: "Different OpenAI model name for blind LLM2 source-faithful review"
+        required: true
+        type: string
+      rights_jurisdiction:
+        description: "Rights jurisdiction recorded for this benchmark run"
+        required: true
+        type: string
+        default: "UNSPECIFIED"
+
+permissions:
+  contents: read
+
+jobs:
+  default-branch-registration-stub:
+    name: Refuse execution from default-branch registration stub
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail closed
+        shell: bash
+        run: |
+          echo "This file exists on the default branch only to register workflow_dispatch." >&2
+          echo "Run this workflow against feat/real-paper-benchmark-v1 so GitHub executes the frozen branch-specific rights-gated workflow." >&2
+          exit 2
