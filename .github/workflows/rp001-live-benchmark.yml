@@ -1,0 +1,152 @@
+name: ADR RP001 Live LLM1-LLM2 Benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      external_processing_authorized:
+        description: "Explicitly authorize sending RP001 PDF to the configured external model provider"
+        required: true
+        type: boolean
+        default: false
+      extraction_model:
+        description: "OpenAI model name for LLM1 scientific extraction"
+        required: true
+        type: string
+      review_model:
+        description: "Different OpenAI model name for blind LLM2 source-faithful review"
+        required: true
+        type: string
+      rights_jurisdiction:
+        description: "Rights jurisdiction recorded for this benchmark run"
+        required: true
+        type: string
+        default: "UNSPECIFIED"
+
+permissions:
+  contents: read
+
+jobs:
+  materialize:
+    name: Exact RP001 materialization
+    uses: ./.github/workflows/rp001-materialization.yml
+
+  llm1-llm2:
+    name: Rights-gated LLM1 extraction and blind LLM2 review
+    needs: materialize
+    if: ${{ inputs.external_processing_authorized == true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      ADR_EXTRACTION_MODEL: ${{ inputs.extraction_model }}
+      ADR_SOURCE_FAITHFUL_REVIEW_MODEL: ${{ inputs.review_model }}
+      ADR_RIGHTS_JURISDICTION: ${{ inputs.rights_jurisdiction }}
+      ADR_CODE_HEAD_SHA: ${{ github.sha }}
+      ADR_DATA_DIR: .adr-benchmark/rp001
+      ADR_RP001_LIVE_OUTPUT_DIR: .adr-benchmark/rp001-live
+      ADR_PILOT_BASE_URL: http://127.0.0.1:18787
+      ADR_EXTERNAL_PROCESSING_AUTHORIZED: "true"
+      ADR_OPERATOR_ID: rp001-live-benchmark-runner
+      ADR_HOST: 127.0.0.1
+      ADR_PORT: "18787"
+    steps:
+      - name: Checkout exact benchmark head
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          package-manager-cache: false
+
+      - name: Validate explicit provider configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "OPENAI_API_KEY repository secret is not configured" >&2
+            exit 2
+          fi
+          if [ -z "$ADR_EXTRACTION_MODEL" ] || [ -z "$ADR_SOURCE_FAITHFUL_REVIEW_MODEL" ]; then
+            echo "both extraction_model and review_model are required" >&2
+            exit 2
+          fi
+          if [ "$ADR_EXTRACTION_MODEL" = "$ADR_SOURCE_FAITHFUL_REVIEW_MODEL" ]; then
+            echo "LLM1 and LLM2 must use different declared models for the live calibration run" >&2
+            exit 2
+          fi
+          echo "ADR_OPERATOR_TOKEN=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+
+      - name: Restore exact materialization authority world
+        uses: actions/download-artifact@v4
+        with:
+          name: rp001-materialization-${{ github.sha }}
+          path: .adr-benchmark
+
+      - name: Start rights-enforced pilot runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$ADR_RP001_LIVE_OUTPUT_DIR"
+          nohup node apps/pilot-api/src/server.mjs > "$ADR_RP001_LIVE_OUTPUT_DIR/server.log" 2>&1 &
+          echo $! > "$ADR_RP001_LIVE_OUTPUT_DIR/server.pid"
+          for attempt in $(seq 1 120); do
+            if curl --fail --silent "$ADR_PILOT_BASE_URL/readyz" > "$ADR_RP001_LIVE_OUTPUT_DIR/readyz.json"; then
+              exit 0
+            fi
+            sleep 0.25
+          done
+          cat "$ADR_RP001_LIVE_OUTPUT_DIR/server.log" >&2
+          exit 1
+
+      - name: Run exact LLM1 to blind LLM2 benchmark
+        run: node scripts/real-paper-benchmark/run-rp001-live.mjs
+
+      - name: Assert reference packet is blind
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const packet = JSON.parse(fs.readFileSync('.adr-benchmark/rp001-live/rp001-reference-packet.json', 'utf8'));
+          if (packet.blindToAutomatedDisposition !== true || packet.frozenBeforeAutomatedReview !== true) {
+            throw new Error('reference packet is not frozen blind before LLM2');
+          }
+          if (packet.containsAutomatedDisposition !== false || packet.containsExtractionConfidence !== false || packet.containsLlm1ProviderModelIdentity !== false) {
+            throw new Error('reference packet contains prohibited model/reviewer side channel');
+          }
+          for (const candidate of packet.candidates) {
+            for (const forbidden of ['automatedReview', 'review', 'extractionConfidence']) {
+              if (forbidden in candidate) throw new Error(`reference packet candidate contains ${forbidden}`);
+            }
+          }
+          NODE
+
+      - name: Upload blind reference packet only
+        uses: actions/upload-artifact@v4
+        with:
+          name: rp001-reference-packet-${{ github.sha }}
+          path: .adr-benchmark/rp001-live/rp001-reference-packet.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Stop pilot runtime
+        if: always()
+        shell: bash
+        run: |
+          if [ -f "$ADR_RP001_LIVE_OUTPUT_DIR/server.pid" ]; then
+            kill "$(cat "$ADR_RP001_LIVE_OUTPUT_DIR/server.pid")" 2>/dev/null || true
+          fi
+
+      - name: Upload automated pre-reference benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rp001-live-llm1-llm2-${{ github.sha }}
+          path: |
+            .adr-benchmark/rp001-live/
+            .adr-benchmark/rp001/runtime-checkpoint.json
+          if-no-files-found: error
+          retention-days: 30
