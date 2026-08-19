@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { sameAuthorityRef } from '../../../../packages/contracts/src/authority.mjs';
 import {
   RightsAuthorityError,
   assertRightsAllowed,
@@ -52,13 +53,22 @@ function audit(eventId, actor, occurredAt, inputRefs = [], details = {}) {
   };
 }
 
+function uniquePolicyRefs(records) {
+  const refs = [];
+  for (const record of records) {
+    const ref = record.semanticPayload.rightsPolicyRef;
+    if (!refs.some((existing) => sameAuthorityRef(existing, ref))) refs.push(ref);
+  }
+  return refs;
+}
+
 export class PilotRightsEnforcementService {
   #ledger;
   #operatorId;
   #evaluatorId;
 
   constructor({ ledger, operatorId, evaluatorId = 'pilot-rights-engine' }) {
-    if (!ledger || typeof ledger.resolve !== 'function' || typeof ledger.publish !== 'function') {
+    if (!ledger || typeof ledger.resolve !== 'function' || typeof ledger.publish !== 'function' || typeof ledger.exportSnapshot !== 'function') {
       throw new RightsAuthorityError('INVALID_LEDGER', 'pilot rights enforcement requires AuthorityLedger');
     }
     this.#ledger = ledger;
@@ -117,6 +127,31 @@ export class PilotRightsEnforcementService {
       rightsGrantRef: grant.ref,
       authorityClaim: 'RIGHTS_PROVISIONING_ONLY_NOT_SCIENTIFIC_AUTHORITY'
     };
+  }
+
+  policyFor({ subjectRef, operation }) {
+    const subject = this.#ledger.resolve(subjectRef);
+    ownershipFromSubject(this.#ledger, subject);
+    const safeOperation = requiredText(operation, 'operation');
+    const grants = this.#ledger.exportSnapshot().records.filter((record) =>
+      record.ref.kind === 'RightsGrant'
+      && sameAuthorityRef(record.semanticPayload?.subjectRef, subject.ref)
+      && Array.isArray(record.semanticPayload?.rules)
+      && record.semanticPayload.rules.some((rule) => rule.operation === safeOperation));
+    const policies = uniquePolicyRefs(grants);
+    if (policies.length === 0) {
+      throw new RightsAuthorityError(
+        'RIGHTS_POLICY_NOT_PROVISIONED',
+        `no exact RightsGrant policy is provisioned for ${subject.ref.kind} ${safeOperation}`
+      );
+    }
+    if (policies.length > 1) {
+      throw new RightsAuthorityError(
+        'RIGHTS_POLICY_SELECTION_AMBIGUOUS',
+        `multiple RightsPolicy worlds are provisioned for exact ${subject.ref.kind} ${safeOperation}`
+      );
+    }
+    return policies[0];
   }
 
   decide({
@@ -182,23 +217,20 @@ export class PilotRightsEnforcementService {
     });
   }
 
-  async execute({
-    rightsPolicyRef,
+  authorize({
+    rightsPolicyRef = null,
     subjectRef,
     actorId,
     actorType = 'SERVICE_ACCOUNT',
     operation,
     purpose,
     jurisdiction,
-    enforceableObligations = [],
-    sideEffect
+    enforceableObligations = []
   }) {
-    if (typeof sideEffect !== 'function') {
-      throw new RightsAuthorityError('RIGHTS_SIDE_EFFECT_REQUIRED', 'pilot rights enforcement requires an explicit sideEffect callback');
-    }
+    const policyRef = rightsPolicyRef ?? this.policyFor({ subjectRef, operation });
     const at = new Date().toISOString();
     const decision = this.decide({
-      rightsPolicyRef,
+      rightsPolicyRef: policyRef,
       subjectRef,
       actorId,
       actorType,
@@ -218,12 +250,42 @@ export class PilotRightsEnforcementService {
       requiredAt: at,
       enforceableObligations
     });
-    const result = await sideEffect({ rightsDecisionRef: decision.ref, obligations: decision.semanticPayload.obligations });
     return {
       version: PILOT_RIGHTS_ENFORCEMENT_VERSION,
       rightsDecisionRef: decision.ref,
       outcome: decision.semanticPayload.outcome,
       obligations: decision.semanticPayload.obligations,
+      authorityClaim: 'EXACT_POINT_IN_TIME_RIGHTS_ALLOW'
+    };
+  }
+
+  async execute({
+    rightsPolicyRef = null,
+    subjectRef,
+    actorId,
+    actorType = 'SERVICE_ACCOUNT',
+    operation,
+    purpose,
+    jurisdiction,
+    enforceableObligations = [],
+    sideEffect
+  }) {
+    if (typeof sideEffect !== 'function') {
+      throw new RightsAuthorityError('RIGHTS_SIDE_EFFECT_REQUIRED', 'pilot rights enforcement requires an explicit sideEffect callback');
+    }
+    const authorized = this.authorize({
+      rightsPolicyRef,
+      subjectRef,
+      actorId,
+      actorType,
+      operation,
+      purpose,
+      jurisdiction,
+      enforceableObligations
+    });
+    const result = await sideEffect({ rightsDecisionRef: authorized.rightsDecisionRef, obligations: authorized.obligations });
+    return {
+      ...authorized,
       result,
       authorityClaim: 'SIDE_EFFECT_EXECUTED_ONLY_AFTER_EXACT_RIGHTS_ALLOW'
     };
