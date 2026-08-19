@@ -12,6 +12,7 @@ on:
       - "apps/pilot-web/**"
       - "packages/source-ingestion/**"
       - "acceptance/rights-enforcement/**"
+      - "package.json"
       - ".github/workflows/rights-ra02.yml"
   workflow_dispatch:
 
@@ -34,7 +35,4 @@ jobs:
           package-manager-cache: false
 
       - name: RA02 acceptance
-        run: node acceptance/rights-enforcement/run.mjs && node acceptance/rights-enforcement/ingestion.mjs && node acceptance/rights-enforcement/automated-review.mjs && node acceptance/rights-enforcement/host-egress.mjs
-
-      - name: Full ADR regression
-        run: npm test
+        run: npm run test:rights-enforcement
