@@ -1,0 +1,508 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ADR Pilot — Scientific Review Workbench</title>
+  <style>
+    :root { font-family: Inter, ui-sans-serif, system-ui, sans-serif; color-scheme: light; }
+    body { margin: 0; background: #f6f7f8; color: #1b1f23; }
+    main { max-width: 1240px; margin: 32px auto; padding: 0 20px 60px; }
+    h1 { font-size: 28px; margin-bottom: 8px; }
+    h2 { margin-top: 0; }
+    h3 { margin-bottom: 8px; }
+    .sub { color: #59636e; margin-bottom: 20px; }
+    .card { background: white; border: 1px solid #d8dee4; border-radius: 12px; padding: 20px; margin: 16px 0; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .review-grid { display: grid; grid-template-columns: minmax(0,1.15fr) minmax(420px,.85fr); gap: 16px; align-items: start; }
+    label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+    input, select, textarea { width: 100%; box-sizing: border-box; padding: 9px 10px; border: 1px solid #c7ced6; border-radius: 8px; background: white; }
+    input[type=file] { padding: 14px; border-style: dashed; }
+    input[type=checkbox] { width: auto; margin-right: 8px; }
+    textarea.code { min-height: 260px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+    button { border: 0; border-radius: 8px; padding: 10px 16px; font-weight: 700; cursor: pointer; background: #20252b; color: white; }
+    button.secondary { background: #59636e; }
+    button.reject { background: #a40e26; }
+    button:disabled { opacity: .45; cursor: default; }
+    progress { width: 100%; height: 16px; }
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; background: #0d1117; color: #e6edf3; padding: 14px; border-radius: 8px; min-height: 70px; }
+    .status,.provider,.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+    .ok { background: #dafbe1; border: 1px solid #4ac26b; border-radius: 8px; padding: 10px 12px; font-size: 13px; }
+    .warn { background: #fff8c5; border: 1px solid #d4a72c; border-radius: 8px; padding: 10px 12px; font-size: 13px; }
+    .note { color: #59636e; font-size: 13px; line-height: 1.5; }
+    .split { border-top: 1px solid #d8dee4; margin: 20px 0; }
+    iframe { width: 100%; height: 760px; border: 1px solid #d8dee4; border-radius: 10px; background: #eee; }
+    .candidate { border: 1px solid #d8dee4; border-radius: 10px; padding: 14px; margin-bottom: 14px; }
+    .candidate.reviewed { opacity: .62; }
+    .invalid { border-color: #cf222e; background: #fff8f8; }
+    .claim { font-size: 16px; line-height: 1.45; margin: 8px 0; }
+    .evidence { background: #f6f8fa; border-left: 3px solid #8c959f; padding: 8px 10px; margin: 8px 0; font-size: 13px; }
+    .family { margin-top: 12px; border-top: 1px solid #d8dee4; padding-top: 10px; }
+    .dimension { display: grid; grid-template-columns: 1.1fr 1fr .8fr; gap: 8px; margin: 8px 0; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    .badge { display:inline-block; background:#eef1f4; border-radius:999px; padding:3px 7px; font-size:11px; margin-right:6px; }
+    .badge.bad { background:#ffebe9; color:#cf222e; }
+    @media (max-width: 900px) { .grid,.review-grid { grid-template-columns: 1fr; } iframe { height: 560px; } }
+  </style>
+</head>
+<body>
+<main>
+  <h1>ADR Pilot — Scientific Review Workbench</h1>
+  <div class="sub">Exact PDF → proposal-only extraction/import → compiler preflight → human source-faithful ACCEPT/REJECT.</div>
+  <div id="persistence" class="ok">Checking runtime persistence…</div>
+
+  <section class="card">
+    <h2>Operator</h2>
+    <div class="grid">
+      <div><label>Operator bearer token</label><input id="token" type="password" autocomplete="off"></div>
+      <div><label>Resume existing upload/session id</label><input id="resumeId" placeholder="4b45c022-..."></div>
+      <div><label>Organization</label><input id="org" value="org-a"></div>
+      <div><label>Tenant</label><input id="tenant" value="tenant-a"></div>
+    </div>
+    <p><button id="resume" class="secondary">Resume existing SourceArtifact</button></p>
+    <p class="note">After a browser refresh or process restart, resume the existing upload id. This does not upload or re-materialize the PDF. Re-select the same local PDF below only for preview.</p>
+    <div id="compilationRecovery" hidden>
+      <div class="split"></div>
+      <h3>Resume existing compilation</h3>
+      <p class="note">Read-only recovery from the restored AuthorityLedger. Selecting a compilation does not re-import the external model output and does not create a new compilation version.</p>
+      <div class="grid">
+        <div><label>Existing compilation</label><select id="compilationSelect"></select></div>
+        <div><label>Recovery state</label><div id="compilationSummary" class="status">NO_COMPILATION_SELECTED</div></div>
+      </div>
+      <p><button id="resumeCompilation" class="secondary" disabled>Resume existing compilation</button></p>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>1. Upload and materialize source</h2>
+    <input id="file" type="file" accept="application/pdf,.pdf">
+    <div class="grid" style="margin-top:14px">
+      <div><label>Title</label><input id="title" placeholder="Paper title"></div>
+      <div><label>DOI (optional)</label><input id="doi" placeholder="10.xxxx/..."></div>
+      <div><label>Source logical id</label><input id="logicalId" placeholder="source.paper.my-study"></div>
+      <div><label>Source type</label><select id="sourceType"><option>PUBLICATION</option><option>PROTOCOL</option><option>TRIAL_REPORT</option><option>OTHER</option></select></div>
+      <div><label>Rights basis</label><select id="rights"><option>INTERNAL_EVALUATION</option><option>LICENSED</option><option>PUBLIC</option><option>OTHER</option></select></div>
+    </div>
+    <p><button id="upload">Create session & upload PDF</button> <button id="finalize" class="secondary" disabled>Finalize Source + SourceArtifact</button></p>
+    <progress id="progress" value="0" max="100"></progress>
+    <div id="status" class="status">IDLE</div>
+  </section>
+
+  <section class="card">
+    <h2>2A. Manual external proposal import</h2>
+    <p class="note">Use this for DeepSeek/KIMI/other web-hosted models. The pasted JSON remains <strong>PROPOSAL_ONLY</strong>. ADR dry-runs each claim through the real ScientificCompiler. Invalid claims stay INVALID and are never silently repaired or retyped.</p>
+    <div class="grid">
+      <div><label>Provider label</label><input id="providerLabel" placeholder="DEEPSEEK_WEB"></div>
+      <div><label>Model label</label><input id="modelLabel" placeholder="model/version as shown by provider"></div>
+    </div>
+    <label style="margin-top:12px">Raw proposal JSON</label>
+    <textarea id="proposalJson" class="code" placeholder='{"claims":[...]}'></textarea>
+    <p><button id="importProposal" disabled>Preflight + import reviewable candidates</button></p>
+    <div id="importSummary" class="status">NO_IMPORT_YET</div>
+  </section>
+
+  <section class="card">
+    <h2>2B. Configured provider extraction</h2>
+    <p class="note">Optional direct provider path. Extraction remains <strong>PROPOSAL_ONLY</strong>; no Claim authority is created here.</p>
+    <p class="provider" id="provider">Extraction provider: checking…</p>
+    <label style="font-weight:500"><input id="externalAuth" type="checkbox">I confirm this SourceArtifact may be sent to the configured external model provider for this extraction run.</label>
+    <p><button id="extract" disabled>Extract Claim Candidates</button></p>
+  </section>
+
+  <section id="reviewSection" class="card" hidden>
+    <h2>3. Source-faithful review</h2>
+    <p class="note">Left: the exact local PDF selected for preview. Right: compiler-reviewable candidates. Schema-valid does not mean scientifically correct. ACCEPT requires explicit semantic adjudication for every reported context dimension; REJECT requires a reason.</p>
+    <div id="preflight"></div>
+    <div class="review-grid">
+      <div><iframe id="pdf"></iframe></div>
+      <div id="candidates"></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Latest result</h2>
+    <pre id="result">No source selected yet.</pre>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const FAMILIES = ['BIOLOGICAL','ENVIRONMENTAL','MANAGEMENT','OPERATIONAL','MEASUREMENT','JURISDICTION_ECONOMIC'];
+let currentUploadId = null;
+let extractionConfigured = false;
+let sourceMaterialized = false;
+let currentCompilation = null;
+let recoverableCompilations = [];
+let pdfObjectUrl = null;
+
+function authHeaders(extra = {}) { return { Authorization: `Bearer ${$('token').value}`, ...extra }; }
+function setResult(value) { $('result').textContent = typeof value === 'string' ? value : JSON.stringify(value, null, 2); }
+function sourceIdFromFile(file) { return `source.paper.${file.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'upload'}`; }
+function esc(value) { return String(value ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function refreshButtons() {
+  $('importProposal').disabled = !sourceMaterialized;
+  $('extract').disabled = !(sourceMaterialized && extractionConfigured && $('externalAuth').checked);
+}
+function rememberUploadId(id) {
+  currentUploadId = id || null;
+  if (currentUploadId) {
+    $('resumeId').value = currentUploadId;
+    try { localStorage.setItem('adr.pilot.lastUploadId', currentUploadId); } catch {}
+  }
+}
+function guessSemanticId(hint) {
+  const clean = String(hint || '').trim().toLowerCase().replace(/[^a-z0-9_.]+/g, '_').replace(/^_+|_+$/g, '');
+  return clean.includes('.') ? clean : `source.${clean || 'dimension'}`;
+}
+function guessValueType(value) {
+  if (typeof value === 'boolean') return 'BOOLEAN';
+  if (typeof value === 'number' && Number.isInteger(value)) return 'INTEGER';
+  if (typeof value === 'number') return 'DECIMAL';
+  const s = String(value ?? '');
+  if (/^[+-]?\d+$/.test(s)) return 'INTEGER';
+  if (/^[+-]?(?:0|[1-9]\d*)\.\d+$/.test(s)) return 'DECIMAL';
+  return 'CATEGORY';
+}
+function pageOf(locator) { return locator?.coordinates?.page ?? null; }
+function evidenceOf(locator) { return locator?.coordinates?.evidenceText ?? ''; }
+function jumpToPage(page) {
+  if (!pdfObjectUrl || !page) return;
+  $('pdf').src = `${pdfObjectUrl}#page=${encodeURIComponent(page)}`;
+}
+function recoveredPreflight(compilation) {
+  const metadata = compilation.runMetadata ?? {};
+  return {
+    total: metadata.originalCandidateCount ?? compilation.candidateCount,
+    reviewable: compilation.candidateCount,
+    invalid: metadata.invalidCandidateCount ?? 0,
+    invalidCandidates: [],
+    importPayloadHash: metadata.importPayloadHash ?? 'NOT_RECORDED'
+  };
+}
+function compilationLabel(compilation) {
+  const metadata = compilation.runMetadata ?? {};
+  const provider = metadata.providerLabel ?? metadata.provider ?? 'UNKNOWN_PROVIDER';
+  const model = metadata.modelLabel ?? metadata.model ?? 'UNKNOWN_MODEL';
+  return `${provider} / ${model} — ${compilation.version} — ${compilation.reviewedCount}/${compilation.candidateCount} reviewed`;
+}
+
+async function loadRecoverableCompilations() {
+  recoverableCompilations = [];
+  $('compilationRecovery').hidden = true;
+  $('resumeCompilation').disabled = true;
+  $('compilationSelect').innerHTML = '';
+  $('compilationSummary').textContent = 'CHECKING_EXISTING_COMPILATIONS';
+  if (!currentUploadId || !sourceMaterialized) return;
+  const response = await fetch(`/operator/source-uploads/${encodeURIComponent(currentUploadId)}/compilations`, { headers: authHeaders() });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(JSON.stringify(payload));
+  recoverableCompilations = payload.compilations ?? [];
+  if (recoverableCompilations.length === 0) {
+    $('compilationSummary').textContent = 'NO_EXISTING_COMPILATIONS';
+    return;
+  }
+  $('compilationSelect').innerHTML = recoverableCompilations.map((compilation, index) => `<option value="${index}">${esc(compilationLabel(compilation))}</option>`).join('');
+  $('compilationRecovery').hidden = false;
+  $('resumeCompilation').disabled = false;
+  const selected = recoverableCompilations[0];
+  $('compilationSummary').textContent = `${selected.reviewedCount}/${selected.candidateCount} reviewed · ${selected.acceptedCount ?? 0} accepted · ${selected.rejectedCount ?? 0} rejected`;
+}
+
+function updateCompilationSummary() {
+  const index = Number($('compilationSelect').value);
+  const selected = recoverableCompilations[index];
+  if (!selected) return $('compilationSummary').textContent = 'NO_COMPILATION_SELECTED';
+  $('compilationSummary').textContent = `${selected.reviewedCount}/${selected.candidateCount} reviewed · ${selected.acceptedCount ?? 0} accepted · ${selected.rejectedCount ?? 0} rejected`;
+}
+
+async function loadReadiness() {
+  try {
+    const response = await fetch('/readyz', { cache: 'no-store' });
+    const readiness = await response.json();
+    const durable = readiness?.authorityPersistence === 'LOCAL_CHECKPOINT_RESTART_DURABLE_V1';
+    $('persistence').className = durable ? 'ok' : 'warn';
+    $('persistence').textContent = `Authority persistence: ${readiness?.authorityPersistence ?? 'UNKNOWN'} · checkpoint: ${readiness?.checkpoint?.state ?? 'UNKNOWN'}`;
+    extractionConfigured = Boolean(readiness?.extraction?.configured);
+    $('provider').textContent = extractionConfigured
+      ? `Extraction provider: ${readiness.extraction.provider} / ${readiness.extraction.model}`
+      : 'Extraction provider: NOT_CONFIGURED — manual external proposal import remains available.';
+  } catch {
+    extractionConfigured = false;
+    $('persistence').className = 'warn';
+    $('persistence').textContent = 'Runtime readiness unavailable.';
+    $('provider').textContent = 'Extraction provider: readiness unavailable';
+  }
+  refreshButtons();
+}
+
+$('externalAuth').addEventListener('change', refreshButtons);
+$('compilationSelect').addEventListener('change', updateCompilationSummary);
+$('file').addEventListener('change', () => {
+  const file = $('file').files[0];
+  if (!file) return;
+  if (!$('title').value) $('title').value = file.name.replace(/\.pdf$/i, '');
+  if (!$('logicalId').value) $('logicalId').value = sourceIdFromFile(file);
+  if (pdfObjectUrl) URL.revokeObjectURL(pdfObjectUrl);
+  pdfObjectUrl = URL.createObjectURL(file);
+  $('pdf').src = pdfObjectUrl;
+});
+
+$('resume').addEventListener('click', async () => {
+  const id = $('resumeId').value.trim();
+  if (!id) return setResult('Existing upload/session id is required.');
+  if (!$('token').value) return setResult('Operator token is required.');
+  $('status').textContent = 'RESUMING SESSION';
+  try {
+    const response = await fetch(`/operator/source-uploads/${encodeURIComponent(id)}`, { headers: authHeaders() });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(JSON.stringify(payload));
+    rememberUploadId(payload.uploadId);
+    sourceMaterialized = payload.state === 'SOURCE_MATERIALIZED' && Boolean(payload.sourceArtifactRef);
+    $('status').textContent = payload.state;
+    $('finalize').disabled = payload.state !== 'STORED';
+    currentCompilation = null;
+    $('reviewSection').hidden = true;
+    refreshButtons();
+    setResult(payload);
+    await loadRecoverableCompilations();
+  } catch (error) {
+    sourceMaterialized = false;
+    recoverableCompilations = [];
+    $('compilationRecovery').hidden = true;
+    $('status').textContent = 'RESUME_FAILED';
+    refreshButtons();
+    setResult(error.message);
+  }
+});
+
+$('resumeCompilation').addEventListener('click', () => {
+  const index = Number($('compilationSelect').value);
+  const compilation = recoverableCompilations[index];
+  if (!compilation) return setResult('Select an existing compilation first.');
+  const payload = { ...compilation, preflight: recoveredPreflight(compilation), recovered: true };
+  $('status').textContent = `CANDIDATES_RECOVERED (${compilation.candidateCount})`;
+  $('importSummary').textContent = `RECOVERED ${compilationLabel(compilation)} HASH=${payload.preflight.importPayloadHash}`;
+  renderCandidates(payload);
+  setResult({
+    recovery: 'READ_ONLY_EXISTING_COMPILATION',
+    compilationResultRef: compilation.compilationResultRef,
+    version: compilation.version,
+    runMetadata: compilation.runMetadata,
+    candidateCount: compilation.candidateCount,
+    reviewedCount: compilation.reviewedCount
+  });
+});
+
+$('upload').addEventListener('click', async () => {
+  const file = $('file').files[0];
+  if (!file) return setResult('Select a PDF first.');
+  if (!$('token').value) return setResult('Operator token is required.');
+  $('upload').disabled = true; $('finalize').disabled = true; sourceMaterialized = false; currentCompilation = null;
+  recoverableCompilations = []; $('compilationRecovery').hidden = true;
+  $('reviewSection').hidden = true; refreshButtons(); $('progress').value = 0; $('status').textContent = 'CREATING SESSION';
+  try {
+    const logicalId = $('logicalId').value.trim();
+    const sessionResponse = await fetch('/operator/source-uploads', {
+      method: 'POST', headers: authHeaders({ 'content-type': 'application/json' }),
+      body: JSON.stringify({
+        scope: { organizationId: $('org').value.trim(), tenantId: $('tenant').value.trim() || undefined },
+        filename: file.name, declaredMediaType: 'application/pdf',
+        source: {
+          logicalId, version: '1', sourceType: $('sourceType').value, title: $('title').value.trim(),
+          bibliographic: $('doi').value.trim() ? { doi: $('doi').value.trim() } : {},
+          rights: { basis: $('rights').value, trainingUse: 'PROHIBITED' }
+        },
+        artifact: {
+          logicalId: `${logicalId}.artifact.pdf`, version: '1', mediaType: 'application/pdf', materializationIdentity: `operator-upload:${file.name}`,
+          acquisition: { method: 'UPLOAD', acquiredAt: new Date().toISOString(), locator: `operator-upload://${file.name}` },
+          rightsSnapshot: { basis: $('rights').value, trainingUse: 'PROHIBITED' }, metadata: { originalFilename: file.name }
+        }
+      })
+    });
+    const session = await sessionResponse.json();
+    if (!sessionResponse.ok) throw new Error(JSON.stringify(session));
+    rememberUploadId(session.uploadId); setResult(session); $('status').textContent = 'UPLOADING';
+    const uploaded = await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('PUT', `/operator/source-uploads/${encodeURIComponent(currentUploadId)}/content`);
+      xhr.setRequestHeader('Authorization', `Bearer ${$('token').value}`); xhr.setRequestHeader('Content-Type', 'application/pdf');
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) $('progress').value = Math.round((event.loaded / event.total) * 100);
+        $('status').textContent = `UPLOADING ${event.loaded.toLocaleString()} / ${event.lengthComputable ? event.total.toLocaleString() : '?'} bytes`;
+      };
+      xhr.onerror = () => reject(new Error('network upload failed'));
+      xhr.onload = () => {
+        let payload; try { payload = JSON.parse(xhr.responseText); } catch { payload = xhr.responseText; }
+        if (xhr.status >= 200 && xhr.status < 300) resolve(payload); else reject(new Error(typeof payload === 'string' ? payload : JSON.stringify(payload)));
+      };
+      xhr.send(file);
+    });
+    $('progress').value = 100; $('status').textContent = 'STORED'; setResult(uploaded); $('finalize').disabled = false;
+  } catch (error) { $('status').textContent = 'FAILED'; setResult(error.message); }
+  finally { $('upload').disabled = false; }
+});
+
+$('finalize').addEventListener('click', async () => {
+  if (!currentUploadId) return;
+  $('finalize').disabled = true; $('status').textContent = 'FINALIZING AUTHORITY';
+  try {
+    const response = await fetch(`/operator/source-uploads/${encodeURIComponent(currentUploadId)}/finalize`, { method: 'POST', headers: authHeaders() });
+    const payload = await response.json(); if (!response.ok) throw new Error(JSON.stringify(payload));
+    $('status').textContent = 'SOURCE_MATERIALIZED'; sourceMaterialized = true; refreshButtons(); setResult(payload);
+    await loadRecoverableCompilations();
+  } catch (error) { $('status').textContent = 'FAILED'; setResult(error.message); $('finalize').disabled = false; }
+});
+
+function reviewStatus(candidate) {
+  const review = candidate.review;
+  if (!review) return '';
+  if (review.disposition === 'ACCEPT_SOURCE_FAITHFUL') {
+    return `ACCEPT_SOURCE_FAITHFUL → ${review.claimRef ? 'Claim minted' : 'review recorded'} (recovered)`;
+  }
+  return 'REJECT_SOURCE_FAITHFUL → no Claim minted (recovered)';
+}
+
+function candidateHtml(candidate, index) {
+  const page = pageOf(candidate.sourceLocator);
+  const reviewed = Boolean(candidate.review);
+  const disabled = reviewed ? ' disabled' : '';
+  let contexts = '';
+  for (const family of FAMILIES) {
+    const data = candidate.contextFamilies?.[family];
+    if (!data || data.status === 'NOT_REPORTED') continue;
+    let dims = '';
+    for (let i = 0; i < data.dimensions.length; i += 1) {
+      const d = data.dimensions[i];
+      dims += `<div class="dimension" data-family="${family}" data-dim="${i}">
+        <input class="semanticId" value="${esc(guessSemanticId(d.semanticHint))}" title="canonical semanticId"${disabled}>
+        <select class="valueType"${disabled}>${['CATEGORY','STRING','DECIMAL','INTEGER','BOOLEAN','DATE','TIMESTAMP','UNKNOWN'].map(v => `<option${v===guessValueType(d.valueCandidate)?' selected':''}>${v}</option>`).join('')}</select>
+        <input class="unit" value="${esc(d.unitCandidate ?? '')}" placeholder="unit / blank"${disabled}>
+      </div><div class="note">${esc(d.semanticHint)} = <strong>${esc(d.valueCandidate)}</strong> · page ${esc(pageOf(d.sourceLocator) ?? '?')} · ${esc(evidenceOf(d.sourceLocator))}</div>`;
+    }
+    contexts += `<div class="family"><strong>${family}</strong>${dims}</div>`;
+  }
+  const rationale = candidate.review?.rationale ?? '';
+  return `<div class="candidate${reviewed ? ' reviewed' : ''}" id="candidate-${index}">
+    <div><span class="badge">${esc(candidate.claimType)}</span><span class="badge">confidence ${esc(candidate.extractionConfidence ?? 'n/a')}</span>${reviewed ? '<span class="badge">REVIEW RECOVERED</span>' : ''}</div>
+    <div class="claim">${esc(candidate.assertion)}</div>
+    <div class="evidence"><button class="secondary" onclick="jumpToPage(${Number(page) || 1})">Page ${esc(page ?? '?')}</button> ${esc(evidenceOf(candidate.sourceLocator))}</div>
+    ${contexts}
+    <label style="margin-top:12px">Review rationale / rejection reason</label><textarea class="rationale" rows="2" placeholder="Why accept or reject?"${disabled}>${esc(rationale)}</textarea>
+    <div class="actions"><button onclick="submitReview(${index},'ACCEPT_SOURCE_FAITHFUL')"${disabled}>Accept source-faithful</button><button class="reject" onclick="submitReview(${index},'REJECT_SOURCE_FAITHFUL')"${disabled}>Reject</button></div>
+    <div class="status review-status">${esc(reviewStatus(candidate))}</div>
+  </div>`;
+}
+
+function renderPreflight(payload) {
+  if (!payload?.preflight) { $('preflight').innerHTML = ''; return; }
+  const p = payload.preflight;
+  let invalid = '';
+  for (const item of p.invalidCandidates ?? []) {
+    invalid += `<div class="candidate invalid"><span class="badge bad">INVALID</span> <strong>${esc(item.key ?? `candidate-${item.index}`)}</strong><div class="note">${esc(item.claimType ?? 'unknown type')}</div><div class="claim">${esc(item.assertion ?? '')}</div><div class="evidence">${esc(item.error?.code)} — ${esc(item.error?.message)}</div></div>`;
+  }
+  const recoveredNote = payload.recovered && p.invalid > 0 && (p.invalidCandidates ?? []).length === 0
+    ? '<p class="note">Recovered compilation retains original candidate count, invalid count, and raw proposal hash. Invalid raw candidate bodies were never materialized into authority and therefore are not reconstructed here.</p>' : '';
+  $('preflight').innerHTML = `<div class="ok"><strong>Compiler preflight:</strong> total ${esc(p.total)} · reviewable ${esc(p.reviewable)} · invalid ${esc(p.invalid)}<br><span class="mono">raw proposal hash: ${esc(p.importPayloadHash)}</span>${payload.recovered ? '<br><strong>RECOVERED READ-ONLY:</strong> no re-import performed.' : ''}</div>${recoveredNote}${invalid ? `<h3>Invalid candidates — not materialized</h3>${invalid}` : ''}`;
+}
+
+function renderCandidates(payload) {
+  currentCompilation = payload;
+  renderPreflight(payload);
+  $('candidates').innerHTML = payload.candidates.map(candidateHtml).join('') || '<p>No compiler-reviewable candidates returned.</p>';
+  $('reviewSection').hidden = false;
+}
+
+window.jumpToPage = jumpToPage;
+window.submitReview = async (index, disposition) => {
+  const candidate = currentCompilation?.candidates?.[index]; if (!candidate || candidate.review) return;
+  const card = $(`candidate-${index}`); const rationale = card.querySelector('.rationale').value.trim();
+  const contextAdjudication = Object.fromEntries(FAMILIES.map(f => [f, []]));
+  if (disposition === 'ACCEPT_SOURCE_FAITHFUL') {
+    for (const row of card.querySelectorAll('.dimension')) {
+      const family = row.dataset.family;
+      const semanticId = row.querySelector('.semanticId').value.trim();
+      const valueType = row.querySelector('.valueType').value;
+      const unit = row.querySelector('.unit').value.trim();
+      contextAdjudication[family].push({ semanticId, valueType, ...(unit ? { unit } : {}) });
+    }
+  }
+  const reasonCodes = disposition === 'REJECT_SOURCE_FAITHFUL'
+    ? [rationale ? 'REVIEWER_SOURCE_FAITHFUL_REJECTION' : 'SOURCE_LOCATOR_DOES_NOT_SUPPORT_ASSERTION'] : [];
+  card.querySelectorAll('button,input,select,textarea').forEach(el => el.disabled = true);
+  card.querySelector('.review-status').textContent = 'SUBMITTING REVIEW';
+  try {
+    const response = await fetch(`/operator/source-uploads/${encodeURIComponent(currentUploadId)}/review`, {
+      method: 'POST', headers: authHeaders({ 'content-type': 'application/json' }),
+      body: JSON.stringify({
+        compilationResultRef: currentCompilation.compilationResultRef,
+        claimCandidateRef: candidate.claimCandidateRef,
+        sourceContextCandidateRef: candidate.sourceContextCandidateRef,
+        disposition, reasonCodes, rationale: rationale || undefined,
+        ...(disposition === 'ACCEPT_SOURCE_FAITHFUL' ? { contextAdjudication } : {})
+      })
+    });
+    const payload = await response.json(); if (!response.ok) throw new Error(JSON.stringify(payload));
+    candidate.review = {
+      reviewRef: payload.reviewRef,
+      disposition: payload.disposition,
+      reasonCodes,
+      rationale: rationale || null,
+      claimRef: payload.claimRef,
+      sourceContextRef: payload.sourceContextRef
+    };
+    card.classList.add('reviewed'); card.querySelector('.review-status').textContent = `${payload.disposition} → ${payload.claimRef ? 'Claim minted' : 'no Claim minted'}`;
+    setResult(payload);
+  } catch (error) {
+    card.querySelectorAll('button,input,select,textarea').forEach(el => el.disabled = false);
+    card.querySelector('.review-status').textContent = 'REVIEW_FAILED'; setResult(error.message);
+  }
+};
+
+$('importProposal').addEventListener('click', async () => {
+  if (!currentUploadId || !sourceMaterialized) return setResult('Resume or materialize an exact SourceArtifact first.');
+  let proposal;
+  try { proposal = JSON.parse($('proposalJson').value); }
+  catch (error) { return setResult(`Proposal JSON parse failed: ${error.message}`); }
+  $('importProposal').disabled = true; $('status').textContent = 'COMPILER_PREFLIGHT'; $('importSummary').textContent = 'IMPORTING';
+  try {
+    const response = await fetch(`/operator/source-uploads/${encodeURIComponent(currentUploadId)}/import-proposal`, {
+      method: 'POST', headers: authHeaders({ 'content-type': 'application/json' }),
+      body: JSON.stringify({
+        providerLabel: $('providerLabel').value.trim() || 'EXTERNAL_WEB',
+        modelLabel: $('modelLabel').value.trim() || 'UNKNOWN_MODEL',
+        proposal
+      })
+    });
+    const payload = await response.json(); if (!response.ok) throw new Error(JSON.stringify(payload));
+    $('status').textContent = `CANDIDATES_READY (${payload.candidateCount})`;
+    $('importSummary').textContent = `TOTAL=${payload.preflight.total} REVIEWABLE=${payload.preflight.reviewable} INVALID=${payload.preflight.invalid} HASH=${payload.preflight.importPayloadHash}`;
+    setResult(payload);
+    renderCandidates(payload);
+    await loadRecoverableCompilations();
+  } catch (error) {
+    $('status').textContent = 'MANUAL_IMPORT_FAILED'; $('importSummary').textContent = 'FAILED'; setResult(error.message);
+  } finally { refreshButtons(); }
+});
+
+$('extract').addEventListener('click', async () => {
+  if (!currentUploadId || !sourceMaterialized) return;
+  if (!$('externalAuth').checked) return setResult('Explicit external processing authorization is required.');
+  $('extract').disabled = true; $('status').textContent = 'EXTRACTING CANDIDATES';
+  try {
+    const response = await fetch(`/operator/source-uploads/${encodeURIComponent(currentUploadId)}/extract`, {
+      method: 'POST', headers: authHeaders({ 'content-type': 'application/json' }), body: JSON.stringify({ externalProcessingAuthorized: true })
+    });
+    const payload = await response.json(); if (!response.ok) throw new Error(JSON.stringify(payload));
+    $('status').textContent = `CANDIDATES_READY (${payload.candidateCount})`; setResult(payload); renderCandidates(payload);
+    await loadRecoverableCompilations();
+  } catch (error) { $('status').textContent = 'EXTRACTION_FAILED'; setResult(error.message); }
+  finally { refreshButtons(); }
+});
+
+try {
+  const remembered = localStorage.getItem('adr.pilot.lastUploadId');
+  if (remembered) $('resumeId').value = remembered;
+} catch {}
+loadReadiness();
+</script>
+</body>
+</html>
