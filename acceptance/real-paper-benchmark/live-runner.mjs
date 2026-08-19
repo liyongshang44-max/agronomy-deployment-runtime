@@ -1,9 +1,10 @@
 import { strict as assert } from 'node:assert';
+import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
@@ -18,7 +19,29 @@ const token = 'fixture-operator-token';
 const requests = [];
 
 function ref(kind, id, version = '1') {
-  return { kind, logicalId: id, version, semanticHash: `sha256:${kind.toLowerCase().padEnd(64, '0').slice(0, 64)}` };
+  return {
+    kind,
+    logicalId: id,
+    version,
+    semanticHash: `sha256:${createHash('sha256').update(`${kind}:${id}:${version}`).digest('hex')}`
+  };
+}
+
+async function runChild(file, env) {
+  const child = spawn(process.execPath, [file], {
+    cwd: ROOT,
+    env,
+    stdio: ['ignore', 'pipe', 'pipe']
+  });
+  let stdout = '';
+  let stderr = '';
+  child.stdout.on('data', (chunk) => { stdout += chunk.toString('utf8'); });
+  child.stderr.on('data', (chunk) => { stderr += chunk.toString('utf8'); });
+  const code = await new Promise((resolvePromise, rejectPromise) => {
+    child.once('error', rejectPromise);
+    child.once('exit', (exitCode) => resolvePromise(exitCode));
+  });
+  return { code, stdout, stderr };
 }
 
 try {
@@ -105,21 +128,17 @@ try {
   await new Promise((resolvePromise) => server.listen(0, '127.0.0.1', resolvePromise));
   const address = server.address();
   try {
-    const run = spawnSync(process.execPath, [RUNNER], {
-      cwd: ROOT,
-      env: {
-        ...process.env,
-        ADR_PILOT_BASE_URL: `http://127.0.0.1:${address.port}`,
-        ADR_OPERATOR_TOKEN: token,
-        ADR_DATA_DIR: dataDir,
-        ADR_RP001_LIVE_OUTPUT_DIR: liveDir,
-        ADR_CODE_HEAD_SHA: codeHead,
-        ADR_RIGHTS_JURISDICTION: 'UNSPECIFIED',
-        ADR_EXTERNAL_PROCESSING_AUTHORIZED: 'true'
-      },
-      encoding: 'utf8'
+    const run = await runChild(RUNNER, {
+      ...process.env,
+      ADR_PILOT_BASE_URL: `http://127.0.0.1:${address.port}`,
+      ADR_OPERATOR_TOKEN: token,
+      ADR_DATA_DIR: dataDir,
+      ADR_RP001_LIVE_OUTPUT_DIR: liveDir,
+      ADR_CODE_HEAD_SHA: codeHead,
+      ADR_RIGHTS_JURISDICTION: 'UNSPECIFIED',
+      ADR_EXTERNAL_PROCESSING_AUTHORIZED: 'true'
     });
-    assert.equal(run.status, 0, `${run.stderr}\n${run.stdout}`);
+    assert.equal(run.code, 0, `${run.stderr}\n${run.stdout}`);
   } finally {
     await new Promise((resolvePromise) => server.close(resolvePromise));
   }
