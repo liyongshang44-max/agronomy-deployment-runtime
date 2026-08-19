@@ -16,6 +16,9 @@ const REFERENCE_DISPOSITIONS = new Set([
   'ACCEPT_SOURCE_FAITHFUL',
   'REJECT_SOURCE_FAITHFUL'
 ]);
+const RUN_MODES = new Set(['FIXTURE', 'REAL']);
+const SHA256_RE = /^sha256:[0-9a-f]{64}$/;
+const COMMIT_SHA_RE = /^[0-9a-f]{40}$/;
 
 export class RealPaperBenchmarkError extends Error {
   constructor(code, message) {
@@ -38,6 +41,76 @@ function finiteRatio(numerator, denominator) {
 
 function increment(map, key) {
   map[key] = (map[key] ?? 0) + 1;
+}
+
+function normalizeAuthorityRef(value, path, expectedKind) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new RealPaperBenchmarkError('INVALID_REAL_RUN_EVIDENCE', `${path} must be an authority ref`);
+  }
+  const kind = requiredText(value.kind, `${path}.kind`);
+  if (kind !== expectedKind) {
+    throw new RealPaperBenchmarkError('INVALID_REAL_RUN_EVIDENCE', `${path}.kind must be ${expectedKind}`);
+  }
+  const logicalId = requiredText(value.logicalId, `${path}.logicalId`);
+  const version = requiredText(value.version, `${path}.version`);
+  const semanticHash = requiredText(value.semanticHash, `${path}.semanticHash`);
+  if (!SHA256_RE.test(semanticHash)) {
+    throw new RealPaperBenchmarkError('INVALID_REAL_RUN_EVIDENCE', `${path}.semanticHash must be sha256:<64 lowercase hex>`);
+  }
+  return { kind, logicalId, version, semanticHash };
+}
+
+function normalizeRealPaperEvidence(evidence, path) {
+  if (!evidence || typeof evidence !== 'object' || Array.isArray(evidence)) {
+    throw new RealPaperBenchmarkError('REAL_RUN_SOURCE_ARTIFACT_EVIDENCE_REQUIRED', `${path} is required for REAL benchmark runs`);
+  }
+  const sourceRef = normalizeAuthorityRef(evidence.sourceRef, `${path}.sourceRef`, 'Source');
+  const sourceArtifactRef = normalizeAuthorityRef(evidence.sourceArtifactRef, `${path}.sourceArtifactRef`, 'SourceArtifact');
+  const contentHash = requiredText(evidence.contentHash, `${path}.contentHash`);
+  if (!SHA256_RE.test(contentHash)) {
+    throw new RealPaperBenchmarkError('INVALID_REAL_RUN_EVIDENCE', `${path}.contentHash must be sha256:<64 lowercase hex>`);
+  }
+  if (!Number.isSafeInteger(evidence.byteLength) || evidence.byteLength <= 0) {
+    throw new RealPaperBenchmarkError('INVALID_REAL_RUN_EVIDENCE', `${path}.byteLength must be a positive safe integer`);
+  }
+  const retentionRightsDecisionRef = normalizeAuthorityRef(
+    evidence.retentionRightsDecisionRef,
+    `${path}.retentionRightsDecisionRef`,
+    'RightsDecision'
+  );
+  return {
+    sourceRef,
+    sourceArtifactRef,
+    contentHash,
+    byteLength: evidence.byteLength,
+    retentionRightsDecisionRef
+  };
+}
+
+function normalizeExecution(runMode, value) {
+  if (runMode === 'FIXTURE') {
+    if (value === undefined || value === null) return null;
+    if (typeof value !== 'object' || Array.isArray(value)) {
+      throw new RealPaperBenchmarkError('INVALID_BENCHMARK_RUN', 'execution must be an object when provided');
+    }
+    return value;
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new RealPaperBenchmarkError('REAL_RUN_EXECUTION_EVIDENCE_REQUIRED', 'REAL benchmark run requires execution evidence');
+  }
+  const repositoryFullName = requiredText(value.repositoryFullName, 'execution.repositoryFullName');
+  const codeHeadSha = requiredText(value.codeHeadSha, 'execution.codeHeadSha');
+  if (!COMMIT_SHA_RE.test(codeHeadSha)) {
+    throw new RealPaperBenchmarkError('INVALID_REAL_RUN_EVIDENCE', 'execution.codeHeadSha must be exact 40-character lowercase commit SHA');
+  }
+  const rightsEnforcement = requiredText(value.rightsEnforcement, 'execution.rightsEnforcement');
+  if (rightsEnforcement !== 'RA02_EXACT_SUBJECT_FAIL_CLOSED') {
+    throw new RealPaperBenchmarkError(
+      'REAL_RUN_RIGHTS_ENFORCEMENT_REQUIRED',
+      'REAL benchmark run requires RA02_EXACT_SUBJECT_FAIL_CLOSED execution'
+    );
+  }
+  return { repositoryFullName, codeHeadSha, rightsEnforcement };
 }
 
 function normalizeCandidate(candidate, path) {
@@ -100,7 +173,12 @@ function normalizeRun(run) {
   if (run.benchmarkVersion !== REAL_PAPER_BENCHMARK_VERSION) {
     throw new RealPaperBenchmarkError('INVALID_BENCHMARK_VERSION', `benchmarkVersion must be ${REAL_PAPER_BENCHMARK_VERSION}`);
   }
+  const runMode = requiredText(run.runMode, 'runMode');
+  if (!RUN_MODES.has(runMode)) {
+    throw new RealPaperBenchmarkError('INVALID_BENCHMARK_RUN_MODE', 'runMode must be FIXTURE or REAL');
+  }
   const runId = requiredText(run.runId, 'runId');
+  const execution = normalizeExecution(runMode, run.execution);
   if (!Array.isArray(run.papers)) {
     throw new RealPaperBenchmarkError('INVALID_BENCHMARK_RUN', 'papers must be an array');
   }
@@ -113,6 +191,9 @@ function normalizeRun(run) {
     const paperId = requiredText(paper.paperId, `${path}.paperId`);
     if (paperIds.has(paperId)) throw new RealPaperBenchmarkError('DUPLICATE_BENCHMARK_PAPER', `duplicate paperId ${paperId}`);
     paperIds.add(paperId);
+    const evidence = runMode === 'REAL'
+      ? normalizeRealPaperEvidence(paper.evidence, `${path}.evidence`)
+      : (paper.evidence ?? null);
     if (!Array.isArray(paper.candidates)) throw new RealPaperBenchmarkError('INVALID_BENCHMARK_RUN', `${path}.candidates must be an array`);
     const candidateKeys = new Set();
     const candidates = paper.candidates.map((candidate, candidateIndex) => {
@@ -123,9 +204,9 @@ function normalizeRun(run) {
       candidateKeys.add(normalized.candidateKey);
       return normalized;
     });
-    return { paperId, candidates };
+    return { paperId, evidence, candidates };
   });
-  return { runId, papers };
+  return { runMode, runId, execution, papers };
 }
 
 export function summarizeRealPaperBenchmark(run) {
@@ -227,7 +308,10 @@ export function summarizeRealPaperBenchmark(run) {
   return {
     benchmarkVersion: REAL_PAPER_BENCHMARK_VERSION,
     runVersion: REAL_PAPER_BENCHMARK_RUN_VERSION,
+    runMode: normalized.runMode,
     runId: normalized.runId,
+    execution: normalized.execution,
+    exactEvidenceGate: normalized.runMode === 'REAL' ? 'PASS' : 'FIXTURE_NOT_REAL_EVIDENCE',
     totals: {
       ...totals,
       autoResolvedCount,
