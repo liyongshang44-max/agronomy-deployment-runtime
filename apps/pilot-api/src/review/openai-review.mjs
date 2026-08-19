@@ -6,6 +6,7 @@ const OPENAI_DIRECT_FILE_INPUT_MAX_BYTES_EXCLUSIVE = 50_000_000;
 export const ADR_SOURCE_FAITHFUL_REVIEW_PROVIDER = 'OPENAI_RESPONSES';
 export const ADR_SOURCE_FAITHFUL_REVIEW_PROMPT_VERSION = 'adr-source-faithful-review-prompt-v1';
 export const ADR_SOURCE_FAITHFUL_REVIEW_SCHEMA_VERSION = 'adr-source-faithful-review-output-v1';
+export const ADR_SOURCE_FAITHFUL_REVIEW_UPLOAD_FILENAME = 'source-review.pdf';
 
 const CONTEXT_VALUE_TYPES = [
   'DECIMAL', 'INTEGER', 'BOOLEAN', 'STRING', 'CATEGORY', 'DATE', 'TIMESTAMP', 'UNKNOWN'
@@ -197,10 +198,10 @@ function outputText(response) {
   return texts.join('');
 }
 
-async function uploadUserDataPdf({ fetchImpl, apiKey, filename, bytes }) {
+async function uploadUserDataPdf({ fetchImpl, apiKey, bytes }) {
   const form = new FormData();
   form.append('purpose', 'user_data');
-  form.append('file', new Blob([bytes], { type: 'application/pdf' }), filename);
+  form.append('file', new Blob([bytes], { type: 'application/pdf' }), ADR_SOURCE_FAITHFUL_REVIEW_UPLOAD_FILENAME);
   return apiJson(fetchImpl, `${OPENAI_API_BASE}/files`, {
     method: 'POST',
     headers: authHeaders(apiKey),
@@ -290,7 +291,7 @@ export async function reviewSourceFaithfulnessWithOpenAI({
     throw new OpenAIAutomatedReviewError('INVALID_AUTOMATED_REVIEW_PROVIDER_INPUT', 'readable async stream is required');
   }
   positiveInteger(byteLength, 'byteLength');
-  const safeFilename = requiredText(filename, 'filename');
+  requiredText(filename, 'filename');
   const safeModel = requiredText(model, 'model');
   requiredText(apiKey, 'apiKey');
   if (!blindPacket || typeof blindPacket !== 'object' || Array.isArray(blindPacket)) {
@@ -302,7 +303,7 @@ export async function reviewSourceFaithfulnessWithOpenAI({
   let cleanupDeleted = false;
   try {
     const bytes = await collectExactPdfBytes(readable, byteLength);
-    const file = await uploadUserDataPdf({ fetchImpl, apiKey, filename: safeFilename, bytes });
+    const file = await uploadUserDataPdf({ fetchImpl, apiKey, bytes });
     fileId = requiredText(file.id, 'provider file id');
     const response = await createReviewResponse({ fetchImpl, apiKey, model: safeModel, fileId, blindPacket });
     let parsed;
@@ -327,6 +328,7 @@ export async function reviewSourceFaithfulnessWithOpenAI({
         model: safeModel,
         responseId: response.id ?? null,
         uploadedBytes: bytes.byteLength,
+        providerFilename: ADR_SOURCE_FAITHFUL_REVIEW_UPLOAD_FILENAME,
         fileDeletedAfterReview: cleanupDeleted
       }
     };
