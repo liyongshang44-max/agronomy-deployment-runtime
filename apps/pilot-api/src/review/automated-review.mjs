@@ -27,6 +27,13 @@ function requiredText(value, name) {
   return value.trim();
 }
 
+function exactInputRefs(values) {
+  if (!Array.isArray(values)) {
+    throw new AutomatedSourceFaithfulReviewError('INVALID_AUTOMATED_REVIEW_INPUT', 'rightsDecisionRefs must be an array');
+  }
+  return values;
+}
+
 function reviewerPrincipalId(metadata) {
   const hash = semanticHash('ADR-AutomatedReviewerIdentity-v1', {
     provider: metadata.provider,
@@ -135,9 +142,11 @@ export class PilotAutomatedSourceFaithfulReviewAdapter {
     sourceContextCandidateRef,
     reviewerMetadata,
     output,
+    rightsDecisionRefs = [],
     policy = DEFAULT_AUTOMATED_SOURCE_FAITHFUL_POLICY,
     version = `auto-review-${new Date().toISOString()}`
   }) {
+    const rightsRefs = exactInputRefs(rightsDecisionRefs);
     const blind = this.blindPacket({ compilationResultRef, claimCandidateRef, sourceContextCandidateRef });
     const proposalVersion = requiredText(version, 'version');
     const proposal = materializeAutomatedSourceFaithfulReviewProposal({
@@ -159,6 +168,7 @@ export class PilotAutomatedSourceFaithfulReviewAdapter {
         eventId: `evt-auto-review-proposal:${claimCandidateRef.semanticHash}:${proposalVersion}`,
         occurredAt: new Date().toISOString(),
         actor: { type: 'SERVICE_ACCOUNT', id: reviewerPrincipalId(reviewerMetadata) },
+        inputRefs: rightsRefs,
         details: {
           channel: 'pilot-api-automated-source-faithful-review-proposal',
           reviewAuthority: 'PROPOSAL_ONLY'
@@ -208,7 +218,7 @@ export class PilotAutomatedSourceFaithfulReviewAdapter {
       audit: this.#audit(
         `evt-auto-review-promote:${suffix}:${proposalVersion}`,
         auth.reviewer,
-        [proposal.ref],
+        [proposal.ref, ...rightsRefs],
         {
           reviewerMetadata,
           automatedReviewProposalRef: proposal.ref,
