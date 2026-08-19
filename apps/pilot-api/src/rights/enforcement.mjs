@@ -9,6 +9,7 @@ import {
 } from '../../../../packages/rights-authority/src/index.mjs';
 
 export const PILOT_RIGHTS_ENFORCEMENT_VERSION = 'adr.pilot.rights-enforcement.v1';
+export const PILOT_RIGHTS_SIDE_EFFECT_RECEIPT_AUTHORITY = 'OPERATIONAL_EVIDENCE_ONLY_NOT_RIGHTS_GRANT';
 
 function requiredText(value, name) {
   if (typeof value !== 'string' || value.trim().length === 0) {
@@ -259,6 +260,49 @@ export class PilotRightsEnforcementService {
     };
   }
 
+  #recordSideEffectReceipt({ effectKey, subjectRef, operation, rightsDecisionRef, actorId, actorType }) {
+    const key = requiredText(effectKey, 'effectKey');
+    const subject = this.#ledger.resolve(subjectRef);
+    const ownership = ownershipFromSubject(this.#ledger, subject);
+    const actor = principal(actorId, actorType, ownership);
+    const now = new Date().toISOString();
+    return this.#ledger.publish({
+      kind: 'PilotRightsSideEffectReceipt',
+      logicalId: `rights.side-effect.pilot.${key}`,
+      version: '1',
+      semanticPayload: {
+        authorityClass: PILOT_RIGHTS_SIDE_EFFECT_RECEIPT_AUTHORITY,
+        effectKey: key,
+        subjectRef: subject.ref,
+        operation: requiredText(operation, 'operation'),
+        rightsDecisionRef,
+        completedAt: now
+      },
+      audit: audit(`evt-rights-side-effect:${key}`, actor, now, [subject.ref, rightsDecisionRef], {
+        authorityBoundary: PILOT_RIGHTS_SIDE_EFFECT_RECEIPT_AUTHORITY
+      })
+    });
+  }
+
+  sideEffectReceiptFor({ effectKey, subjectRef, operation }) {
+    const key = requiredText(effectKey, 'effectKey');
+    const subject = this.#ledger.resolve(subjectRef);
+    const safeOperation = requiredText(operation, 'operation');
+    const matches = this.#ledger.exportSnapshot().records.filter((record) =>
+      record.ref.kind === 'PilotRightsSideEffectReceipt'
+      && record.semanticPayload?.authorityClass === PILOT_RIGHTS_SIDE_EFFECT_RECEIPT_AUTHORITY
+      && record.semanticPayload?.effectKey === key
+      && record.semanticPayload?.operation === safeOperation
+      && sameAuthorityRef(record.semanticPayload?.subjectRef, subject.ref));
+    if (matches.length === 0) {
+      throw new RightsAuthorityError('RIGHTS_SIDE_EFFECT_RECEIPT_NOT_FOUND', `no completed rights side-effect receipt exists for ${key}`);
+    }
+    if (matches.length > 1) {
+      throw new RightsAuthorityError('RIGHTS_SIDE_EFFECT_RECEIPT_AMBIGUOUS', `multiple side-effect receipts exist for ${key}`);
+    }
+    return matches[0];
+  }
+
   async execute({
     rightsPolicyRef = null,
     subjectRef,
@@ -268,6 +312,7 @@ export class PilotRightsEnforcementService {
     purpose,
     jurisdiction,
     enforceableObligations = [],
+    effectKey = null,
     sideEffect
   }) {
     if (typeof sideEffect !== 'function') {
@@ -284,9 +329,20 @@ export class PilotRightsEnforcementService {
       enforceableObligations
     });
     const result = await sideEffect({ rightsDecisionRef: authorized.rightsDecisionRef, obligations: authorized.obligations });
+    const sideEffectReceipt = effectKey
+      ? this.#recordSideEffectReceipt({
+        effectKey,
+        subjectRef,
+        operation,
+        rightsDecisionRef: authorized.rightsDecisionRef,
+        actorId,
+        actorType
+      })
+      : null;
     return {
       ...authorized,
       result,
+      sideEffectReceiptRef: sideEffectReceipt?.ref ?? null,
       authorityClaim: 'SIDE_EFFECT_EXECUTED_ONLY_AFTER_EXACT_RIGHTS_ALLOW'
     };
   }
