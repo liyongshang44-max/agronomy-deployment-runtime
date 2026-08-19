@@ -18,6 +18,11 @@ function requiredText(value, name) {
   return value.trim();
 }
 
+function exactInputRefs(values) {
+  if (!Array.isArray(values)) throw new SourceFaithfulReviewError('INVALID_PILOT_REVIEW_INPUT', 'rightsDecisionRefs must be an array');
+  return values;
+}
+
 export class PilotReviewAdapter {
   #ledger;
   #operatorId;
@@ -30,11 +35,12 @@ export class PilotReviewAdapter {
     this.#reviewService = new SourceFaithfulReviewService({ ledger });
   }
 
-  #audit(eventId, actorType = 'USER') {
+  #audit(eventId, actorType = 'USER', inputRefs = []) {
     return {
       eventId,
       occurredAt: new Date().toISOString(),
       actor: { type: actorType, id: this.#operatorId },
+      inputRefs,
       details: { channel: 'pilot-api-source-faithful-review' }
     };
   }
@@ -100,8 +106,10 @@ export class PilotReviewAdapter {
     reasonCodes = [],
     rationale,
     contextAdjudication,
+    rightsDecisionRefs = [],
     version = `review-${new Date().toISOString()}`
   }) {
+    const rightsRefs = exactInputRefs(rightsDecisionRefs);
     const claimCandidate = this.#ledger.resolve(claimCandidateRef);
     const source = this.#ledger.resolve(claimCandidate.semanticPayload.sourceRef);
     const auth = this.#authorizationFor(source);
@@ -123,7 +131,7 @@ export class PilotReviewAdapter {
       claimVersion: '1',
       sourceContextLogicalId: `source-context.pilot.${suffix}`,
       sourceContextVersion: '1',
-      audit: this.#audit(`evt-pilot-review:${suffix}:${reviewVersion}`)
+      audit: this.#audit(`evt-pilot-review:${suffix}:${reviewVersion}`, 'USER', rightsRefs)
     });
     return {
       review: result.review,

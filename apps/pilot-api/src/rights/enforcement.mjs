@@ -1,0 +1,358 @@
+import { randomUUID } from 'node:crypto';
+import { sameAuthorityRef } from '../../../../packages/contracts/src/authority.mjs';
+import {
+  RightsAuthorityError,
+  assertRightsAllowed,
+  publishRightsDecision,
+  publishRightsGrant,
+  publishRightsPolicy
+} from '../../../../packages/rights-authority/src/index.mjs';
+
+export const PILOT_RIGHTS_ENFORCEMENT_VERSION = 'adr.pilot.rights-enforcement.v1';
+export const PILOT_RIGHTS_SIDE_EFFECT_RECEIPT_AUTHORITY = 'OPERATIONAL_EVIDENCE_ONLY_NOT_RIGHTS_GRANT';
+
+function requiredText(value, name) {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new RightsAuthorityError('INVALID_RIGHTS_INPUT', `${name} must be a non-empty string`);
+  }
+  return value.trim();
+}
+
+function ownershipFromSubject(ledger, record) {
+  if (record.ref.kind === 'Source') return record.semanticPayload.ownership;
+  if (record.ref.kind === 'SourceArtifact') {
+    const source = ledger.resolve(record.semanticPayload.sourceRef);
+    if (source?.ref?.kind !== 'Source') {
+      throw new RightsAuthorityError('RIGHTS_SUBJECT_SOURCE_REQUIRED', 'SourceArtifact rights scope requires its exact Source authority');
+    }
+    return source.semanticPayload.ownership;
+  }
+  throw new RightsAuthorityError('INVALID_RIGHTS_SUBJECT', 'pilot rights enforcement requires Source or SourceArtifact');
+}
+
+function sameScope(left, right) {
+  return left?.organizationId === right?.organizationId
+    && (left?.tenantId ?? null) === (right?.tenantId ?? null);
+}
+
+function principal(principalId, type, ownership) {
+  return {
+    principalId: requiredText(principalId, 'principalId'),
+    type,
+    organizationId: ownership.organizationId,
+    ...(ownership.tenantId ? { tenantId: ownership.tenantId } : {})
+  };
+}
+
+function audit(eventId, actor, occurredAt, inputRefs = [], details = {}) {
+  return {
+    eventId,
+    occurredAt,
+    actor: { type: actor.type, id: actor.principalId },
+    inputRefs,
+    details: { channel: 'pilot-api-rights-enforcement', ...details }
+  };
+}
+
+function uniquePolicyRefs(records) {
+  const refs = [];
+  for (const record of records) {
+    const ref = record.semanticPayload.rightsPolicyRef;
+    if (!refs.some((existing) => sameAuthorityRef(existing, ref))) refs.push(ref);
+  }
+  return refs;
+}
+
+export class PilotRightsEnforcementService {
+  #ledger;
+  #operatorId;
+  #evaluatorId;
+
+  constructor({ ledger, operatorId, evaluatorId = 'pilot-rights-engine' }) {
+    if (!ledger || typeof ledger.resolve !== 'function' || typeof ledger.publish !== 'function' || typeof ledger.exportSnapshot !== 'function') {
+      throw new RightsAuthorityError('INVALID_LEDGER', 'pilot rights enforcement requires AuthorityLedger');
+    }
+    this.#ledger = ledger;
+    this.#operatorId = requiredText(operatorId, 'operatorId');
+    this.#evaluatorId = requiredText(evaluatorId, 'evaluatorId');
+  }
+
+  provision({
+    subjectRef,
+    basisClass,
+    evidenceRefs = [],
+    rules,
+    validFrom,
+    validUntil,
+    version = `grant-${new Date().toISOString()}-${randomUUID()}`
+  }) {
+    const subject = this.#ledger.resolve(subjectRef);
+    const ownership = ownershipFromSubject(this.#ledger, subject);
+    const owner = principal(this.#operatorId, 'USER', ownership);
+    const safeVersion = requiredText(version, 'version');
+    const now = new Date().toISOString();
+    const suffix = subject.ref.semanticHash.replace(/^sha256:/, '').slice(0, 20);
+    const policy = publishRightsPolicy({
+      ledger: this.#ledger,
+      logicalId: `rights.policy.pilot.${suffix}`,
+      version: safeVersion,
+      ownership,
+      ownerPrincipal: owner,
+      basis: { class: requiredText(basisClass, 'basisClass'), evidenceRefs },
+      audit: audit(`evt-rights-policy:${suffix}:${safeVersion}`, owner, now, evidenceRefs, {
+        authorityBoundary: 'RECORDED_RIGHTS_BASIS_NOT_LEGAL_OPINION'
+      })
+    });
+    const grant = publishRightsGrant({
+      ledger: this.#ledger,
+      logicalId: `rights.grant.pilot.${suffix}`,
+      version: safeVersion,
+      rightsPolicyRef: policy.ref,
+      subjectRef: subject.ref,
+      grantee: {
+        organizationId: ownership.organizationId,
+        ...(ownership.tenantId ? { tenantId: ownership.tenantId } : {})
+      },
+      rules,
+      validFrom,
+      validUntil,
+      grantorPrincipal: owner,
+      audit: audit(`evt-rights-grant:${suffix}:${safeVersion}`, owner, now, [policy.ref, subject.ref], {
+        authorityBoundary: 'EXACT_SUBJECT_ONLY_NO_RIGHTS_INHERITANCE'
+      })
+    });
+    return {
+      version: PILOT_RIGHTS_ENFORCEMENT_VERSION,
+      subjectRef: subject.ref,
+      rightsPolicyRef: policy.ref,
+      rightsGrantRef: grant.ref,
+      authorityClaim: 'RIGHTS_PROVISIONING_ONLY_NOT_SCIENTIFIC_AUTHORITY'
+    };
+  }
+
+  policyFor({ subjectRef, operation }) {
+    const subject = this.#ledger.resolve(subjectRef);
+    ownershipFromSubject(this.#ledger, subject);
+    const safeOperation = requiredText(operation, 'operation');
+    const grants = this.#ledger.exportSnapshot().records.filter((record) =>
+      record.ref.kind === 'RightsGrant'
+      && sameAuthorityRef(record.semanticPayload?.subjectRef, subject.ref)
+      && Array.isArray(record.semanticPayload?.rules)
+      && record.semanticPayload.rules.some((rule) => rule.operation === safeOperation));
+    const policies = uniquePolicyRefs(grants);
+    if (policies.length === 0) {
+      throw new RightsAuthorityError(
+        'RIGHTS_POLICY_NOT_PROVISIONED',
+        `no exact RightsGrant policy is provisioned for ${subject.ref.kind} ${safeOperation}`
+      );
+    }
+    if (policies.length > 1) {
+      throw new RightsAuthorityError(
+        'RIGHTS_POLICY_SELECTION_AMBIGUOUS',
+        `multiple RightsPolicy worlds are provisioned for exact ${subject.ref.kind} ${safeOperation}`
+      );
+    }
+    return policies[0];
+  }
+
+  decide({
+    rightsPolicyRef,
+    subjectRef,
+    actorId,
+    actorType = 'SERVICE_ACCOUNT',
+    operation,
+    purpose,
+    jurisdiction,
+    evaluatedAt = new Date().toISOString(),
+    version = `decision-${new Date().toISOString()}-${randomUUID()}`
+  }) {
+    const subject = this.#ledger.resolve(subjectRef);
+    const ownership = ownershipFromSubject(this.#ledger, subject);
+    const actor = principal(actorId, actorType, ownership);
+    const evaluator = principal(this.#evaluatorId, 'SERVICE_ACCOUNT', ownership);
+    const at = new Date(evaluatedAt).toISOString();
+    return publishRightsDecision({
+      ledger: this.#ledger,
+      logicalId: `rights.decision.pilot.${subject.ref.semanticHash.replace(/^sha256:/, '').slice(0, 20)}.${requiredText(operation, 'operation').toLowerCase()}`,
+      version: requiredText(version, 'version'),
+      rightsPolicyRef,
+      subjectRef: subject.ref,
+      actor,
+      evaluatorPrincipal: evaluator,
+      operation,
+      purpose,
+      jurisdiction,
+      evaluatedAt: at,
+      audit: audit(`evt-rights-decision:${randomUUID()}`, evaluator, at, [rightsPolicyRef, subject.ref], {
+        operation,
+        purpose,
+        jurisdiction
+      })
+    });
+  }
+
+  assertAllowed({
+    rightsDecisionRef,
+    subjectRef,
+    actorId,
+    actorType = 'SERVICE_ACCOUNT',
+    operation,
+    purpose,
+    jurisdiction,
+    requiredAt,
+    enforceableObligations = []
+  }) {
+    const subject = this.#ledger.resolve(subjectRef);
+    const ownership = ownershipFromSubject(this.#ledger, subject);
+    const actor = principal(actorId, actorType, ownership);
+    return assertRightsAllowed({
+      ledger: this.#ledger,
+      rightsDecisionRef,
+      subjectRef: subject.ref,
+      actor,
+      operation,
+      purpose,
+      jurisdiction,
+      requiredAt,
+      enforceableObligations
+    });
+  }
+
+  authorize({
+    rightsPolicyRef = null,
+    subjectRef,
+    actorId,
+    actorType = 'SERVICE_ACCOUNT',
+    operation,
+    purpose,
+    jurisdiction,
+    enforceableObligations = []
+  }) {
+    const policyRef = rightsPolicyRef ?? this.policyFor({ subjectRef, operation });
+    const at = new Date().toISOString();
+    const decision = this.decide({
+      rightsPolicyRef: policyRef,
+      subjectRef,
+      actorId,
+      actorType,
+      operation,
+      purpose,
+      jurisdiction,
+      evaluatedAt: at
+    });
+    this.assertAllowed({
+      rightsDecisionRef: decision.ref,
+      subjectRef,
+      actorId,
+      actorType,
+      operation,
+      purpose,
+      jurisdiction,
+      requiredAt: at,
+      enforceableObligations
+    });
+    return {
+      version: PILOT_RIGHTS_ENFORCEMENT_VERSION,
+      rightsDecisionRef: decision.ref,
+      outcome: decision.semanticPayload.outcome,
+      obligations: decision.semanticPayload.obligations,
+      authorityClaim: 'EXACT_POINT_IN_TIME_RIGHTS_ALLOW'
+    };
+  }
+
+  #recordSideEffectReceipt({ effectKey, subjectRef, operation, rightsDecisionRef, actorId, actorType }) {
+    const key = requiredText(effectKey, 'effectKey');
+    const subject = this.#ledger.resolve(subjectRef);
+    const ownership = ownershipFromSubject(this.#ledger, subject);
+    const actor = principal(actorId, actorType, ownership);
+    const now = new Date().toISOString();
+    return this.#ledger.publish({
+      kind: 'PilotRightsSideEffectReceipt',
+      logicalId: `rights.side-effect.pilot.${key}`,
+      version: '1',
+      semanticPayload: {
+        authorityClass: PILOT_RIGHTS_SIDE_EFFECT_RECEIPT_AUTHORITY,
+        effectKey: key,
+        subjectRef: subject.ref,
+        operation: requiredText(operation, 'operation'),
+        rightsDecisionRef,
+        completedAt: now
+      },
+      audit: audit(`evt-rights-side-effect:${key}`, actor, now, [subject.ref, rightsDecisionRef], {
+        authorityBoundary: PILOT_RIGHTS_SIDE_EFFECT_RECEIPT_AUTHORITY
+      })
+    });
+  }
+
+  sideEffectReceiptFor({ effectKey, subjectRef, operation }) {
+    const key = requiredText(effectKey, 'effectKey');
+    const subject = this.#ledger.resolve(subjectRef);
+    const safeOperation = requiredText(operation, 'operation');
+    const matches = this.#ledger.exportSnapshot().records.filter((record) =>
+      record.ref.kind === 'PilotRightsSideEffectReceipt'
+      && record.semanticPayload?.authorityClass === PILOT_RIGHTS_SIDE_EFFECT_RECEIPT_AUTHORITY
+      && record.semanticPayload?.effectKey === key
+      && record.semanticPayload?.operation === safeOperation
+      && sameAuthorityRef(record.semanticPayload?.subjectRef, subject.ref));
+    if (matches.length === 0) {
+      throw new RightsAuthorityError('RIGHTS_SIDE_EFFECT_RECEIPT_NOT_FOUND', `no completed rights side-effect receipt exists for ${key}`);
+    }
+    if (matches.length > 1) {
+      throw new RightsAuthorityError('RIGHTS_SIDE_EFFECT_RECEIPT_AMBIGUOUS', `multiple side-effect receipts exist for ${key}`);
+    }
+    return matches[0];
+  }
+
+  async execute({
+    rightsPolicyRef = null,
+    subjectRef,
+    actorId,
+    actorType = 'SERVICE_ACCOUNT',
+    operation,
+    purpose,
+    jurisdiction,
+    enforceableObligations = [],
+    effectKey = null,
+    sideEffect
+  }) {
+    if (typeof sideEffect !== 'function') {
+      throw new RightsAuthorityError('RIGHTS_SIDE_EFFECT_REQUIRED', 'pilot rights enforcement requires an explicit sideEffect callback');
+    }
+    const authorized = this.authorize({
+      rightsPolicyRef,
+      subjectRef,
+      actorId,
+      actorType,
+      operation,
+      purpose,
+      jurisdiction,
+      enforceableObligations
+    });
+    const result = await sideEffect({ rightsDecisionRef: authorized.rightsDecisionRef, obligations: authorized.obligations });
+    const sideEffectReceipt = effectKey
+      ? this.#recordSideEffectReceipt({
+        effectKey,
+        subjectRef,
+        operation,
+        rightsDecisionRef: authorized.rightsDecisionRef,
+        actorId,
+        actorType
+      })
+      : null;
+    return {
+      ...authorized,
+      result,
+      sideEffectReceiptRef: sideEffectReceipt?.ref ?? null,
+      authorityClaim: 'SIDE_EFFECT_EXECUTED_ONLY_AFTER_EXACT_RIGHTS_ALLOW'
+    };
+  }
+}
+
+export function assertProvisioningScope({ ledger, subjectRef, ownership }) {
+  const subject = ledger.resolve(subjectRef);
+  const subjectOwnership = ownershipFromSubject(ledger, subject);
+  if (!sameScope(subjectOwnership, ownership)) {
+    throw new RightsAuthorityError('RIGHTS_PROVISIONING_SCOPE_MISMATCH', 'requested rights provisioning scope differs from exact subject ownership');
+  }
+  return subject;
+}

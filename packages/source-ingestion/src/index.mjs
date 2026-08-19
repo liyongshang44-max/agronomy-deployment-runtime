@@ -345,18 +345,22 @@ function restoredSession(input, { artifactStore, sourceRegistry }) {
   if (requiresAuthority && (!session.sourceRef || !session.sourceArtifactRef)) {
     throw new SourceIngestionError('INVALID_SOURCE_UPLOAD_SNAPSHOT', `${state} session requires sourceRef and sourceArtifactRef`);
   }
-  if (session.sourceRef || session.sourceArtifactRef) {
-    if (!session.sourceRef || !session.sourceArtifactRef) throw new SourceIngestionError('INVALID_SOURCE_UPLOAD_SNAPSHOT', 'sourceRef and sourceArtifactRef must be restored together');
+  if (session.sourceArtifactRef && !session.sourceRef) {
+    throw new SourceIngestionError('INVALID_SOURCE_UPLOAD_SNAPSHOT', 'sourceArtifactRef cannot exist without sourceRef');
+  }
+  if (session.sourceRef) {
     const source = sourceRegistry.resolveSource(session.sourceRef);
-    const artifact = sourceRegistry.resolveArtifact(session.sourceArtifactRef);
     if (!sameScope(source.semanticPayload.ownership, scope)) throw new SourceIngestionError('SOURCE_UPLOAD_SNAPSHOT_SCOPE_MISMATCH', 'restored Source ownership does not match upload scope');
-    if (!sameAuthorityRef(artifact.semanticPayload.sourceRef, source.ref)) throw new SourceIngestionError('SOURCE_UPLOAD_SNAPSHOT_AUTHORITY_MISMATCH', 'restored SourceArtifact does not bind restored Source');
-    if (session.retentionReceipt) {
-      if (artifact.semanticPayload.contentHash !== session.retentionReceipt.contentHash
-        || artifact.semanticPayload.byteLength !== session.retentionReceipt.byteLength
-        || artifact.semanticPayload.retention?.storeKind !== session.retentionReceipt.storeKind
-        || artifact.semanticPayload.retention?.retentionId !== session.retentionReceipt.retentionId) {
-        throw new SourceIngestionError('SOURCE_UPLOAD_SNAPSHOT_AUTHORITY_MISMATCH', 'restored SourceArtifact does not match retained PDF receipt');
+    if (session.sourceArtifactRef) {
+      const artifact = sourceRegistry.resolveArtifact(session.sourceArtifactRef);
+      if (!sameAuthorityRef(artifact.semanticPayload.sourceRef, source.ref)) throw new SourceIngestionError('SOURCE_UPLOAD_SNAPSHOT_AUTHORITY_MISMATCH', 'restored SourceArtifact does not bind restored Source');
+      if (session.retentionReceipt) {
+        if (artifact.semanticPayload.contentHash !== session.retentionReceipt.contentHash
+          || artifact.semanticPayload.byteLength !== session.retentionReceipt.byteLength
+          || artifact.semanticPayload.retention?.storeKind !== session.retentionReceipt.storeKind
+          || artifact.semanticPayload.retention?.retentionId !== session.retentionReceipt.retentionId) {
+          throw new SourceIngestionError('SOURCE_UPLOAD_SNAPSHOT_AUTHORITY_MISMATCH', 'restored SourceArtifact does not match retained PDF receipt');
+        }
       }
     }
   }
@@ -423,6 +427,16 @@ export class PilotSourceIngestionService {
     return publicSession(session);
   }
 
+  preRegisterSource({ uploadId, sourceAudit }) {
+    const session = this.#mutableSession(uploadId);
+    if (session.state !== 'CREATED') {
+      throw new SourceIngestionError('SOURCE_UPLOAD_STATE_INVALID', `cannot pre-register Source from state ${session.state}`);
+    }
+    const source = this.#sourceRegistry.registerSource({ ...session.source, ownership: session.scope, audit: sourceAudit });
+    session.sourceRef = source.ref;
+    return deepFreeze({ upload: publicSession(session), source });
+  }
+
   getUpload(uploadId) {
     const session = this.#sessions.get(requiredText(uploadId, 'uploadId'));
     if (!session) throw new SourceIngestionError('SOURCE_UPLOAD_NOT_FOUND', 'source upload session does not exist');
@@ -455,7 +469,9 @@ export class PilotSourceIngestionService {
   finalizeUpload({ uploadId, sourceAudit, artifactAudit }) {
     const session = this.#mutableSession(uploadId);
     if (session.state !== 'STORED' || !session.retentionReceipt) throw new SourceIngestionError('SOURCE_UPLOAD_STATE_INVALID', `cannot finalize source upload from state ${session.state}`);
-    const source = this.#sourceRegistry.registerSource({ ...session.source, ownership: session.scope, audit: sourceAudit });
+    const source = session.sourceRef
+      ? this.#sourceRegistry.resolveSource(session.sourceRef)
+      : this.#sourceRegistry.registerSource({ ...session.source, ownership: session.scope, audit: sourceAudit });
     const sourceArtifact = this.#sourceRegistry.materializeRetainedArtifact({
       ...session.artifact,
       sourceRef: source.ref,

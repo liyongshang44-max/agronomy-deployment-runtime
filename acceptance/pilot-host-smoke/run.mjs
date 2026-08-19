@@ -37,6 +37,7 @@ function startHost(port) {
       ADR_OPERATOR_TOKEN: TOKEN,
       ADR_OPERATOR_ID: 'pilot-host-smoke',
       ADR_DATA_DIR: root,
+      ADR_RIGHTS_JURISDICTION: 'GB',
       OPENAI_API_KEY: '',
       ADR_EXTRACTION_MODEL: ''
     },
@@ -82,6 +83,29 @@ function headers(extra = {}) {
   return { authorization: `Bearer ${TOKEN}`, ...extra };
 }
 
+async function provisionRights(baseUrl, uploadId, subject, rules, version) {
+  const response = await fetch(`${baseUrl}/operator/source-uploads/${encodeURIComponent(uploadId)}/rights`, {
+    method: 'POST',
+    headers: headers({ 'content-type': 'application/json' }),
+    body: JSON.stringify({
+      subject,
+      basisClass: 'LICENSE',
+      rules,
+      validFrom: '2026-01-01T00:00:00Z',
+      validUntil: '2027-01-01T00:00:00Z',
+      version
+    })
+  });
+  const payload = await response.json();
+  assert.equal(response.status, 201, JSON.stringify(payload));
+  assert.equal(payload.authorityClaim, 'RIGHTS_PROVISIONING_ONLY_NOT_SCIENTIFIC_AUTHORITY');
+  return payload;
+}
+
+function allow(operation) {
+  return { operation, purposes: ['*'], jurisdictions: ['*'], obligations: [] };
+}
+
 function notReportedContext() {
   return {
     BIOLOGICAL: { status: 'NOT_REPORTED', dimensions: [] },
@@ -103,6 +127,8 @@ try {
   assert.equal(ready1.ready, true);
   assert.equal(ready1.authorityPersistence, 'LOCAL_CHECKPOINT_RESTART_DURABLE_V1');
   assert.equal(ready1.extraction.configured, false);
+  assert.equal(ready1.rightsAuthority.enforcement, 'RA02_EXACT_SUBJECT_FAIL_CLOSED');
+  assert.equal(ready1.rightsAuthority.sourceRightsDoNotInheritToArtifact, true);
 
   const createResponse = await fetch(`${base1}/operator/source-uploads`, {
     method: 'POST',
@@ -123,6 +149,17 @@ try {
   });
   assert.equal(createResponse.status, 201);
   const created = await createResponse.json();
+  assert.equal(created.state, 'CREATED');
+  assert.equal(created.sourceRef.kind, 'Source');
+
+  const deniedUploadResponse = await fetch(`${base1}/operator/source-uploads/${encodeURIComponent(created.uploadId)}/content`, {
+    method: 'PUT', headers: headers({ 'content-type': 'application/pdf' }), body: pdf
+  });
+  assert.equal(deniedUploadResponse.status, 409);
+  assert.equal((await deniedUploadResponse.json()).error, 'RIGHTS_POLICY_NOT_PROVISIONED');
+
+  const sourceRights = await provisionRights(base1, created.uploadId, 'SOURCE', [allow('RETAIN_FULLTEXT')], 'source-retention-v1');
+  assert.equal(sourceRights.subjectRef.kind, 'Source');
 
   const uploadResponse = await fetch(`${base1}/operator/source-uploads/${encodeURIComponent(created.uploadId)}/content`, {
     method: 'PUT', headers: headers({ 'content-type': 'application/pdf' }), body: pdf
@@ -130,6 +167,8 @@ try {
   assert.equal(uploadResponse.status, 201);
   const stored = await uploadResponse.json();
   assert.equal(stored.state, 'STORED');
+  assert.equal(stored.rightsDecisionRef.kind, 'RightsDecision');
+  assert.equal(stored.rightsSideEffectReceiptRef.kind, 'PilotRightsSideEffectReceipt');
 
   const finalizeResponse = await fetch(`${base1}/operator/source-uploads/${encodeURIComponent(created.uploadId)}/finalize`, {
     method: 'POST', headers: headers()
@@ -138,7 +177,25 @@ try {
   const finalized = await finalizeResponse.json();
   assert.equal(finalized.upload.state, 'SOURCE_MATERIALIZED');
   assert.match(finalized.contentHash, /^sha256:[0-9a-f]{64}$/);
+  assert.deepEqual(finalized.retentionRightsDecisionRef, stored.rightsDecisionRef);
   const exactArtifactRef = finalized.sourceArtifactRef;
+
+  const deniedImportResponse = await fetch(`${base1}/operator/source-uploads/${encodeURIComponent(created.uploadId)}/import-proposal`, {
+    method: 'POST',
+    headers: headers({ 'content-type': 'application/json' }),
+    body: JSON.stringify({ providerLabel: 'MODEL_C_WEB', modelLabel: 'UNKNOWN_MODEL', proposal: { claims: [] } })
+  });
+  assert.equal(deniedImportResponse.status, 409);
+  assert.equal((await deniedImportResponse.json()).error, 'RIGHTS_POLICY_NOT_PROVISIONED');
+
+  const artifactRights = await provisionRights(
+    base1,
+    created.uploadId,
+    'SOURCE_ARTIFACT',
+    [allow('READ_FOR_EXTRACTION'), allow('RETAIN_DERIVED')],
+    'artifact-manual-review-v1'
+  );
+  assert.equal(artifactRights.subjectRef.kind, 'SourceArtifact');
 
   const importResponse = await fetch(`${base1}/operator/source-uploads/${encodeURIComponent(created.uploadId)}/import-proposal`, {
     method: 'POST',
@@ -168,6 +225,7 @@ try {
   assert.equal(imported.candidateCount, 1);
   assert.equal(imported.preflight.total, 1);
   assert.equal(imported.preflight.reviewable, 1);
+  assert.equal(imported.rightsDecisionRefs.length, 2);
   const exactCompilationRef = imported.compilationResultRef;
   const exactClaimCandidateRef = imported.candidates[0].claimCandidateRef;
   const exactContextCandidateRef = imported.candidates[0].sourceContextCandidateRef;
@@ -189,6 +247,7 @@ try {
   const reviewed = await reviewResponse.json();
   assert.equal(reviewed.disposition, 'REJECT_SOURCE_FAITHFUL');
   assert.equal(reviewed.claimRef, null);
+  assert.equal(reviewed.rightsDecisionRefs.length, 1);
 
   const recoveryBeforeResponse = await fetch(`${base1}/operator/source-uploads/${encodeURIComponent(created.uploadId)}/compilations`, {
     headers: headers()
@@ -209,6 +268,7 @@ try {
   const ready2 = await waitReady(base2, second);
   assert.equal(ready2.authorityPersistence, 'LOCAL_CHECKPOINT_RESTART_DURABLE_V1');
   assert.equal(ready2.checkpoint.state, 'RESTORED_AND_VERIFIED');
+  assert.equal(ready2.rightsAuthority.enforcement, 'RA02_EXACT_SUBJECT_FAIL_CLOSED');
 
   const restoredResponse = await fetch(`${base2}/operator/source-uploads/${encodeURIComponent(created.uploadId)}`, {
     headers: headers()
@@ -246,7 +306,15 @@ try {
   assert.equal(health.status, 200);
   assert.equal((await health.json()).ok, true);
 
-  console.log(JSON.stringify({ total: 1, passed: 1, failed: 0, uploadId: created.uploadId }, null, 2));
+  console.log(JSON.stringify({
+    total: 1,
+    passed: 1,
+    failed: 0,
+    uploadId: created.uploadId,
+    rightsFailClosedBeforeRetention: true,
+    exactRetentionDecisionRestartDurable: true,
+    artifactRightsExplicitNoInheritance: true
+  }, null, 2));
 } finally {
   if (first) await stopHost(first.child);
   if (second) await stopHost(second.child);
