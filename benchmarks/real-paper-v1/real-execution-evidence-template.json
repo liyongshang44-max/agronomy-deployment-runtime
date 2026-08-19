@@ -1,0 +1,30 @@
+{
+  "paperId": "RP001",
+  "execution": {
+    "repositoryFullName": "liyongshang44-max/agronomy-deployment-runtime",
+    "codeHeadSha": "replace-with-exact-40-char-head-sha",
+    "rightsEnforcement": "RA02_EXACT_SUBJECT_FAIL_CLOSED"
+  },
+  "paperEvidence": {
+    "sourceRef": {
+      "kind": "Source",
+      "logicalId": "replace-with-exact-source-logical-id",
+      "version": "1",
+      "semanticHash": "sha256:replace-with-exact-source-semantic-hash"
+    },
+    "sourceArtifactRef": {
+      "kind": "SourceArtifact",
+      "logicalId": "replace-with-exact-source-artifact-logical-id",
+      "version": "1",
+      "semanticHash": "sha256:replace-with-exact-source-artifact-semantic-hash"
+    },
+    "contentHash": "sha256:replace-with-exact-pdf-content-hash",
+    "byteLength": 0,
+    "retentionRightsDecisionRef": {
+      "kind": "RightsDecision",
+      "logicalId": "replace-with-exact-retention-rights-decision-logical-id",
+      "version": "replace-with-exact-version",
+      "semanticHash": "sha256:replace-with-exact-rights-decision-semantic-hash"
+    }
+  }
+}

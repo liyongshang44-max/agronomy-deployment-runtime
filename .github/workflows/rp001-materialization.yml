@@ -1,0 +1,93 @@
+name: ADR RP001 Materialization
+
+on:
+  workflow_call:
+  push:
+    branches:
+      - "feat/real-paper-benchmark-v1"
+    paths:
+      - "scripts/real-paper-benchmark/acquire-rp001.mjs"
+      - "scripts/real-paper-benchmark/materialize-rp001.mjs"
+      - "acceptance/real-paper-benchmark/materialization.mjs"
+      - "docs/implementation/real-paper-benchmark/corpus-v1.json"
+      - ".github/workflows/rp001-materialization.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  materialize:
+    name: Rights-enforced RP001 exact artifact
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      OPENAI_API_KEY: ""
+      ADR_EXTRACTION_MODEL: ""
+      ADR_SOURCE_FAITHFUL_REVIEW_MODEL: ""
+      ADR_CODE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      ADR_RP001_ACQUISITION_DIR: .adr-benchmark/acquisition
+      ADR_RP001_OUTPUT_DIR: .adr-benchmark/rp001
+      ADR_RP001_OPERATOR_ID: rp001-github-materializer
+      ADR_RIGHTS_JURISDICTION: UNSPECIFIED
+    steps:
+      - name: Checkout exact product head
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          package-manager-cache: false
+
+      - name: Acquire exact current PMC OA PDF
+        run: node scripts/real-paper-benchmark/acquire-rp001.mjs
+
+      - name: Materialize through RA02 rights-enforced path
+        shell: bash
+        run: |
+          set -euo pipefail
+          export ADR_RP001_PDF_PATH="$PWD/.adr-benchmark/acquisition/rp001.pdf"
+          export ADR_RP001_ACQUISITION_LOCATOR="$(cat .adr-benchmark/acquisition/locator.txt)"
+          node scripts/real-paper-benchmark/materialize-rp001.mjs
+
+      - name: Assert no model execution
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const evidence = JSON.parse(fs.readFileSync('.adr-benchmark/rp001/rp001-materialization-evidence.json', 'utf8'));
+          const expected = {
+            llmInvoked: false,
+            externalModelEgress: false,
+            extractionPerformed: false,
+            automatedReviewPerformed: false
+          };
+          if (JSON.stringify(evidence.modelExecution) !== JSON.stringify(expected)) {
+            throw new Error(`unexpected model execution state: ${JSON.stringify(evidence.modelExecution)}`);
+          }
+          if (evidence.codeHeadSha !== process.env.ADR_CODE_HEAD_SHA) throw new Error('materialization code head mismatch');
+          console.log(JSON.stringify({
+            paperId: evidence.paperId,
+            codeHeadSha: evidence.codeHeadSha,
+            contentHash: evidence.source.contentHash,
+            byteLength: evidence.source.byteLength,
+            sourceArtifactRef: evidence.source.sourceArtifactRef,
+            retentionRightsDecisionRef: evidence.rights.retentionRightsDecisionRef
+          }, null, 2));
+          NODE
+
+      - name: Upload exact materialization authority world
+        uses: actions/upload-artifact@v4
+        with:
+          name: rp001-materialization-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            .adr-benchmark/rp001/
+            .adr-benchmark/acquisition/oa-response.xml
+            .adr-benchmark/acquisition/acquisition.json
+            .adr-benchmark/acquisition/locator.txt
+          if-no-files-found: error
+          retention-days: 30

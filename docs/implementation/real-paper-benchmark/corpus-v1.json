@@ -52,6 +52,16 @@
         "NITROGEN_COMPENSATORY_EFFECT",
         "DISCUSSION_TO_RECOMMENDATION_OVERREACH_RISK"
       ],
+      "exactSourceArtifactPin": {
+        "pinVersion": "adr.real-paper-source-artifact-pin.v1",
+        "mediaType": "application/pdf",
+        "sourceArtifactLogicalId": "source.paper.doi-10.3390-plants11213007.artifact.pdf",
+        "contentHash": "sha256:0e17a738d09b6d6638b103ce6a7b979cb9c7b2d9011e449ccdbc5d585dea6cab",
+        "byteLength": 6045990,
+        "identityMeaning": "EXACT_PDF_BYTES_REQUIRED_FOR_RP001_BENCHMARK_EXECUTION",
+        "mismatchDisposition": "FAIL_CLOSED_BEFORE_RIGHTS_RETENTION",
+        "authorityClaim": "BENCHMARK_SOURCE_IDENTITY_ONLY_NOT_SCIENTIFIC_AUTHORITY"
+      },
       "referenceAnnotationStatus": "PENDING_INDEPENDENT_ANNOTATION_AND_DOMAIN_EXPERT_ADJUDICATION",
       "externalProcessing": {
         "paperIsOpenAccess": true,

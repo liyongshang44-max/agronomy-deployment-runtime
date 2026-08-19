@@ -1,0 +1,43 @@
+name: ADR Real Paper Benchmark
+
+on:
+  push:
+    branches:
+      - "feat/real-paper-benchmark-v1"
+  pull_request:
+    paths:
+      - "benchmarks/real-paper-v1/**"
+      - "scripts/real-paper-benchmark/**"
+      - "acceptance/real-paper-benchmark/**"
+      - ".github/workflows/real-paper-benchmark.yml"
+      - ".github/workflows/rp001-materialization.yml"
+      - ".github/workflows/rp001-live-benchmark.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark-contract:
+    name: Real-paper benchmark contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          package-manager-cache: false
+
+      - name: Benchmark acceptance
+        run: node acceptance/real-paper-benchmark/run.mjs && node acceptance/real-paper-benchmark/recovery-export.mjs && node acceptance/real-paper-benchmark/materialization.mjs && node acceptance/real-paper-benchmark/live-runner.mjs && node acceptance/real-paper-benchmark/reference-workflow.mjs
+
+      - name: Full ADR regression
+        run: npm test
+
+  rp001-materialization:
+    name: RP001 exact materialization
+    uses: ./.github/workflows/rp001-materialization.yml

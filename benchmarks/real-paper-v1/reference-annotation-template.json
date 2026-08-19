@@ -1,0 +1,19 @@
+{
+  "annotationVersion": "adr.real-paper-reference-annotation.v1",
+  "paperId": "replace-with-corpus-paper-id",
+  "blindToAutomatedDisposition": true,
+  "adjudicator": {
+    "type": "HUMAN_OR_INDEPENDENT_REFERENCE",
+    "id": "replace-with-reference-reviewer-id",
+    "provider": null,
+    "model": null
+  },
+  "adjudications": [
+    {
+      "candidateKey": "claim-candidate.logical-id@version#sha256:...",
+      "referenceDisposition": "ACCEPT_SOURCE_FAITHFUL",
+      "defectCodes": [],
+      "rationale": "Reference-only benchmark rationale; never written into AuthorityLedger."
+    }
+  ]
+}
