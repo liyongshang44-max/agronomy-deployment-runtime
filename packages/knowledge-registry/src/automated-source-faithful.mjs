@@ -164,10 +164,11 @@ export function buildAutomatedSourceFaithfulBlindPacket({ ledger, compilationRes
   const pair = assertCandidatePair({ ledger, compilationResultRef, claimCandidateRef, sourceContextCandidateRef });
   const packet = {
     contractVersion: AUTOMATED_SOURCE_FAITHFUL_REVIEW_CONTRACT,
-    claimCandidateRef: pair.claimCandidate.ref,
-    sourceContextCandidateRef: pair.sourceContextCandidate.ref,
-    sourceArtifactRef: pair.artifact.ref,
-    sourceArtifactContentHash: pair.artifact.semanticPayload.contentHash,
+    opaqueBinding: {
+      claimCandidateSemanticHash: pair.claimCandidate.ref.semanticHash,
+      sourceContextCandidateSemanticHash: pair.sourceContextCandidate.ref.semanticHash,
+      sourceArtifactContentHash: pair.artifact.semanticPayload.contentHash
+    },
     claim: {
       claimType: pair.claimCandidate.semanticPayload.claimType,
       assertion: pair.claimCandidate.semanticPayload.assertion,
@@ -175,6 +176,7 @@ export function buildAutomatedSourceFaithfulBlindPacket({ ledger, compilationRes
     },
     sourceContext: blindContextFamilies(pair.sourceContextCandidate.semanticPayload.contextFamilies),
     blindness: {
+      authorityLogicalIdsHidden: true,
       extractorProviderHidden: true,
       extractorModelHidden: true,
       extractorConfidenceHidden: true,
