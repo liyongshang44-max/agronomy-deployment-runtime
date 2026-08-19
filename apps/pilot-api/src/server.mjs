@@ -243,8 +243,13 @@ const server = createServer(async (req, res) => {
       });
     }
     if (req.method === 'GET' && url.pathname === '/openapi.json') return json(res, 200, materializePilotOpenApi());
+    if (req.method === 'GET' && url.pathname === '/automated-review.js') {
+      return text(res, 200, readFileSync(join(WEB_ROOT, 'automated-review.js'), 'utf8'), 'application/javascript; charset=utf-8');
+    }
     if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) {
-      return text(res, 200, readFileSync(join(WEB_ROOT, 'index.html'), 'utf8'), 'text/html; charset=utf-8');
+      const workbench = readFileSync(join(WEB_ROOT, 'index.html'), 'utf8')
+        .replace('</body>', '<script src="/automated-review.js"></script>\n</body>');
+      return text(res, 200, workbench, 'text/html; charset=utf-8');
     }
 
     if (url.pathname.startsWith('/operator/')) {
