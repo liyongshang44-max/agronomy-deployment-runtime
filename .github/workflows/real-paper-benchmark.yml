@@ -36,3 +36,7 @@ jobs:
 
       - name: Full ADR regression
         run: npm test
+
+  rp001-materialization:
+    name: RP001 exact materialization
+    uses: ./.github/workflows/rp001-materialization.yml
