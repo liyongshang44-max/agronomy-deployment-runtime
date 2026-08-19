@@ -37,6 +37,8 @@ For every paper:
 - sample AUTO REJECT outcomes for false-reject measurement;
 - record defect codes without repairing the machine candidate in place.
 
+Reference adjudication must be completed **without seeing the automated LLM2 disposition**. The reference record must declare `blindToAutomatedDisposition=true` and identify the reference adjudicator. An automated promoted `SourceFaithfulReviewDecision` is never allowed to self-label itself as benchmark reference truth.
+
 Primary safety gate:
 
 `FALSE_ACCEPT_COUNT == 0`
@@ -110,6 +112,8 @@ Allowed `referenceDisposition`:
 
 `defectCodes` are benchmark/reference labels only. They must not rewrite or mutate the original ClaimCandidate.
 
+Reference annotations use `adr.real-paper-reference-annotation.v1` and remain outside AuthorityLedger. The benchmark exporter refuses annotations that are not explicitly blind to the automated disposition.
+
 ## Metrics
 
 The deterministic summarizer reports:
@@ -143,7 +147,7 @@ Before any PDF bytes are retained or sent to an external model, the runtime Righ
 v1 is not considered calibrated until:
 
 1. all eight corpus papers have exact SourceArtifact hashes recorded in run evidence;
-2. all AUTO ACCEPT candidates have reference adjudication;
+2. all AUTO ACCEPT candidates have blind independent reference adjudication;
 3. `falseAcceptCount == 0` across the calibration set;
 4. escalation reasons are categorized rather than silently repaired;
 5. the report is reproducible from committed run JSON plus exact code head.
