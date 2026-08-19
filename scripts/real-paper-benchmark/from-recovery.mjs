@@ -40,11 +40,25 @@ function automatedStatus(candidate) {
   );
 }
 
-function referenceIndex(referenceLabels) {
+function referenceIndex(referenceLabels, expectedPaperId) {
   if (!referenceLabels) return new Map();
   if (referenceLabels.annotationVersion !== 'adr.real-paper-reference-annotation.v1') {
     throw new RealPaperBenchmarkError('INVALID_REFERENCE_ANNOTATION_VERSION', 'unsupported reference annotation version');
   }
+  if (referenceLabels.blindToAutomatedDisposition !== true) {
+    throw new RealPaperBenchmarkError(
+      'REFERENCE_ANNOTATION_NOT_BLIND',
+      'reference annotation must be completed without seeing the automated disposition'
+    );
+  }
+  if (referenceLabels.paperId !== expectedPaperId) {
+    throw new RealPaperBenchmarkError('REFERENCE_ANNOTATION_PAPER_MISMATCH', 'reference annotation paperId must match benchmark paperId');
+  }
+  if (!referenceLabels.adjudicator || typeof referenceLabels.adjudicator !== 'object' || Array.isArray(referenceLabels.adjudicator)) {
+    throw new RealPaperBenchmarkError('INVALID_REFERENCE_ADJUDICATOR', 'reference adjudicator metadata is required');
+  }
+  requiredText(referenceLabels.adjudicator.type, 'reference.adjudicator.type');
+  requiredText(referenceLabels.adjudicator.id, 'reference.adjudicator.id');
   if (!Array.isArray(referenceLabels.adjudications)) {
     throw new RealPaperBenchmarkError('INVALID_REFERENCE_ANNOTATION', 'reference adjudications must be an array');
   }
@@ -71,7 +85,7 @@ export function benchmarkPaperFromRecovery({ paperId, compilation, referenceLabe
   if (!compilation || typeof compilation !== 'object' || !Array.isArray(compilation.candidates)) {
     throw new RealPaperBenchmarkError('INVALID_RECOVERY_EXPORT', 'compilation with candidates[] is required');
   }
-  const references = referenceIndex(referenceLabels);
+  const references = referenceIndex(referenceLabels, safePaperId);
   const candidates = compilation.candidates.map((candidate, index) => {
     const candidateKey = candidateIdentity(candidate, index);
     const status = automatedStatus(candidate);
