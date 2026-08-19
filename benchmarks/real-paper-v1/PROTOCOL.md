@@ -64,18 +64,58 @@ After Phase A has zero false accepts on the frozen corpus, explicitly promote ad
 
 Out of scope for this benchmark. Source-faithful automation results do not justify automated Scientific Qualification.
 
+## Run modes and exact evidence
+
+Every run declares `runMode`.
+
+`FIXTURE` is for deterministic contract acceptance only. It may omit runtime evidence and is always reported with:
+
+`exactEvidenceGate = FIXTURE_NOT_REAL_EVIDENCE`
+
+`REAL` is the only mode that may count as real-paper benchmark evidence. A REAL run is rejected unless it binds:
+
+- exact repository full name;
+- exact 40-character code head SHA;
+- `rightsEnforcement = RA02_EXACT_SUBJECT_FAIL_CLOSED`;
+- exact Source authority ref for every paper;
+- exact SourceArtifact authority ref for every paper;
+- exact PDF `contentHash`;
+- exact positive `byteLength`;
+- exact `RETAIN_FULLTEXT` RightsDecision ref.
+
+A valid REAL run reports:
+
+`exactEvidenceGate = PASS`
+
+This gate is independent from the Phase-A false-accept gate. A run can have exact execution evidence but still fail source-faithful calibration, and vice versa.
+
+`benchmarks/real-paper-v1/real-execution-evidence-template.json` is a non-authoritative template for assembling this exact evidence after the rights-enforced pilot materializes a paper.
+
 ## Run record
 
-A benchmark run JSON must use `adr.real-paper-benchmark-run.v1` and contain:
+A REAL benchmark run JSON uses `adr.real-paper-benchmark-run.v1` and has this shape:
 
 ```json
 {
   "runVersion": "adr.real-paper-benchmark-run.v1",
   "benchmarkVersion": "adr.real-paper-benchmark.v1",
+  "runMode": "REAL",
   "runId": "...",
+  "execution": {
+    "repositoryFullName": "liyongshang44-max/agronomy-deployment-runtime",
+    "codeHeadSha": "<exact 40-char SHA>",
+    "rightsEnforcement": "RA02_EXACT_SUBJECT_FAIL_CLOSED"
+  },
   "papers": [
     {
       "paperId": "RP001",
+      "evidence": {
+        "sourceRef": { "kind": "Source", "logicalId": "...", "version": "...", "semanticHash": "sha256:..." },
+        "sourceArtifactRef": { "kind": "SourceArtifact", "logicalId": "...", "version": "...", "semanticHash": "sha256:..." },
+        "contentHash": "sha256:...",
+        "byteLength": 123456,
+        "retentionRightsDecisionRef": { "kind": "RightsDecision", "logicalId": "...", "version": "...", "semanticHash": "sha256:..." }
+      },
       "candidates": [
         {
           "candidateKey": "...",
@@ -114,6 +154,14 @@ Allowed `referenceDisposition`:
 
 Reference annotations use `adr.real-paper-reference-annotation.v1` and remain outside AuthorityLedger. The benchmark exporter refuses annotations that are not explicitly blind to the automated disposition.
 
+## Recovery exporter
+
+`scripts/real-paper-benchmark/from-recovery.mjs` exports the selected compilation without re-importing or rewriting it.
+
+Without a real-execution evidence sidecar, it emits a `FIXTURE` run. With an exact evidence sidecar it emits `REAL`; the summarizer then validates code head, RA02 marker, Source/SourceArtifact refs, PDF hash/length, and retention RightsDecision before accepting the run shape.
+
+The exporter never derives benchmark reference truth from ADR's automated or human SourceFaithfulReviewDecision. Reference labels must still arrive through the separate blind annotation file.
+
 ## Metrics
 
 The deterministic summarizer reports:
@@ -146,10 +194,11 @@ Neither file grants operational rights or contains publication full text. Before
 
 The current frozen corpus is not calibrated until:
 
-1. every paper in the corpus authority has an exact SourceArtifact content hash recorded in run evidence;
-2. all AUTO ACCEPT candidates have blind independent reference adjudication;
-3. `falseAcceptCount == 0` across the frozen corpus;
-4. escalation reasons are categorized rather than silently repaired;
-5. the report is reproducible from committed run JSON plus exact code head.
+1. every paper in the corpus authority is represented by a REAL run with `exactEvidenceGate = PASS`;
+2. every REAL run binds exact RA02 code head and exact SourceArtifact content hash/byteLength;
+3. all AUTO ACCEPT candidates have blind independent reference adjudication;
+4. `falseAcceptCount == 0` across the frozen corpus;
+5. escalation reasons are categorized rather than silently repaired;
+6. the report is reproducible from committed run JSON plus exact authority refs and code head.
 
 Expansion from RP001 to additional papers is a separate explicit corpus-authority change, not an implicit side effect of discovering candidate papers.
