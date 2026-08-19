@@ -62,6 +62,51 @@ function selectRp001Upload(checkpoint) {
   return upload;
 }
 
+function exactSingleCompilation(recovery, stage) {
+  if (!Array.isArray(recovery?.compilations) || recovery.compilations.length !== 1) {
+    throw new Error(`RP001 ${stage} requires exactly one recoverable compilation, found ${recovery?.compilations?.length ?? 'invalid'}`);
+  }
+  return recovery.compilations[0];
+}
+
+function referencePacket({ compilation, executionEvidence }) {
+  const candidates = compilation.candidates.map((candidate) => {
+    if (candidate.automatedReview || candidate.review) {
+      throw new Error('reference packet must be frozen before any LLM2 or human source-faithful disposition exists');
+    }
+    return {
+      candidateKey: `${candidate.claimCandidateRef.logicalId}@${candidate.claimCandidateRef.version}#${candidate.claimCandidateRef.semanticHash}`,
+      claimCandidateRef: candidate.claimCandidateRef,
+      sourceContextCandidateRef: candidate.sourceContextCandidateRef,
+      claimType: candidate.claimType,
+      assertion: candidate.assertion,
+      sourceLocator: candidate.sourceLocator,
+      contextFamilies: candidate.contextFamilies
+    };
+  });
+  return {
+    schemaVersion: 'adr.real-paper-reference-packet.v1',
+    benchmarkVersion: 'adr.real-paper-benchmark.v1',
+    paperId: PAPER_ID,
+    codeHeadSha: CODE_HEAD,
+    blindToAutomatedDisposition: true,
+    frozenBeforeAutomatedReview: true,
+    containsAutomatedDisposition: false,
+    containsExtractionConfidence: false,
+    containsLlm1ProviderModelIdentity: false,
+    sourceEvidence: executionEvidence.paperEvidence,
+    compilationResultRef: compilation.compilationResultRef,
+    candidateCount: candidates.length,
+    candidates,
+    adjudicationContract: {
+      outputVersion: 'adr.real-paper-reference-annotation.v1',
+      allowedDispositions: ['ACCEPT_SOURCE_FAITHFUL', 'REJECT_SOURCE_FAITHFUL'],
+      machineCandidateRepairForbidden: true
+    },
+    authorityClaim: 'REFERENCE_ADJUDICATION_INPUT_ONLY_NOT_REFERENCE_TRUTH_OR_SCIENTIFIC_AUTHORITY'
+  };
+}
+
 if (!EXTERNAL_PROCESSING_AUTHORIZED) {
   throw new Error('ADR_EXTERNAL_PROCESSING_AUTHORIZED=true is required before RP001 external LLM processing');
 }
@@ -126,6 +171,25 @@ if (!extraction?.compilationResultRef || !Number.isSafeInteger(extraction?.candi
   throw new Error('LLM1 extraction did not return exact compilationResultRef and candidateCount');
 }
 
+const executionEvidence = projectRealExecutionEvidence({
+  paperId: PAPER_ID,
+  dataDir: DATA_DIR,
+  uploadId: upload.uploadId,
+  codeHeadSha: CODE_HEAD
+});
+writeFileSync(join(OUTPUT_DIR, 'real-execution-evidence.json'), `${JSON.stringify(executionEvidence, null, 2)}\n`, 'utf8');
+
+const preReviewRecovery = await requestJson(`${uploadPath}/compilations`);
+const preReviewCompilation = exactSingleCompilation(preReviewRecovery, 'pre-LLM2 reference freeze');
+if (preReviewCompilation.compilationResultRef.semanticHash !== extraction.compilationResultRef.semanticHash) {
+  throw new Error('pre-LLM2 recovery compilation differs from exact LLM1 compilation result');
+}
+const packet = referencePacket({ compilation: preReviewCompilation, executionEvidence });
+if (packet.candidateCount !== extraction.candidateCount) {
+  throw new Error(`reference packet candidate count ${packet.candidateCount} differs from LLM1 ${extraction.candidateCount}`);
+}
+writeFileSync(join(OUTPUT_DIR, 'rp001-reference-packet.json'), `${JSON.stringify(packet, null, 2)}\n`, 'utf8');
+
 const automatedReview = await requestJson(`${uploadPath}/automated-review`, {
   method: 'POST',
   body: {
@@ -139,21 +203,14 @@ writeFileSync(join(OUTPUT_DIR, 'llm2-review.json'), `${JSON.stringify(automatedR
 
 const recovery = await requestJson(`${uploadPath}/compilations`);
 writeFileSync(join(OUTPUT_DIR, 'recovery.json'), `${JSON.stringify(recovery, null, 2)}\n`, 'utf8');
-if (!Array.isArray(recovery.compilations) || recovery.compilations.length !== 1) {
-  throw new Error(`RP001 live benchmark requires exactly one recoverable compilation, found ${recovery.compilations?.length ?? 'invalid'}`);
+const postReviewCompilation = exactSingleCompilation(recovery, 'post-LLM2 benchmark export');
+if (postReviewCompilation.compilationResultRef.semanticHash !== extraction.compilationResultRef.semanticHash) {
+  throw new Error('post-LLM2 recovery compilation differs from exact LLM1 compilation result');
 }
-
-const executionEvidence = projectRealExecutionEvidence({
-  paperId: PAPER_ID,
-  dataDir: DATA_DIR,
-  uploadId: upload.uploadId,
-  codeHeadSha: CODE_HEAD
-});
-writeFileSync(join(OUTPUT_DIR, 'real-execution-evidence.json'), `${JSON.stringify(executionEvidence, null, 2)}\n`, 'utf8');
 
 const paper = benchmarkPaperFromRecovery({
   paperId: PAPER_ID,
-  compilation: recovery.compilations[0],
+  compilation: postReviewCompilation,
   referenceLabels: null,
   evidence: executionEvidence.paperEvidence
 });
@@ -182,6 +239,12 @@ const result = {
   rightsGrantRef: rights.rightsGrantRef,
   compilationResultRef: extraction.compilationResultRef,
   llm1CandidateCount: extraction.candidateCount,
+  referencePacket: {
+    schemaVersion: packet.schemaVersion,
+    candidateCount: packet.candidateCount,
+    frozenBeforeAutomatedReview: true,
+    path: 'rp001-reference-packet.json'
+  },
   llm2Batch: automatedReview,
   phaseASafetyGate: summary.phaseASafetyGate,
   referenceStatus: 'PENDING_BLIND_INDEPENDENT_REFERENCE_ADJUDICATION',
