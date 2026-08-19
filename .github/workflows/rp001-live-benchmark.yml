@@ -1,4 +1,4 @@
-name: ADR RP001 Live LLM1-LMM2 Benchmark
+name: ADR RP001 Live LLM1-LLM2 Benchmark
 
 on:
   workflow_dispatch:
@@ -104,6 +104,34 @@ jobs:
       - name: Run exact LLM1 to blind LLM2 benchmark
         run: node scripts/real-paper-benchmark/run-rp001-live.mjs
 
+      - name: Assert reference packet is blind
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const packet = JSON.parse(fs.readFileSync('.adr-benchmark/rp001-live/rp001-reference-packet.json', 'utf8'));
+          if (packet.blindToAutomatedDisposition !== true || packet.frozenBeforeAutomatedReview !== true) {
+            throw new Error('reference packet is not frozen blind before LLM2');
+          }
+          if (packet.containsAutomatedDisposition !== false || packet.containsExtractionConfidence !== false || packet.containsLlm1ProviderModelIdentity !== false) {
+            throw new Error('reference packet contains prohibited model/reviewer side channel');
+          }
+          for (const candidate of packet.candidates) {
+            for (const forbidden of ['automatedReview', 'review', 'extractionConfidence']) {
+              if (forbidden in candidate) throw new Error(`reference packet candidate contains ${forbidden}`);
+            }
+          }
+          NODE
+
+      - name: Upload blind reference packet only
+        uses: actions/upload-artifact@v4
+        with:
+          name: rp001-reference-packet-${{ github.sha }}
+          path: .adr-benchmark/rp001-live/rp001-reference-packet.json
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Stop pilot runtime
         if: always()
         shell: bash
@@ -112,7 +140,7 @@ jobs:
             kill "$(cat "$ADR_RP001_LIVE_OUTPUT_DIR/server.pid")" 2>/dev/null || true
           fi
 
-      - name: Upload pre-reference benchmark evidence
+      - name: Upload automated pre-reference benchmark evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
