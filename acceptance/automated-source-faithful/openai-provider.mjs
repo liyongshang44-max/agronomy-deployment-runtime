@@ -4,16 +4,18 @@ import {
   ADR_SOURCE_FAITHFUL_REVIEW_PROMPT_VERSION,
   ADR_SOURCE_FAITHFUL_REVIEW_PROVIDER,
   ADR_SOURCE_FAITHFUL_REVIEW_SCHEMA_VERSION,
+  ADR_SOURCE_FAITHFUL_REVIEW_UPLOAD_FILENAME,
   automatedSourceFaithfulReviewJsonSchema,
   reviewSourceFaithfulnessWithOpenAI
 } from '../../apps/pilot-api/src/review/openai-review.mjs';
 
 const blindPacket = {
   contractVersion: 'adr.automated-source-faithful-review.v1',
-  claimCandidateRef: { kind: 'ClaimCandidate', logicalId: 'claim-candidate.fixture', version: '1', semanticHash: `sha256:${'1'.repeat(64)}` },
-  sourceContextCandidateRef: { kind: 'SourceContextCandidate', logicalId: 'context-candidate.fixture', version: '1', semanticHash: `sha256:${'2'.repeat(64)}` },
-  sourceArtifactRef: { kind: 'SourceArtifact', logicalId: 'artifact.fixture', version: '1', semanticHash: `sha256:${'3'.repeat(64)}` },
-  sourceArtifactContentHash: `sha256:${'4'.repeat(64)}`,
+  opaqueBinding: {
+    claimCandidateSemanticHash: `sha256:${'1'.repeat(64)}`,
+    sourceContextCandidateSemanticHash: `sha256:${'2'.repeat(64)}`,
+    sourceArtifactContentHash: `sha256:${'4'.repeat(64)}`
+  },
   claim: {
     claimType: 'PARAMETER',
     assertion: 'Soil temperature threshold is 18 C.',
@@ -28,6 +30,7 @@ const blindPacket = {
     JURISDICTION_ECONOMIC: { status: 'NOT_REPORTED', dimensions: [] }
   },
   blindness: {
+    authorityLogicalIdsHidden: true,
     extractorProviderHidden: true,
     extractorModelHidden: true,
     extractorConfidenceHidden: true,
@@ -42,25 +45,15 @@ const output = {
   rationale: 'The candidate is completely supported by the cited source text.',
   reviewConfidence: 0.98,
   checks: {
-    ASSERTION_SUPPORT: 'PASS',
-    CONTEXT_COMPLETENESS: 'PASS',
-    EVIDENCE_COVERAGE: 'PASS',
-    CAUSALITY_FIDELITY: 'PASS',
-    TEMPORAL_FIDELITY: 'PASS',
-    POPULATION_FIDELITY: 'PASS',
-    GEOGRAPHY_FIDELITY: 'PASS',
-    MANAGEMENT_FIDELITY: 'PASS',
-    MEASUREMENT_FIDELITY: 'PASS',
-    CLAIM_ATOMICITY: 'PASS',
-    UNSUPPORTED_INFERENCE: 'PASS'
+    ASSERTION_SUPPORT: 'PASS', CONTEXT_COMPLETENESS: 'PASS', EVIDENCE_COVERAGE: 'PASS',
+    CAUSALITY_FIDELITY: 'PASS', TEMPORAL_FIDELITY: 'PASS', POPULATION_FIDELITY: 'PASS',
+    GEOGRAPHY_FIDELITY: 'PASS', MANAGEMENT_FIDELITY: 'PASS', MEASUREMENT_FIDELITY: 'PASS',
+    CLAIM_ATOMICITY: 'PASS', UNSUPPORTED_INFERENCE: 'PASS'
   },
   contextAdjudication: {
     BIOLOGICAL: [{ semanticId: 'crop.identity', valueType: 'CATEGORY', unit: null }],
     ENVIRONMENTAL: [{ semanticId: 'soil.temperature', valueType: 'DECIMAL', unit: 'C' }],
-    MANAGEMENT: [],
-    OPERATIONAL: [],
-    MEASUREMENT: [],
-    JURISDICTION_ECONOMIC: []
+    MANAGEMENT: [], OPERATIONAL: [], MEASUREMENT: [], JURISDICTION_ECONOMIC: []
   }
 };
 
@@ -68,6 +61,10 @@ const requests = [];
 const fakeFetch = async (url, options) => {
   requests.push({ url, options });
   if (url.endsWith('/files') && options.method === 'POST') {
+    const uploaded = options.body.get('file');
+    assert.equal(uploaded.name, ADR_SOURCE_FAITHFUL_REVIEW_UPLOAD_FILENAME);
+    assert.equal(uploaded.name.includes('EXTRACT_PROVIDER_A'), false);
+    assert.equal(uploaded.name.includes('extract-model-a'), false);
     return new Response(JSON.stringify({ id: 'file-review-fixture' }), { status: 200, headers: { 'content-type': 'application/json' } });
   }
   if (url.endsWith('/responses') && options.method === 'POST') {
@@ -77,7 +74,9 @@ const fakeFetch = async (url, options) => {
     assert.ok(inputText.includes('Soil temperature threshold is 18 C.'));
     assert.equal(inputText.includes('EXTRACT_PROVIDER_A'), false);
     assert.equal(inputText.includes('extract-model-a'), false);
-    assert.equal(inputText.includes('extractorConfidence'), false);
+    assert.equal(inputText.includes('0.99'), false);
+    assert.equal(inputText.includes('extractor rationale from model A'), false);
+    assert.equal(inputText.includes('claim-candidate.fixture'), false);
     const schema = body.text.format.schema;
     assert.equal(schema.properties.contextAdjudication.properties.BIOLOGICAL.minItems, 1);
     assert.equal(schema.properties.contextAdjudication.properties.MANAGEMENT.maxItems, 0);
@@ -96,7 +95,7 @@ const pdf = Buffer.from('%PDF-1.7\nreview fixture\n%%EOF');
 const result = await reviewSourceFaithfulnessWithOpenAI({
   readable: Readable.from([pdf]),
   byteLength: pdf.byteLength,
-  filename: 'review-fixture.pdf',
+  filename: 'EXTRACT_PROVIDER_A-extract-model-a-original-paper.pdf',
   blindPacket,
   model: 'review-model-b',
   apiKey: 'test-key',
@@ -115,6 +114,7 @@ assert.equal(result.reviewerMetadata.provider, ADR_SOURCE_FAITHFUL_REVIEW_PROVID
 assert.equal(result.reviewerMetadata.promptVersion, ADR_SOURCE_FAITHFUL_REVIEW_PROMPT_VERSION);
 assert.equal(result.reviewerMetadata.schemaVersion, ADR_SOURCE_FAITHFUL_REVIEW_SCHEMA_VERSION);
 assert.equal(result.reviewerMetadata.reviewMode, 'BLIND_FALSIFICATION');
+assert.equal(result.providerTrace.providerFilename, ADR_SOURCE_FAITHFUL_REVIEW_UPLOAD_FILENAME);
 assert.equal(result.providerTrace.fileDeletedAfterReview, true);
 assert.equal(requests.filter((request) => request.url.endsWith('/responses')).length, 1);
 
