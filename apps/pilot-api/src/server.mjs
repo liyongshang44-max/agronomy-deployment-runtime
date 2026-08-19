@@ -16,6 +16,7 @@ import {
   createDeterministicCompilerDefinition
 } from '../../../packages/scientific-compiler/src/index.mjs';
 import { SourceFaithfulReviewError } from '../../../packages/knowledge-registry/src/source-faithful.mjs';
+import { AutomatedSourceFaithfulReviewError } from '../../../packages/knowledge-registry/src/automated-source-faithful.mjs';
 import { materializePilotOpenApi } from '../../../packages/public-api/src/index.mjs';
 import {
   ADR_EXTRACTION_PROMPT_VERSION,
@@ -26,6 +27,13 @@ import {
 } from './extraction/openai.mjs';
 import { ManualExternalProposalImportService } from './extraction/manual-import.mjs';
 import { PilotReviewAdapter } from './review/pilot-review.mjs';
+import { PilotAutomatedSourceFaithfulReviewAdapter } from './review/automated-review.mjs';
+import { PilotAutomatedSourceFaithfulBatchService } from './review/automated-batch.mjs';
+import {
+  ADR_SOURCE_FAITHFUL_REVIEW_PROVIDER,
+  OpenAIAutomatedReviewError,
+  reviewSourceFaithfulnessWithOpenAI
+} from './review/openai-review.mjs';
 import { listRecoverableCompilations } from './recovery/compilation-recovery.mjs';
 import {
   PilotCheckpointError,
@@ -45,6 +53,7 @@ const OPERATOR_ID = process.env.ADR_OPERATOR_ID ?? 'local-pilot-operator';
 const MAX_UPLOAD_BYTES = Number(process.env.ADR_MAX_SOURCE_UPLOAD_BYTES ?? DEFAULT_MAX_SOURCE_UPLOAD_BYTES);
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY ?? '';
 const EXTRACTION_MODEL = process.env.ADR_EXTRACTION_MODEL ?? '';
+const SOURCE_FAITHFUL_REVIEW_MODEL = process.env.ADR_SOURCE_FAITHFUL_REVIEW_MODEL ?? '';
 const MAX_JSON_BYTES = 1024 * 1024;
 
 if (!Number.isSafeInteger(PORT) || PORT <= 0 || PORT > 65535) throw new Error('ADR_PORT must be a valid TCP port');
@@ -65,6 +74,12 @@ const ingestion = new PilotSourceIngestionService({
 const compiler = new ScientificCompiler({ ledger, sourceRegistry });
 const manualProposalImporter = new ManualExternalProposalImportService({ ledger, sourceRegistry, artifactStore });
 const reviewAdapter = new PilotReviewAdapter({ ledger, operatorId: OPERATOR_ID });
+const automatedReviewAdapter = new PilotAutomatedSourceFaithfulReviewAdapter({ ledger });
+const automatedReviewBatch = new PilotAutomatedSourceFaithfulBatchService({
+  ledger,
+  sourceRegistry,
+  adapter: automatedReviewAdapter
+});
 let compilerDefinition = null;
 let checkpointHash = restoredCheckpoint ? 'RESTORED_AND_VERIFIED' : 'EMPTY_RUNTIME';
 
@@ -122,7 +137,7 @@ function audit(eventId, { actorType = 'USER', channel = 'pilot-api-source-ingest
 }
 
 function uploadPath(pathname) {
-  const match = pathname.match(/^\/operator\/source-uploads\/([^/]+)(?:\/(content|finalize|extract|import-proposal|review))?$/);
+  const match = pathname.match(/^\/operator\/source-uploads\/([^/]+)(?:\/(content|finalize|extract|import-proposal|review|automated-review))?$/);
   if (!match) return null;
   return { uploadId: decodeURIComponent(match[1]), action: match[2] ?? null };
 }
@@ -134,6 +149,7 @@ function recoveryPath(pathname) {
 }
 
 function extractionConfigured() { return Boolean(OPENAI_API_KEY && EXTRACTION_MODEL); }
+function automatedReviewConfigured() { return Boolean(OPENAI_API_KEY && SOURCE_FAITHFUL_REVIEW_MODEL); }
 
 function extractionCompilerDefinition() {
   if (!extractionConfigured()) throw new OpenAIExtractionError('EXTRACTION_PROVIDER_NOT_CONFIGURED', 'OPENAI_API_KEY and ADR_EXTRACTION_MODEL are required');
@@ -166,6 +182,8 @@ function errorStatus(error) {
     return 400;
   }
   if (error instanceof OpenAIExtractionError) return error.code === 'EXTRACTION_PROVIDER_NOT_CONFIGURED' ? 503 : 502;
+  if (error instanceof OpenAIAutomatedReviewError) return 502;
+  if (error instanceof AutomatedSourceFaithfulReviewError) return 409;
   if (error instanceof ScientificCompilerError || error instanceof SourceFaithfulReviewError) return 409;
   if (error instanceof PilotCheckpointError) return 500;
   if (typeof error?.code === 'string' && error.code.includes('AUTHORITY')) return 409;
@@ -202,18 +220,36 @@ const server = createServer(async (req, res) => {
           externalProcessingAuthorizationRequired: true,
           proposalAuthority: 'PROPOSAL_ONLY'
         },
+        automatedSourceFaithfulReview: {
+          configured: automatedReviewConfigured(),
+          provider: ADR_SOURCE_FAITHFUL_REVIEW_PROVIDER,
+          model: SOURCE_FAITHFUL_REVIEW_MODEL || null,
+          mode: 'BLIND_FALSIFICATION',
+          externalProcessingAuthorizationRequired: true,
+          outputAuthority: 'PROPOSAL_ONLY_BEFORE_DETERMINISTIC_PROMOTION',
+          humanEscalation: true
+        },
         manualExternalProposalImport: {
           configured: true,
           transport: 'USER_COPY_PASTE',
           modelIdentityAuthority: 'OPERATOR_DECLARED_NOT_VERIFIED',
           proposalAuthority: 'PROPOSAL_ONLY'
         },
-        sourceFaithfulReview: { configured: true, humanDispositionRequired: true }
+        sourceFaithfulReview: {
+          configured: true,
+          humanReviewAvailable: true,
+          automatedBlindReviewAvailable: automatedReviewConfigured()
+        }
       });
     }
     if (req.method === 'GET' && url.pathname === '/openapi.json') return json(res, 200, materializePilotOpenApi());
+    if (req.method === 'GET' && url.pathname === '/automated-review.js') {
+      return text(res, 200, readFileSync(join(WEB_ROOT, 'automated-review.js'), 'utf8'), 'application/javascript; charset=utf-8');
+    }
     if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) {
-      return text(res, 200, readFileSync(join(WEB_ROOT, 'index.html'), 'utf8'), 'text/html; charset=utf-8');
+      const workbench = readFileSync(join(WEB_ROOT, 'index.html'), 'utf8')
+        .replace('</body>', '<script src="/automated-review.js"></script>\n</body>');
+      return text(res, 200, workbench, 'text/html; charset=utf-8');
     }
 
     if (url.pathname.startsWith('/operator/')) {
@@ -354,6 +390,51 @@ const server = createServer(async (req, res) => {
           authorityClaim: imported.materialized ? 'PROPOSAL_ONLY' : 'NO_AUTHORITY_MATERIALIZED'
         });
       }
+      if (parsed && req.method === 'POST' && parsed.action === 'automated-review') {
+        if (!automatedReviewConfigured()) {
+          return json(res, 503, {
+            error: 'AUTOMATED_REVIEW_PROVIDER_NOT_CONFIGURED',
+            required: ['OPENAI_API_KEY', 'ADR_SOURCE_FAITHFUL_REVIEW_MODEL']
+          });
+        }
+        const body = await readJson(req);
+        if (body.externalProcessingAuthorized !== true) {
+          return json(res, 409, {
+            error: 'EXTERNAL_MODEL_PROCESSING_AUTHORIZATION_REQUIRED',
+            message: 'externalProcessingAuthorized=true is required because automated source-faithful review sends the exact SourceArtifact to the configured external reviewer'
+          });
+        }
+        if (!body.compilationResultRef) {
+          return json(res, 400, {
+            error: 'COMPILATION_RESULT_REF_REQUIRED',
+            message: 'automated review requires exact compilationResultRef'
+          });
+        }
+        const upload = ingestion.getUpload(parsed.uploadId);
+        if (upload.state !== 'SOURCE_MATERIALIZED' || !upload.sourceArtifactRef) {
+          return json(res, 409, { error: 'SOURCE_UPLOAD_STATE_INVALID', message: `automated review requires SOURCE_MATERIALIZED, received ${upload.state}` });
+        }
+        const versionPrefix = typeof body.versionPrefix === 'string' && body.versionPrefix.trim()
+          ? body.versionPrefix.trim() : `auto-${new Date().toISOString()}`;
+        const result = await automatedReviewBatch.run({
+          sourceArtifactRef: upload.sourceArtifactRef,
+          compilationResultRef: body.compilationResultRef,
+          filename: upload.filename,
+          retryEscalated: body.retryEscalated === true,
+          versionPrefix,
+          reviewer: ({ readable, byteLength, filename, blindPacket }) => reviewSourceFaithfulnessWithOpenAI({
+            readable,
+            byteLength,
+            filename,
+            blindPacket,
+            model: SOURCE_FAITHFUL_REVIEW_MODEL,
+            apiKey: OPENAI_API_KEY
+          }),
+          onCandidateComplete: async () => { checkpointRuntime(); }
+        });
+        checkpointRuntime();
+        return json(res, 200, result);
+      }
       if (parsed && req.method === 'POST' && parsed.action === 'review') {
         const body = await readJson(req);
         const reviewed = reviewAdapter.review({
@@ -393,7 +474,8 @@ server.listen(PORT, HOST, () => {
   console.log(`Checkpoint: ${CHECKPOINT_PATH} (${checkpointHash})`);
   console.log(`Max source upload bytes: ${MAX_UPLOAD_BYTES}`);
   console.log(`Extraction provider: ${extractionConfigured() ? `${ADR_EXTRACTION_PROVIDER}/${EXTRACTION_MODEL}` : 'NOT_CONFIGURED'}`);
+  console.log(`Automated source-faithful reviewer: ${automatedReviewConfigured() ? `${ADR_SOURCE_FAITHFUL_REVIEW_PROVIDER}/${SOURCE_FAITHFUL_REVIEW_MODEL}` : 'NOT_CONFIGURED'}`);
   console.log('Manual external proposal import: ENABLED');
-  console.log('Source-faithful review: ENABLED');
+  console.log('Human source-faithful review: ENABLED');
   console.log('Authority persistence: LOCAL_CHECKPOINT_RESTART_DURABLE_V1');
 });

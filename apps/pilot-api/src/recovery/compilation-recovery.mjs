@@ -1,5 +1,6 @@
 import { sameAuthorityRef } from '../../../../packages/contracts/src/authority.mjs';
 import { AuthorityLedgerError } from '../../../../packages/provenance/src/index.mjs';
+import { adjudicateAutomatedSourceFaithfulReviewProposal } from '../../../../packages/knowledge-registry/src/automated-source-faithful.mjs';
 
 export class PilotCompilationRecoveryError extends Error {
   constructor(code, message) {
@@ -28,7 +29,39 @@ function authorityForReview(records, kind, reviewRef) {
   return matches[0] ?? null;
 }
 
-function candidatePayload(claimRecord, contextRecord, review, records) {
+function latestAutomatedProposal(proposalRecords, compilationRef, claimRef, contextRef) {
+  const matches = proposalRecords.filter((record) => {
+    const payload = record.semanticPayload;
+    return sameAuthorityRef(payload.compilationResultRef, compilationRef)
+      && sameAuthorityRef(payload.claimCandidateRef, claimRef)
+      && sameAuthorityRef(payload.sourceContextCandidateRef, contextRef);
+  });
+  if (matches.length === 0) return null;
+  return [...matches].sort((a, b) => String(a.ref.version).localeCompare(String(b.ref.version))).at(-1);
+}
+
+function automatedPayload(ledger, proposal, review) {
+  if (!proposal) return null;
+  const adjudication = adjudicateAutomatedSourceFaithfulReviewProposal({ ledger, proposalRef: proposal.ref });
+  const effectiveDisposition = adjudication.effectiveDisposition;
+  let status;
+  if (review) status = 'TERMINAL_REVIEW_MATERIALIZED';
+  else if (effectiveDisposition === 'ESCALATE_TO_HUMAN') status = 'ESCALATED_PENDING_HUMAN';
+  else status = 'PROMOTION_INCOMPLETE';
+  return {
+    proposalRef: proposal.ref,
+    proposedDisposition: proposal.semanticPayload.proposedDisposition,
+    effectiveDisposition,
+    status,
+    reasonCodes: proposal.semanticPayload.reasonCodes ?? [],
+    rationale: proposal.semanticPayload.rationale ?? null,
+    reviewConfidence: proposal.semanticPayload.reviewConfidence ?? null,
+    reviewerMetadata: proposal.semanticPayload.reviewerMetadata ?? null,
+    promotionReasons: adjudication.promotionReasons
+  };
+}
+
+function candidatePayload(ledger, claimRecord, contextRecord, review, automatedProposal, records) {
   let reviewPayload = null;
   if (review) {
     const claim = authorityForReview(records, 'Claim', review.ref);
@@ -63,6 +96,7 @@ function candidatePayload(claimRecord, contextRecord, review, records) {
     sourceLocator: claimRecord.semanticPayload.sourceLocator,
     extractionConfidence: claimRecord.semanticPayload.extractionConfidence ?? null,
     contextFamilies: contextRecord.semanticPayload.contextFamilies,
+    automatedReview: automatedPayload(ledger, automatedProposal, review),
     review: reviewPayload
   };
 }
@@ -78,7 +112,7 @@ function matchingReview(reviewRecords, compilationRef, claimRef, contextRef) {
   return [...matches].sort((a, b) => String(a.ref.version).localeCompare(String(b.ref.version))).at(-1);
 }
 
-function materializeRecoveredCompilation({ ledger, result, records, reviewRecords }) {
+function materializeRecoveredCompilation({ ledger, result, records, reviewRecords, automatedProposalRecords }) {
   const claimRefs = result.semanticPayload.claimCandidateRefs;
   const contextRefs = result.semanticPayload.sourceContextCandidateRefs;
   if (!Array.isArray(claimRefs) || !Array.isArray(contextRefs) || claimRefs.length !== contextRefs.length) {
@@ -99,7 +133,8 @@ function materializeRecoveredCompilation({ ledger, result, records, reviewRecord
       throw new PilotCompilationRecoveryError('COMPILATION_CANDIDATE_PAIR_MISMATCH', 'recovered SourceContextCandidate does not bind the paired ClaimCandidate');
     }
     const review = matchingReview(reviewRecords, result.ref, claim.ref, context.ref);
-    return candidatePayload(claim, context, review, records);
+    const automatedProposal = latestAutomatedProposal(automatedProposalRecords, result.ref, claim.ref, context.ref);
+    return candidatePayload(ledger, claim, context, review, automatedProposal, records);
   });
 
   const runMetadata = result.semanticPayload.runMetadata ?? {};
@@ -112,6 +147,8 @@ function materializeRecoveredCompilation({ ledger, result, records, reviewRecord
     reviewedCount: candidates.filter((candidate) => candidate.review).length,
     acceptedCount: candidates.filter((candidate) => candidate.review?.disposition === 'ACCEPT_SOURCE_FAITHFUL').length,
     rejectedCount: candidates.filter((candidate) => candidate.review?.disposition === 'REJECT_SOURCE_FAITHFUL').length,
+    escalatedPendingHumanCount: candidates.filter((candidate) => candidate.automatedReview?.status === 'ESCALATED_PENDING_HUMAN').length,
+    promotionIncompleteCount: candidates.filter((candidate) => candidate.automatedReview?.status === 'PROMOTION_INCOMPLETE').length,
     candidates,
     authorityClaim: 'PROPOSAL_ONLY'
   };
@@ -135,10 +172,17 @@ export function listRecoverableCompilations({ ledger, sourceArtifactRef }) {
   const snapshot = ledger.exportSnapshot();
   const records = snapshot.records;
   const reviews = records.filter((record) => record.ref.kind === 'SourceFaithfulReviewDecision');
+  const automatedProposals = records.filter((record) => record.ref.kind === 'AutomatedSourceFaithfulReviewProposal');
   const results = records
     .filter((record) => record.ref.kind === 'ScientificCompilationResult')
     .filter((record) => sameAuthorityRef(record.semanticPayload.sourceArtifactRef, artifact.ref))
-    .map((result) => materializeRecoveredCompilation({ ledger, result, records, reviewRecords: reviews }))
+    .map((result) => materializeRecoveredCompilation({
+      ledger,
+      result,
+      records,
+      reviewRecords: reviews,
+      automatedProposalRecords: automatedProposals
+    }))
     .sort((a, b) => String(b.version).localeCompare(String(a.version)));
 
   return {
