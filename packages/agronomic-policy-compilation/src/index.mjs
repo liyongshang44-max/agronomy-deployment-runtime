@@ -16,6 +16,7 @@ export {
 } from './extended-contract.mjs';
 
 export {
+  AGRONOMIC_POLICY_REQUIRED_KNOWLEDGE_USE,
   publishAgronomicPolicyCompilation,
   validateAgronomicPolicyCompilationAuthority
-} from './authority.mjs';
+} from './hardened-authority.mjs';
