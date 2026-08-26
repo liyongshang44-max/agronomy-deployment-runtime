@@ -15,11 +15,27 @@ export {
 } from './extended-contract-v1.mjs';
 
 export const AGRONOMIC_RULE_CONTRACT_VERSION_V2 = 'adr.declarative-agronomic-rule.v2';
+export const AGRONOMIC_TEMPORAL_CONSTRAINT_TARGETS = deepFreeze([
+  'RULE_EVALUATION',
+  'RULE_ACTION'
+]);
+export const AGRONOMIC_TEMPORAL_CONSTRAINT_RELATIONS = deepFreeze([
+  'NOT_BEFORE_DATE',
+  'NOT_AFTER_DATE',
+  'BEFORE_EVENT',
+  'AFTER_EVENT',
+  'MIN_OFFSET_BEFORE_EVENT',
+  'MIN_OFFSET_AFTER_EVENT',
+  'WITHIN_PERIOD_OF_EVENT'
+]);
 export const agronomicModelDefinitionHash = v1.agronomicModelDefinitionHash;
 
 const KNOWLEDGE_KINDS = new Set(['QualifiedKnowledge', 'DerivedKnowledge']);
+const TEMPORAL_TARGETS = new Set(AGRONOMIC_TEMPORAL_CONSTRAINT_TARGETS);
+const TEMPORAL_RELATIONS = new Set(AGRONOMIC_TEMPORAL_CONSTRAINT_RELATIONS);
 const HASH_RE = /^sha256:[0-9a-f]{64}$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const ISO_DURATION_RE = /^P(?:(\d+(?:\.\d+)?)Y)?(?:(\d+(?:\.\d+)?)M)?(?:(\d+(?:\.\d+)?)W)?(?:(\d+(?:\.\d+)?)D)?(?:T(?:(\d+(?:\.\d+)?)H)?(?:(\d+(?:\.\d+)?)M)?(?:(\d+(?:\.\d+)?)S)?)?$/;
 
 function text(value, name) {
   if (typeof value !== 'string' || value.trim().length === 0) {
@@ -74,24 +90,106 @@ function authorityBindings(values, name, { nonEmpty = false } = {}) {
   return deepFreeze(values.map((value, index) => authorityBinding(value, `${name}[${index}]`)));
 }
 
-function normalizeEvaluationStart(value) {
-  exactObject(value, 'evaluationStart', new Set(['date', 'authorityBindings']));
-  const date = text(value.date, 'evaluationStart.date');
+function calendarDate(value, name) {
+  const date = text(value, name);
   const parsed = DATE_RE.test(date) ? new Date(`${date}T00:00:00Z`) : null;
   if (!parsed || Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date) {
     throw new v1.AgronomicPolicyCompilationError(
-      'INVALID_AGRONOMIC_EVALUATION_START_DATE',
-      'evaluationStart.date must be a valid YYYY-MM-DD calendar date'
+      'INVALID_AGRONOMIC_TEMPORAL_DATE',
+      `${name} must be a valid YYYY-MM-DD calendar date`
     );
   }
+  return date;
+}
+
+function duration(value, name) {
+  const normalized = text(value, name);
+  const match = ISO_DURATION_RE.exec(normalized);
+  if (!match || !match.slice(1).some((part) => part !== undefined)) {
+    throw new v1.AgronomicPolicyCompilationError(
+      'INVALID_AGRONOMIC_TEMPORAL_DURATION',
+      `${name} must be a non-zero ISO-8601 duration`
+    );
+  }
+  return normalized;
+}
+
+function normalizeTemporalConstraint(value, name) {
+  exactObject(value, name, new Set([
+    'target',
+    'relation',
+    'date',
+    'eventSemanticId',
+    'duration',
+    'authorityBindings'
+  ]));
+  const target = text(value.target, `${name}.target`);
+  if (!TEMPORAL_TARGETS.has(target)) {
+    throw new v1.AgronomicPolicyCompilationError(
+      'INVALID_AGRONOMIC_TEMPORAL_TARGET',
+      `${name}.target is unsupported`
+    );
+  }
+  const relation = text(value.relation, `${name}.relation`);
+  if (!TEMPORAL_RELATIONS.has(relation)) {
+    throw new v1.AgronomicPolicyCompilationError(
+      'INVALID_AGRONOMIC_TEMPORAL_RELATION',
+      `${name}.relation is unsupported`
+    );
+  }
+  const bindings = authorityBindings(value.authorityBindings, `${name}.authorityBindings`, { nonEmpty: true });
+
+  if (relation === 'NOT_BEFORE_DATE' || relation === 'NOT_AFTER_DATE') {
+    if (value.eventSemanticId !== undefined || value.duration !== undefined) {
+      throw new v1.AgronomicPolicyCompilationError(
+        'INVALID_AGRONOMIC_TEMPORAL_CONSTRAINT',
+        `${relation} accepts date only and cannot carry eventSemanticId or duration`
+      );
+    }
+    return deepFreeze({
+      target,
+      relation,
+      date: calendarDate(value.date, `${name}.date`),
+      authorityBindings: bindings
+    });
+  }
+
+  if (value.date !== undefined) {
+    throw new v1.AgronomicPolicyCompilationError(
+      'INVALID_AGRONOMIC_TEMPORAL_CONSTRAINT',
+      `${relation} cannot carry a calendar date`
+    );
+  }
+  const eventSemanticId = text(value.eventSemanticId, `${name}.eventSemanticId`);
+
+  if (relation === 'BEFORE_EVENT' || relation === 'AFTER_EVENT') {
+    if (value.duration !== undefined) {
+      throw new v1.AgronomicPolicyCompilationError(
+        'INVALID_AGRONOMIC_TEMPORAL_CONSTRAINT',
+        `${relation} cannot carry duration; use an offset relation when a duration is source material`
+      );
+    }
+    return deepFreeze({ target, relation, eventSemanticId, authorityBindings: bindings });
+  }
+
   return deepFreeze({
-    date,
-    authorityBindings: authorityBindings(
-      value.authorityBindings,
-      'evaluationStart.authorityBindings',
-      { nonEmpty: true }
-    )
+    target,
+    relation,
+    eventSemanticId,
+    duration: duration(value.duration, `${name}.duration`),
+    authorityBindings: bindings
   });
+}
+
+function normalizeTemporalConstraints(values) {
+  if (values === undefined) return deepFreeze([]);
+  if (!Array.isArray(values)) {
+    throw new v1.AgronomicPolicyCompilationError(
+      'INVALID_AGRONOMIC_TEMPORAL_CONSTRAINT',
+      'temporalConstraints must be an array'
+    );
+  }
+  return deepFreeze(values.map((value, index) => normalizeTemporalConstraint(value, `temporalConstraints[${index}]`)));
 }
 
 function normalizeCoordinator(value) {
@@ -109,7 +207,7 @@ function normalizeCoordinator(value) {
 function stripRuleToV1(value) {
   const stripped = cloneCanonicalValue(value);
   stripped.contractVersion = v1.AGRONOMIC_RULE_CONTRACT_VERSION;
-  delete stripped.evaluationStart;
+  delete stripped.temporalConstraints;
   if (stripped.coordination && typeof stripped.coordination === 'object' && !Array.isArray(stripped.coordination)) {
     delete stripped.coordination.coordinator;
   }
@@ -123,7 +221,7 @@ function normalizeRuleV2(value) {
     'decisionType',
     'inputs',
     'evaluationCadence',
-    'evaluationStart',
+    'temporalConstraints',
     'trigger',
     'exceptions',
     'action',
@@ -142,9 +240,7 @@ function normalizeRuleV2(value) {
     ]));
   }
   const normalizedV1 = v1.normalizeDeclarativeAgronomicRule(stripRuleToV1(value));
-  const evaluationStart = value.evaluationStart === undefined
-    ? undefined
-    : normalizeEvaluationStart(value.evaluationStart);
+  const temporalConstraints = normalizeTemporalConstraints(value.temporalConstraints);
   const coordinator = value.coordination?.coordinator === undefined
     ? undefined
     : normalizeCoordinator(value.coordination.coordinator);
@@ -157,7 +253,7 @@ function normalizeRuleV2(value) {
   return deepFreeze({
     ...normalizedV1,
     contractVersion: AGRONOMIC_RULE_CONTRACT_VERSION_V2,
-    ...(evaluationStart ? { evaluationStart } : {}),
+    temporalConstraints,
     coordination: deepFreeze({
       ...normalizedV1.coordination,
       ...(coordinator ? { coordinator } : {})
