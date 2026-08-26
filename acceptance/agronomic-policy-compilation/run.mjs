@@ -45,12 +45,37 @@ function sourceProtocol(ledger) {
   });
 }
 
+function sourceArtifact(ledger, source) {
+  return ledger.publish({
+    kind: 'SourceArtifact',
+    logicalId: 'artifact.protocol.irrigation.fixture',
+    version: '1',
+    semanticPayload: {
+      sourceRef: source.ref,
+      mediaType: 'application/pdf',
+      materializationIdentity: 'acceptance-fixture',
+      contentHash: `sha256:${'f'.repeat(64)}`,
+      byteLength: 1234,
+      retention: {
+        storeKind: 'ACCEPTANCE_CONTENT_ADDRESSABLE_FIXTURE',
+        retentionId: 'acceptance:protocol-irrigation'
+      },
+      acquisition: {
+        method: 'FIXTURE',
+        acquiredAt: '2026-08-26T12:00:00.000Z'
+      }
+    },
+    audit: audit({ type: 'USER', id: 'source-curator' }, 'artifact-fixture')
+  });
+}
+
 function port(semanticId, epistemicClasses, unit = 'mm') {
   return { semanticId, valueType: 'DECIMAL', unit, epistemicClasses };
 }
 
 const env = makeEnv();
 const source = sourceProtocol(env.ledger);
+const artifact = sourceArtifact(env.ledger, source);
 const triggerKnowledge = qk(env.ledger, 'knowledge.protocol.trigger', 'Negative plant-available water persisting for two consecutive daily evaluations triggers irrigation scheduling.');
 const exceptionKnowledge = qk(env.ledger, 'knowledge.protocol.rainfall-override', 'A restorative rainfall event cancels the irrigation trigger when net plant-available water becomes positive.');
 const amountKnowledge = qk(env.ledger, 'knowledge.protocol.amount', 'Irrigation amount is based on the prior-day plant-available-water deficit.');
@@ -81,7 +106,9 @@ const model = publish(env, 'Model', 'model-protocol-water-balance', '1', modelSp
   evidenceStateRequirements: ['rainfall_mm', 'irrigation_mm', 'etmax_mm'],
   parameterSlots: [],
   calibrationRequirements: [],
+  measurementConventions: ['DAILY_WATER_BALANCE'],
   applicabilityDomain: { requiredSemanticIds: ['rainfall_mm', 'irrigation_mm', 'etmax_mm'] },
+  limitations: ['SOURCE_PROTOCOL_SPECIFIC'],
   computation: {
     methodId: 'daily-plant-available-water-budget-v1',
     definitionHash: modelDefinitionHash
@@ -192,6 +219,8 @@ const policy = publish(env, 'Policy', 'policy-protocol-irrigation', '1', policyS
     mode: 'EXTERNAL_AUTHORITY',
     authorityRefs: [triggerKnowledge.ref, exceptionKnowledge.ref, amountKnowledge.ref]
   },
+  operationalConstraints: [],
+  jurisdictionConstraints: [],
   humanGate: { mode: 'NONE' },
   fallback: { disposition: 'WAIT' },
   abstentionConditions: [],
@@ -208,6 +237,7 @@ const compilation = publishAgronomicPolicyCompilation({
     contractVersion: 'adr.agronomic-policy-compilation.v1',
     authorityClass: 'AGRONOMIC_POLICY_COMPILATION_AUTHORITY',
     sourceProtocolRefs: [source.ref],
+    sourceProtocolArtifactRefs: [artifact.ref],
     knowledgeRefs: [
       triggerKnowledge.ref,
       exceptionKnowledge.ref,
@@ -249,6 +279,7 @@ const compilation = publishAgronomicPolicyCompilation({
         'EXCEPTION',
         'MODEL_CALCULATION',
         'PERSISTENCE',
+        'SOURCE_ARTIFACT',
         'TRIGGER'
       ],
       unrepresentedElements: []
@@ -267,6 +298,8 @@ const validated = validateAgronomicPolicyCompilationAuthority({
 
 assert.equal(validated.record.ref.kind, 'AgronomicPolicyCompilation');
 assert.equal(validated.semanticPayload.losslessCoverage.status, 'COMPLETE');
+assert.equal(validated.semanticPayload.sourceProtocolArtifactRefs.length, 1);
+assert.deepEqual(validated.semanticPayload.sourceProtocolArtifactRefs[0], artifact.ref);
 assert.equal(validated.semanticPayload.rule.evaluationCadence, 'P1D');
 assert.equal(validated.semanticPayload.rule.coordination.mode, 'NOTIFY');
 assert.equal(validated.semanticPayload.rule.trigger.predicates[0].temporal.count, 2);
@@ -277,6 +310,7 @@ assert.equal(validated.semanticPayload.ruleHash, semanticHash('DeclarativeAgrono
 console.log(JSON.stringify({
   ok: true,
   compilationRef: compilation.ref,
+  sourceProtocolArtifactRef: artifact.ref,
   ruleHash,
   modelDefinitionHash,
   losslessCoverage: validated.semanticPayload.losslessCoverage,
