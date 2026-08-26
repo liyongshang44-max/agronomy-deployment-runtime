@@ -95,7 +95,7 @@ function protocolRuleV2() {
   rule.contractVersion = AGRONOMIC_RULE_CONTRACT_VERSION_V2;
   rule.temporalConstraints = [{
     target: 'RULE_EVALUATION',
-    relation: 'NOT_BEFORE_DATE',
+    relation: 'ON_OR_AFTER_DATE',
     date: '2015-05-01',
     authorityBindings: [binding(
       'EVALUATION_START_DATE',
@@ -144,7 +144,7 @@ test('v2 adds source-bound temporal constraints and named coordination coordinat
   assert.equal(normalized.evaluationCadence, 'P1D');
   assert.equal(normalized.temporalConstraints.length, 1);
   assert.equal(normalized.temporalConstraints[0].target, 'RULE_EVALUATION');
-  assert.equal(normalized.temporalConstraints[0].relation, 'NOT_BEFORE_DATE');
+  assert.equal(normalized.temporalConstraints[0].relation, 'ON_OR_AFTER_DATE');
   assert.equal(normalized.temporalConstraints[0].date, '2015-05-01');
   assert.equal(normalized.temporalConstraints[0].authorityBindings[0].role, 'EVALUATION_START_DATE');
   assert.equal(normalized.coordination.mode, 'NOTIFY');
@@ -153,18 +153,30 @@ test('v2 adds source-bound temporal constraints and named coordination coordinat
   assert.match(declarativeAgronomicRuleHash(normalized), /^sha256:[0-9a-f]{64}$/);
 });
 
-test('v2 represents an action not-before calendar boundary', () => {
-  const rule = protocolRuleV2();
-  rule.temporalConstraints = [{
+test('v2 preserves inclusive versus exclusive calendar boundaries', () => {
+  const inclusive = protocolRuleV2();
+  inclusive.temporalConstraints = [{
     target: 'RULE_ACTION',
-    relation: 'NOT_BEFORE_DATE',
+    relation: 'ON_OR_AFTER_DATE',
     date: '2015-05-05',
-    authorityBindings: [binding('ACTION_NOT_BEFORE_DATE', 'knowledge.protocol.action-not-before-date')]
+    authorityBindings: [binding('ACTION_ON_OR_AFTER_DATE', 'knowledge.protocol.action-on-or-after-date')]
   }];
-  const normalized = normalizeDeclarativeAgronomicRule(rule);
-  assert.equal(normalized.temporalConstraints[0].target, 'RULE_ACTION');
-  assert.equal(normalized.temporalConstraints[0].relation, 'NOT_BEFORE_DATE');
-  assert.equal(normalized.temporalConstraints[0].date, '2015-05-05');
+  const inclusiveNormalized = normalizeDeclarativeAgronomicRule(inclusive);
+  assert.equal(inclusiveNormalized.temporalConstraints[0].relation, 'ON_OR_AFTER_DATE');
+
+  const exclusive = protocolRuleV2();
+  exclusive.temporalConstraints = [{
+    target: 'RULE_ACTION',
+    relation: 'AFTER_DATE',
+    date: '2015-05-05',
+    authorityBindings: [binding('ACTION_AFTER_DATE', 'knowledge.protocol.action-after-date')]
+  }];
+  const exclusiveNormalized = normalizeDeclarativeAgronomicRule(exclusive);
+  assert.equal(exclusiveNormalized.temporalConstraints[0].relation, 'AFTER_DATE');
+  assert.notEqual(
+    declarativeAgronomicRuleHash(inclusiveNormalized),
+    declarativeAgronomicRuleHash(exclusiveNormalized)
+  );
 });
 
 test('v2 represents an event-relative minimum offset before an operation', () => {
@@ -186,7 +198,7 @@ test('v1 fails closed when v2-only temporalConstraints or coordinator fields are
   const temporal = protocolRule();
   temporal.temporalConstraints = [{
     target: 'RULE_EVALUATION',
-    relation: 'NOT_BEFORE_DATE',
+    relation: 'ON_OR_AFTER_DATE',
     date: '2015-05-01',
     authorityBindings: []
   }];
@@ -211,13 +223,13 @@ test('v2 calendar temporal constraint requires a valid calendar date and source 
   assert.throws(() => normalizeDeclarativeAgronomicRule(missingAuthority), /non-empty/);
 });
 
-test('v2 date relation rejects event or duration fields', () => {
+test('v2 calendar relation rejects event or duration fields', () => {
   const rule = protocolRuleV2();
   rule.temporalConstraints[0].eventSemanticId = 'operation.planting';
   assert.throws(() => normalizeDeclarativeAgronomicRule(rule), /accepts date only/);
 });
 
-test('v2 event-offset relation requires both eventSemanticId and duration', () => {
+test('v2 event-offset relation requires eventSemanticId and a non-zero duration', () => {
   const missingEvent = protocolRuleV2();
   missingEvent.temporalConstraints = [{
     target: 'RULE_ACTION',
@@ -235,6 +247,16 @@ test('v2 event-offset relation requires both eventSemanticId and duration', () =
     authorityBindings: [binding('ACTION_OFFSET', 'knowledge.protocol.offset')]
   }];
   assert.throws(() => normalizeDeclarativeAgronomicRule(missingDuration), /duration/);
+
+  const zeroDuration = protocolRuleV2();
+  zeroDuration.temporalConstraints = [{
+    target: 'RULE_ACTION',
+    relation: 'MIN_OFFSET_BEFORE_EVENT',
+    eventSemanticId: 'operation.planting',
+    duration: 'P0D',
+    authorityBindings: [binding('ACTION_OFFSET', 'knowledge.protocol.offset')]
+  }];
+  assert.throws(() => normalizeDeclarativeAgronomicRule(zeroDuration), /non-zero ISO-8601 duration/);
 });
 
 test('v2 coordinator is distinct from notification recipients and cannot exist under NONE coordination', () => {
