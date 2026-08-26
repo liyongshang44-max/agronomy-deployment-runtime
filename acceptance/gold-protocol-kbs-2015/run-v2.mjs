@@ -373,14 +373,16 @@ const rule = {
   decisionType: 'IRRIGATION_SCHEDULING',
   inputs: ['plant_available_water_mm', 'rainfall_restores_plant_available_water', 'previous_day_plant_available_water_deficit_mm'],
   evaluationCadence: 'P1D',
-  evaluationStart: {
+  temporalConstraints: [{
+    target: 'RULE_EVALUATION',
+    relation: 'NOT_BEFORE_DATE',
     date: '2015-05-01',
     authorityBindings: [{
       role: 'EVALUATION_START_DATE',
       authorityRef: knowledgeByKey.get('evaluation-start').ref,
       rationale: 'The source explicitly starts daily rainfall and irrigation recording on May 1 in the 2015 protocol.'
     }]
-  },
+  }],
   trigger: {
     logic: 'ALL',
     predicates: [{
@@ -501,7 +503,7 @@ const compilation = publishAgronomicPolicyCompilation({
     policyRef: policy.ref,
     rule,
     ruleHash,
-    transformationRationale: 'The candidate v2 rule preserves the accepted v1 trigger, persistence, exception, action, amount, notification and model semantics while adding source-bound May 1 evaluation start and Joe Simmons coordinator semantics. Protocol planning remains distinct from actual field execution.',
+    transformationRationale: 'The candidate v2 rule preserves the accepted v1 trigger, persistence, exception, action, amount, notification and model semantics while adding a source-bound temporal constraint for the May 1 evaluation boundary and source-bound Joe Simmons coordinator semantics. Protocol planning remains distinct from actual field execution.',
     losslessCoverage: {
       status: 'COMPLETE',
       coveredElements: [
@@ -538,7 +540,10 @@ const validated = validateAgronomicPolicyCompilationAuthority({ ledger: env.ledg
 assert.equal(validated.semanticPayload.rule.contractVersion, AGRONOMIC_RULE_CONTRACT_VERSION_V2);
 assert.equal(validated.semanticPayload.losslessCoverage.status, 'COMPLETE');
 assert.deepEqual(validated.semanticPayload.losslessCoverage.unrepresentedElements, []);
-assert.equal(validated.semanticPayload.rule.evaluationStart.date, '2015-05-01');
+assert.equal(validated.semanticPayload.rule.temporalConstraints.length, 1);
+assert.equal(validated.semanticPayload.rule.temporalConstraints[0].target, 'RULE_EVALUATION');
+assert.equal(validated.semanticPayload.rule.temporalConstraints[0].relation, 'NOT_BEFORE_DATE');
+assert.equal(validated.semanticPayload.rule.temporalConstraints[0].date, '2015-05-01');
 assert.equal(validated.semanticPayload.rule.coordination.coordinator.sourceLabel, 'Joe Simmons');
 assert.equal(validated.semanticPayload.rule.trigger.predicates[0].temporal.count, 2);
 assert.equal(validated.semanticPayload.rule.action.timing.offset, 'P1D');
@@ -573,7 +578,7 @@ console.log(JSON.stringify({
   claimCount: reviewed.length,
   qualifiedKnowledgeCount: knowledgeByKey.size,
   ruleContractVersion: validated.semanticPayload.rule.contractVersion,
-  evaluationStart: validated.semanticPayload.rule.evaluationStart,
+  temporalConstraints: validated.semanticPayload.rule.temporalConstraints,
   coordinator: validated.semanticPayload.rule.coordination.coordinator,
   losslessCoverage: validated.semanticPayload.losslessCoverage,
   sourceModelUnderSpecification: 'FULL_SPREADSHEET_RECURRENCE_AND_INITIAL_STATE_NOT_REPORTED',
