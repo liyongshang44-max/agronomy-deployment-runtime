@@ -1,8 +1,10 @@
 # DEC-0002 — Governed Agronomic Policy Compilation
 
-Status: **PROPOSED**
+Status: **ACCEPTED**
 
 Date: 2026-08-26
+
+Accepted: 2026-08-26
 
 ## Context
 
@@ -14,7 +16,7 @@ The existing Policy contract records `decisionLogic.methodId + definitionHash` a
 
 This gap is not a reason to collapse protocol documents, scientific knowledge, models, policies, execution and outcomes into one object.
 
-## Decision proposal
+## Decision
 
 Introduce an additive `AgronomicPolicyCompilation` authority in the Knowledge Control Plane.
 
@@ -30,7 +32,7 @@ It does **not** replace `Policy` or `Model`. The compilation records the governe
 - explicit lossless-coverage status;
 - the exact Policy management authorization and approver.
 
-The scientific-use semantics of this proposed v1 authority are intentionally fixed rather than caller-selectable:
+The scientific-use semantics of this v1 authority are intentionally fixed rather than caller-selectable:
 
 ```text
 required knowledge use = AGRONOMIC_POLICY_INPUT
@@ -38,7 +40,7 @@ required knowledge use = AGRONOMIC_POLICY_INPUT
 
 A `knowledgeRef` is therefore not accepted merely because its authority kind is named `QualifiedKnowledge` or `DerivedKnowledge`. Every predecessor must replay through the existing ADR scientific authority validator and must be current, non-superseded/non-revoked authority for `AGRONOMIC_POLICY_INPUT`. This prevents an unrelated scientific qualification, a historical authority, or a forged kind-tagged ledger record from being laundered into Policy authority.
 
-The declarative rule v1 experimental vocabulary covers:
+The declarative rule v1 vocabulary covers:
 
 - semantic input identifiers;
 - evaluation cadence;
@@ -97,7 +99,7 @@ Notification is not approval. `NOTIFY` must not silently create a human gate. `A
 8. Each model definition must have exactly one bound Model; method ID, definition hash and declared semantic ports must agree with the governed Model specification.
 9. `sourceProtocolRefs` must resolve to exact `Source` authority with `sourceType=PROTOCOL`.
 10. Model and Policy refs must pass the existing Specification authority validation chain.
-11. The v1 compilation approval reuses the exact `SPECIFICATION_MANAGE` authorization that published the bound Policy; a future accepted architecture may introduce a narrower compilation permission.
+11. The v1 compilation approval reuses the exact `SPECIFICATION_MANAGE` authorization that published the bound Policy; a future architecture decision may introduce a narrower compilation permission.
 12. `losslessCoverage=COMPLETE` is illegal when any protocol element is declared unrepresented.
 13. Incomplete representation remains explicitly `INCOMPLETE`; it cannot silently masquerade as complete deployable provenance.
 14. Every `QualifiedKnowledge` predecessor must pass `validateQualifiedKnowledgeAuthority` for the active scientific-use target `AGRONOMIC_POLICY_INPUT`; kind-tag spoofing, superseded authority, revoked authority and unrelated-use qualification are rejected.
@@ -105,7 +107,9 @@ Notification is not approval. `NOTIFY` must not silently create a human gate. `A
 
 ## Compatibility with v1.0 freeze
 
-This DEC is **PROPOSED**. It does not amend the frozen v1.0 architecture by itself. The implementation in the same Draft PR is an experimental schema-gap candidate. It must not be merged into protected `main` as normative product authority until this decision is explicitly accepted, or the implementation is reworked to fit an already-frozen authority object.
+This DEC is **ACCEPTED** as an explicit additive architecture extension to the Knowledge Control Plane. ADR v1.0 remains otherwise frozen: this decision authorizes the narrowly scoped `AgronomicPolicyCompilation` authority and the invariants stated here, but does not reopen unrelated authority boundaries or permit Source, Knowledge, Model, Policy, runtime, execution or Outcome semantics to collapse into one object.
+
+The implementation governed by this decision becomes normative repository authority only after its acceptance checks pass on the exact PR head and the accepted change is merged into protected `main`.
 
 ## Rejected alternatives
 
@@ -123,7 +127,7 @@ Rejected because a ledger record can carry the right kind label without satisfyi
 
 ### Let the caller choose any knowledge use
 
-Rejected for the proposed v1 contract. `AgronomicPolicyCompilation` has one fixed purpose, so its predecessor knowledge must be qualified for `AGRONOMIC_POLICY_INPUT`; allowing arbitrary caller-selected use labels would make it easier to launder unrelated scientific authority into a Policy.
+Rejected for the v1 contract. `AgronomicPolicyCompilation` has one fixed purpose, so its predecessor knowledge must be qualified for `AGRONOMIC_POLICY_INPUT`; allowing arbitrary caller-selected use labels would make it easier to launder unrelated scientific authority into a Policy.
 
 ### Rewrite source Claims into operational rules
 
@@ -145,7 +149,7 @@ Positive:
 
 Costs:
 
-- one proposed authority type and declarative vocabulary;
+- one additional authority type and declarative vocabulary;
 - additional governance/audit validation;
-- every compilation publication and replay now traverses the full scientific authority chain for its knowledge predecessors;
-- architecture acceptance is required before merge because v1.0 is frozen.
+- every compilation publication and replay traverses the full scientific authority chain for its knowledge predecessors;
+- future changes to this authority boundary require a new explicit architecture decision rather than silent schema drift.
