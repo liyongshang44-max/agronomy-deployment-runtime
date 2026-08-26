@@ -178,11 +178,11 @@ const claimSpecs = [
   }
 ];
 
-function port(semanticId, epistemicClasses, unit) {
+function port(semanticId, epistemicClasses, unit = '1') {
   return {
     semanticId,
-    valueType: unit ? 'DECIMAL' : 'BOOLEAN',
-    ...(unit ? { unit } : {}),
+    valueType: unit === '1' ? 'BOOLEAN' : 'DECIMAL',
+    unit,
     epistemicClasses
   };
 }
