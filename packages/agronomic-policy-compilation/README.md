@@ -1,6 +1,6 @@
 # Agronomic Policy Compilation
 
-This package is an experimental candidate for governed operationalization of agronomic knowledge into deployable `Model` + `Policy` semantics. It does not collapse Source, Knowledge, Model, Policy, execution, or Outcome authority boundaries.
+This package provides the governed operationalization layer for turning qualified agronomic knowledge and exact protocol material into inspectable `Model` + `Policy` semantics. It does not collapse Source, Knowledge, Model, Policy, execution, or Outcome authority boundaries.
 
 Core invariants:
 
@@ -18,8 +18,8 @@ Core invariants:
 - Notification and approval are distinct: `NOTIFY` does not imply a human approval gate; `APPROVAL_REQUIRED` requires one.
 - Field execution and later outcomes remain outside this package.
 
-The v1 experimental declarative vocabulary covers semantic inputs, evaluation cadence, trigger predicates, thresholds, temporal persistence/windows, exceptions/overrides, action timing, parameter expressions, coordination, fallback, human gate, limitations, and exact knowledge authority bindings.
+The v1 declarative vocabulary covers semantic inputs, evaluation cadence, trigger predicates, thresholds, temporal persistence/windows, exceptions/overrides, action timing, parameter expressions, coordination, fallback, human gate, limitations, and exact knowledge authority bindings.
 
 The package public entry point routes publication and validation through the scientific-authority hardening layer. The lower-level implementation module is not a supported public authority boundary.
 
-Architecture status: `DEC-0002` is **PROPOSED**. ADR v1.0 remains frozen. This package is therefore a schema-gap candidate and must not be treated as merged normative product authority until the decision is explicitly accepted or the design is folded into an already-frozen authority object.
+Architecture status: `DEC-0002` is **ACCEPTED**. This package is the accepted additive `AgronomicPolicyCompilation` authority for the ADR Knowledge Control Plane once the exact accepted implementation is merged into protected `main`. ADR v1.0 remains otherwise frozen; this decision does not reopen unrelated authority boundaries.
