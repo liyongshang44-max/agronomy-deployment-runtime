@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - 'packages/agronomic-policy-compilation/**'
+      - 'acceptance/agronomic-policy-compilation/**'
+      - 'docs/decisions/DEC-0002-AGRONOMIC-POLICY-COMPILATION.md'
       - '.github/workflows/agronomic-policy-compilation.yml'
 
 permissions:
@@ -24,3 +26,5 @@ jobs:
         run: npm run check:constitution
       - name: Agronomic policy compilation contract tests
         run: node --test packages/agronomic-policy-compilation/test/*.test.mjs
+      - name: Agronomic policy compilation authority acceptance
+        run: node acceptance/agronomic-policy-compilation/run.mjs
