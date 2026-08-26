@@ -12,3 +12,8 @@ export {
   normalizeAgronomicPolicyCompilation,
   normalizeDeclarativeAgronomicRule
 } from './contract.mjs';
+
+export {
+  publishAgronomicPolicyCompilation,
+  validateAgronomicPolicyCompilationAuthority
+} from './authority.mjs';
