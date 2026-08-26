@@ -88,6 +88,35 @@ function ruleSemanticDependencies(rule) {
   return [...semanticIds].sort();
 }
 
+function assertProtocolArtifactClosure(ledger, normalized) {
+  const coveredSourceKeys = new Set();
+  for (const artifactRef of normalized.sourceProtocolArtifactRefs) {
+    const artifact = ledger.resolve(artifactRef);
+    if (artifact.ref.kind !== 'SourceArtifact') {
+      throw new AgronomicPolicyCompilationError(
+        'AGRONOMIC_POLICY_COMPILATION_PROTOCOL_ARTIFACT_REQUIRED',
+        'sourceProtocolArtifactRefs must resolve to SourceArtifact authority'
+      );
+    }
+    const sourceRef = artifact.semanticPayload?.sourceRef;
+    const source = normalized.sourceProtocolRefs.find((candidate) => sourceRef && sameAuthorityRef(candidate, sourceRef));
+    if (!source) {
+      throw new AgronomicPolicyCompilationError(
+        'AGRONOMIC_POLICY_COMPILATION_SOURCE_ARTIFACT_SOURCE_MISMATCH',
+        'every protocol SourceArtifact must bind one exact Source listed in sourceProtocolRefs'
+      );
+    }
+    coveredSourceKeys.add(exactRefKey(source));
+  }
+  const uncovered = normalized.sourceProtocolRefs.filter((sourceRef) => !coveredSourceKeys.has(exactRefKey(sourceRef)));
+  if (uncovered.length > 0) {
+    throw new AgronomicPolicyCompilationError(
+      'AGRONOMIC_POLICY_COMPILATION_PROTOCOL_SOURCE_ARTIFACT_MISSING',
+      'every protocol Source must have at least one exact SourceArtifact predecessor'
+    );
+  }
+}
+
 function assertKnowledgeClosure(normalized) {
   const allowed = new Set(normalized.knowledgeRefs.map(exactRefKey));
   for (const binding of [...ruleAuthorityBindings(normalized.rule), ...modelAuthorityBindings(normalized.modelDefinitions)]) {
@@ -256,6 +285,7 @@ function validateCompilationWorld(ledger, normalized) {
       );
     }
   }
+  assertProtocolArtifactClosure(ledger, normalized);
 
   const policyAuthority = validateSpecificationAuthority({ ledger, specificationRef: normalized.policyRef });
   const policyPayload = policyAuthority.semanticPayload;
