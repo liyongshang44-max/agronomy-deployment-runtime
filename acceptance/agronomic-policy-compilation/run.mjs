@@ -2,12 +2,17 @@ import assert from 'node:assert/strict';
 
 import { semanticHash } from '../../packages/canonicalization/src/index.mjs';
 import {
+  AGRONOMIC_POLICY_REQUIRED_KNOWLEDGE_USE,
+  AgronomicPolicyCompilationError,
   agronomicModelDefinitionHash,
   declarativeAgronomicRuleHash,
   publishAgronomicPolicyCompilation,
   validateAgronomicPolicyCompilationAuthority
 } from '../../packages/agronomic-policy-compilation/src/index.mjs';
+import { createPrincipal, publishBuiltinRoleAssignment } from '../../packages/authorization/src/index.mjs';
+import { ExactArtifactStore, SourceRegistry } from '../../packages/source-registry/src/index.mjs';
 import { validateSpecificationAuthority } from '../../packages/specification-registry/src/index.mjs';
+import { makeQualifiedKnowledge } from '../derived-knowledge/fixture.mjs';
 import {
   audit,
   makeEnv,
@@ -17,56 +22,15 @@ import {
   publish
 } from '../specification/fixture.mjs';
 
-function qk(ledger, logicalId, assertion) {
-  return ledger.publish({
-    kind: 'QualifiedKnowledge',
-    logicalId,
-    version: '1',
-    semanticPayload: {
-      assertion,
-      authorityClass: 'SCIENTIFIC_USE_AUTHORITY',
-      allowedUses: [{ use: 'AGRONOMIC_POLICY_INPUT' }]
-    },
-    audit: audit({ type: 'USER', id: 'agronomist' }, 'knowledge-fixture')
-  });
-}
-
-function sourceProtocol(ledger) {
-  return ledger.publish({
-    kind: 'Source',
-    logicalId: 'source.protocol.irrigation.fixture',
-    version: '1',
-    semanticPayload: {
-      sourceType: 'PROTOCOL',
-      title: 'Agronomic irrigation protocol fixture',
-      ownership: { organizationId: 'org-a', tenantId: 'tenant-a' }
-    },
-    audit: audit({ type: 'USER', id: 'source-curator' }, 'source-fixture')
-  });
-}
-
-function sourceArtifact(ledger, source) {
-  return ledger.publish({
-    kind: 'SourceArtifact',
-    logicalId: 'artifact.protocol.irrigation.fixture',
-    version: '1',
-    semanticPayload: {
-      sourceRef: source.ref,
-      mediaType: 'application/pdf',
-      materializationIdentity: 'acceptance-fixture',
-      contentHash: `sha256:${'f'.repeat(64)}`,
-      byteLength: 1234,
-      retention: {
-        storeKind: 'ACCEPTANCE_CONTENT_ADDRESSABLE_FIXTURE',
-        retentionId: 'acceptance:protocol-irrigation'
-      },
-      acquisition: {
-        method: 'FIXTURE',
-        acquiredAt: '2026-08-26T12:00:00.000Z'
-      }
-    },
-    audit: audit({ type: 'USER', id: 'source-curator' }, 'artifact-fixture')
-  });
+function expectCompilationError(fn, code) {
+  let caught;
+  try {
+    fn();
+  } catch (error) {
+    caught = error;
+  }
+  assert.ok(caught instanceof AgronomicPolicyCompilationError, `expected AgronomicPolicyCompilationError, got ${caught?.constructor?.name ?? 'no error'}`);
+  assert.equal(caught.code, code);
 }
 
 function port(semanticId, epistemicClasses, unit = 'mm') {
@@ -74,13 +38,82 @@ function port(semanticId, epistemicClasses, unit = 'mm') {
 }
 
 const env = makeEnv();
-const source = sourceProtocol(env.ledger);
-const artifact = sourceArtifact(env.ledger, source);
-const triggerKnowledge = qk(env.ledger, 'knowledge.protocol.trigger', 'Negative plant-available water persisting for two consecutive daily evaluations triggers irrigation scheduling.');
-const exceptionKnowledge = qk(env.ledger, 'knowledge.protocol.rainfall-override', 'A restorative rainfall event cancels the irrigation trigger when net plant-available water becomes positive.');
-const amountKnowledge = qk(env.ledger, 'knowledge.protocol.amount', 'Irrigation amount is based on the prior-day plant-available-water deficit.');
-const coordinationKnowledge = qk(env.ledger, 'knowledge.protocol.coordination', 'The irrigation schedule is communicated to designated staff by email.');
-const balanceKnowledge = qk(env.ledger, 'knowledge.protocol.balance', 'Rainfall and irrigation are water-budget credits and evapotranspiration is a debit.');
+env.sourceRegistry = new SourceRegistry({ ledger: env.ledger, artifactStore: new ExactArtifactStore() });
+env.approver = createPrincipal({
+  principalId: 'agronomic-policy-scientific-approver',
+  type: 'USER',
+  organizationId: 'org-a',
+  tenantId: 'tenant-a'
+});
+env.approverRole = publishBuiltinRoleAssignment({
+  ledger: env.ledger,
+  logicalId: 'role.agronomic-policy.scientific-approver',
+  version: '1',
+  principal: env.approver,
+  role: 'SCIENTIFIC_APPROVER',
+  scope: { organizationId: 'org-a', tenantId: 'tenant-a' },
+  audit: audit({ type: 'USER', id: 'iam-admin' }, 'agronomic-policy-science-role')
+});
+
+const source = env.sourceRegistry.registerSource({
+  logicalId: 'source.protocol.irrigation.fixture',
+  version: '1',
+  sourceType: 'PROTOCOL',
+  title: 'Agronomic irrigation protocol fixture',
+  ownership: { organizationId: 'org-a', tenantId: 'tenant-a' },
+  audit: audit({ type: 'USER', id: 'source-curator' }, 'source-fixture')
+});
+const artifact = env.sourceRegistry.materializeArtifact({
+  logicalId: 'artifact.protocol.irrigation.fixture',
+  version: '1',
+  sourceRef: source.ref,
+  bytes: Buffer.from([
+    'Daily rainfall and irrigation are water-budget credits and ETmax is a debit.',
+    'When plant-available water is negative for two consecutive daily evaluations, schedule irrigation the next day.',
+    'A restorative rainfall event cancels the pending irrigation schedule.',
+    'Irrigation amount is based on the prior-day plant-available-water deficit.',
+    'Notify designated staff of the irrigation schedule.'
+  ].join(' '), 'utf8'),
+  mediaType: 'text/plain',
+  materializationIdentity: 'agronomic-protocol-authority-fixture',
+  acquisition: { method: 'FIXTURE', acquiredAt: '2026-08-26T12:00:00.000Z' },
+  audit: audit({ type: 'USER', id: 'source-curator' }, 'artifact-fixture')
+});
+
+function qualified(label, assertion, useTarget = AGRONOMIC_POLICY_REQUIRED_KNOWLEDGE_USE) {
+  return makeQualifiedKnowledge(env, {
+    label: `agronomic-policy-${label}`,
+    assertion,
+    useTarget
+  });
+}
+
+const triggerBundle = qualified(
+  'trigger',
+  'Negative plant-available water persisting for two consecutive daily evaluations triggers irrigation scheduling.'
+);
+const exceptionBundle = qualified(
+  'rainfall-override',
+  'A restorative rainfall event cancels the irrigation trigger when net plant-available water becomes positive.'
+);
+const amountBundle = qualified(
+  'amount',
+  'Irrigation amount is based on the prior-day plant-available-water deficit.'
+);
+const coordinationBundle = qualified(
+  'coordination',
+  'The irrigation schedule is communicated to designated staff by email.'
+);
+const balanceBundle = qualified(
+  'balance',
+  'Rainfall and irrigation are water-budget credits and evapotranspiration is a debit.'
+);
+
+const triggerKnowledge = triggerBundle.knowledge;
+const exceptionKnowledge = exceptionBundle.knowledge;
+const amountKnowledge = amountBundle.knowledge;
+const coordinationKnowledge = coordinationBundle.knowledge;
+const balanceKnowledge = balanceBundle.knowledge;
 
 const modelDefinition = {
   type: 'DAILY_WATER_BALANCE',
@@ -235,65 +268,67 @@ const compilationApprover = {
   tenantId: manager.tenantId
 };
 
+const compilationInput = {
+  contractVersion: 'adr.agronomic-policy-compilation.v1',
+  authorityClass: 'AGRONOMIC_POLICY_COMPILATION_AUTHORITY',
+  sourceProtocolRefs: [source.ref],
+  sourceProtocolArtifactRefs: [artifact.ref],
+  knowledgeRefs: [
+    triggerKnowledge.ref,
+    exceptionKnowledge.ref,
+    amountKnowledge.ref,
+    coordinationKnowledge.ref,
+    balanceKnowledge.ref
+  ],
+  modelRefs: [model.ref],
+  modelDefinitions: [{
+    modelRef: model.ref,
+    semanticRole: 'PLANT_AVAILABLE_WATER_STATE',
+    methodId: 'daily-plant-available-water-budget-v1',
+    inputSemanticIds: ['rainfall_mm', 'irrigation_mm', 'etmax_mm'],
+    outputSemanticIds: [
+      'plant_available_water_mm',
+      'net_plant_available_water_mm',
+      'previous_day_plant_available_water_deficit_mm'
+    ],
+    definition: modelDefinition,
+    definitionHash: modelDefinitionHash,
+    authorityBindings: [{
+      role: 'WATER_BALANCE_RELATIONSHIP',
+      authorityRef: balanceKnowledge.ref,
+      rationale: 'The model definition makes the protocol water-budget credit/debit relation inspectable.'
+    }]
+  }],
+  policyRef: policy.ref,
+  rule,
+  ruleHash,
+  transformationRationale: 'Source-faithful operational elements are separated into governed Model and Policy semantics; ADR fallback is explicitly marked as governance rather than source assertion.',
+  losslessCoverage: {
+    status: 'COMPLETE',
+    coveredElements: [
+      'ACTION',
+      'ACTION_AMOUNT',
+      'ACTION_TIMING',
+      'COORDINATION',
+      'EVALUATION_CADENCE',
+      'EXCEPTION',
+      'MODEL_CALCULATION',
+      'PERSISTENCE',
+      'SOURCE_ARTIFACT',
+      'TRIGGER'
+    ],
+    unrepresentedElements: []
+  },
+  approverPrincipal: compilationApprover,
+  approvalRef: policyAuthority.managementAuthorization.ref,
+  limitations: ['PROTOCOL_PLANNING_AUTHORITY_NOT_EXECUTION_EVIDENCE']
+};
+
 const compilation = publishAgronomicPolicyCompilation({
   ledger: env.ledger,
   logicalId: 'compilation.protocol.irrigation',
   version: '1',
-  compilation: {
-    contractVersion: 'adr.agronomic-policy-compilation.v1',
-    authorityClass: 'AGRONOMIC_POLICY_COMPILATION_AUTHORITY',
-    sourceProtocolRefs: [source.ref],
-    sourceProtocolArtifactRefs: [artifact.ref],
-    knowledgeRefs: [
-      triggerKnowledge.ref,
-      exceptionKnowledge.ref,
-      amountKnowledge.ref,
-      coordinationKnowledge.ref,
-      balanceKnowledge.ref
-    ],
-    modelRefs: [model.ref],
-    modelDefinitions: [{
-      modelRef: model.ref,
-      semanticRole: 'PLANT_AVAILABLE_WATER_STATE',
-      methodId: 'daily-plant-available-water-budget-v1',
-      inputSemanticIds: ['rainfall_mm', 'irrigation_mm', 'etmax_mm'],
-      outputSemanticIds: [
-        'plant_available_water_mm',
-        'net_plant_available_water_mm',
-        'previous_day_plant_available_water_deficit_mm'
-      ],
-      definition: modelDefinition,
-      definitionHash: modelDefinitionHash,
-      authorityBindings: [{
-        role: 'WATER_BALANCE_RELATIONSHIP',
-        authorityRef: balanceKnowledge.ref,
-        rationale: 'The model definition makes the protocol water-budget credit/debit relation inspectable.'
-      }]
-    }],
-    policyRef: policy.ref,
-    rule,
-    ruleHash,
-    transformationRationale: 'Source-faithful operational elements are separated into governed Model and Policy semantics; ADR fallback is explicitly marked as governance rather than source assertion.',
-    losslessCoverage: {
-      status: 'COMPLETE',
-      coveredElements: [
-        'ACTION',
-        'ACTION_AMOUNT',
-        'ACTION_TIMING',
-        'COORDINATION',
-        'EVALUATION_CADENCE',
-        'EXCEPTION',
-        'MODEL_CALCULATION',
-        'PERSISTENCE',
-        'SOURCE_ARTIFACT',
-        'TRIGGER'
-      ],
-      unrepresentedElements: []
-    },
-    approverPrincipal: compilationApprover,
-    approvalRef: policyAuthority.managementAuthorization.ref,
-    limitations: ['PROTOCOL_PLANNING_AUTHORITY_NOT_EXECUTION_EVIDENCE']
-  },
+  compilation: compilationInput,
   audit: audit({ type: compilationApprover.type, id: compilationApprover.principalId }, 'agronomic-compilation')
 });
 
@@ -313,10 +348,50 @@ assert.equal(validated.semanticPayload.rule.action.timing.offset, 'P1D');
 assert.equal(validated.semanticPayload.modelDefinitions[0].definitionHash, modelDefinitionHash);
 assert.equal(validated.semanticPayload.ruleHash, semanticHash('DeclarativeAgronomicRule', validated.semanticPayload.rule));
 
+const forgedKnowledge = env.ledger.publish({
+  kind: 'QualifiedKnowledge',
+  logicalId: 'knowledge.zzz-forged-policy-input',
+  version: '1',
+  semanticPayload: {
+    authorityClass: 'SCIENTIFIC_USE_AUTHORITY',
+    assertion: 'This record has the right kind tag but no source-faithful or qualification authority chain.',
+    allowedUses: [AGRONOMIC_POLICY_REQUIRED_KNOWLEDGE_USE]
+  },
+  audit: audit({ type: 'USER', id: 'forger' }, 'forged-knowledge')
+});
+const forgedInput = structuredClone(compilationInput);
+forgedInput.knowledgeRefs = [...forgedInput.knowledgeRefs, forgedKnowledge.ref];
+expectCompilationError(() => publishAgronomicPolicyCompilation({
+  ledger: env.ledger,
+  logicalId: 'compilation.protocol.irrigation.forged-knowledge',
+  version: '1',
+  compilation: forgedInput,
+  audit: audit({ type: compilationApprover.type, id: compilationApprover.principalId }, 'agronomic-compilation-forged')
+}), 'AGRONOMIC_POLICY_COMPILATION_KNOWLEDGE_AUTHORITY_INVALID');
+
+const wrongUseKnowledge = qualified(
+  'wrong-use',
+  'This real QualifiedKnowledge is deliberately qualified for a different scientific use.',
+  { use: 'OTHER_SCIENTIFIC_USE' }
+).knowledge;
+const wrongUseInput = structuredClone(compilationInput);
+wrongUseInput.knowledgeRefs = [...wrongUseInput.knowledgeRefs, wrongUseKnowledge.ref];
+expectCompilationError(() => publishAgronomicPolicyCompilation({
+  ledger: env.ledger,
+  logicalId: 'compilation.protocol.irrigation.wrong-use',
+  version: '1',
+  compilation: wrongUseInput,
+  audit: audit({ type: compilationApprover.type, id: compilationApprover.principalId }, 'agronomic-compilation-wrong-use')
+}), 'AGRONOMIC_POLICY_COMPILATION_KNOWLEDGE_AUTHORITY_INVALID');
+
 console.log(JSON.stringify({
   ok: true,
   compilationRef: compilation.ref,
   sourceProtocolArtifactRef: artifact.ref,
+  requiredKnowledgeUse: AGRONOMIC_POLICY_REQUIRED_KNOWLEDGE_USE,
+  knowledgeAuthorityCount: compilationInput.knowledgeRefs.length,
+  forgedKindTagDenied: true,
+  wrongScientificUseDenied: true,
   ruleHash,
   modelDefinitionHash,
   losslessCoverage: validated.semanticPayload.losslessCoverage,
