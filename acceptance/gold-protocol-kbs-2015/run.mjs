@@ -49,6 +49,10 @@ const OWNERSHIP = { organizationId: 'org-a', tenantId: 'tenant-a' };
 const PDF_PAGE = 23;
 const EXPECTED_TRANSCRIPTION_HASH = 'sha256:8d18c0fcc5a2b536d675e9b1cdafc16fbeedb19204b67c11ae81f887844f71d9';
 const SOURCE_LOCATOR = 'current_agronomic_protocol.pdf#page=23';
+const EXPECTED_SCHEMA_GAPS = [
+  'COORDINATION_COORDINATOR',
+  'EVALUATION_START_DATE'
+];
 
 function locator(evidenceText) {
   return {
@@ -135,6 +139,12 @@ const claimSpecs = [
     evidenceText: 'evapotranspiration (ET) is recorded as a debit to the soil'
   },
   {
+    key: 'evaluation-start',
+    claimType: 'BOUNDARY_CONSTRAINT',
+    assertion: 'For the 2015 Resource Gradient Experiment irrigation protocol, daily recording of rainfall and irrigation events starts on May 1.',
+    evidenceText: 'Starting on May 1, LTER staff will record rainfall and irrigation events'
+  },
+  {
     key: 'daily-paw',
     claimType: 'RELATIONSHIP',
     assertion: 'Using recorded rainfall and irrigation inputs together with modeled daily ETmax, the spreadsheet calculates a daily estimate of plant available water in millimeters.',
@@ -169,6 +179,12 @@ const claimSpecs = [
     claimType: 'OPERATIONAL_RECOMMENDATION',
     assertion: 'Scheduled irrigation events are communicated by e-mail to key investigators and LTER staff.',
     evidenceText: 'Communication of scheduled irrigation events to key investigators and LTER staff will occur via e-mail'
+  },
+  {
+    key: 'email-coordinator',
+    claimType: 'OPERATIONAL_RECOMMENDATION',
+    assertion: 'Communication of scheduled irrigation events is coordinated by Joe Simmons.',
+    evidenceText: 'will be coordinated by Joe Simmons'
   },
   {
     key: 'planning-not-execution',
@@ -408,6 +424,9 @@ const modelDefinition = {
   derivedOutputs: [
     'rainfall_restores_plant_available_water',
     'previous_day_plant_available_water_deficit_mm'
+  ],
+  sourceLimitations: [
+    'THE_PROTOCOL_DOES_NOT_REPORT_THE_FULL_SPREADSHEET_RECURRENCE_OR_INITIAL_STATE'
   ]
 };
 const modelDefinitionHash = agronomicModelDefinitionHash(modelDefinition);
@@ -433,7 +452,8 @@ const model = publish(env, 'Model', 'model.gold.kbs-2015-water-budget', '1', mod
   },
   limitations: [
     'KBS_2015_RESOURCE_GRADIENT_EXPERIMENT_PROTOCOL',
-    'MODEL_DEFINITION_REPRESENTS_PROTOCOL_LOGIC_NOT_FIELD_EXECUTION'
+    'MODEL_DEFINITION_REPRESENTS_PROTOCOL_LOGIC_NOT_FIELD_EXECUTION',
+    'FULL_SPREADSHEET_RECURRENCE_AND_INITIAL_STATE_NOT_REPORTED_BY_SOURCE'
   ],
   computation: {
     methodId: 'kbs-2015-rge-daily-water-budget-v1',
@@ -498,7 +518,15 @@ const rule = {
   coordination: {
     mode: 'NOTIFY',
     channel: 'EMAIL',
-    participants: ['KEY_INVESTIGATORS', 'LTER_STAFF'],
+    participants: [
+      'Stacey Vanderwulp',
+      'Kevin Kahmark',
+      'Neville Millar',
+      'Iurii Shcherbak',
+      'Justin Kunkle',
+      'Bruno Basso',
+      'Phil Robertson'
+    ],
     authorityBindings: [{
       role: 'SCHEDULE_COMMUNICATION',
       authorityRef: knowledgeByKey.get('email-coordination').ref,
@@ -510,7 +538,9 @@ const rule = {
   limitations: [
     'KBS_2015_RESOURCE_GRADIENT_EXPERIMENT_PROTOCOL',
     'ACTION_AMOUNT_COPY_IS_GOVERNED_OPERATIONALIZATION_JUDGMENT',
-    'WAIT_FALLBACK_IS_ADR_GOVERNANCE_NOT_SOURCE_ASSERTION'
+    'WAIT_FALLBACK_IS_ADR_GOVERNANCE_NOT_SOURCE_ASSERTION',
+    'V1_RULE_CONTRACT_HAS_NO_STRUCTURED_EVALUATION_START_DATE',
+    'V1_COORDINATION_CONTRACT_HAS_NO_STRUCTURED_COORDINATOR_ROLE'
   ]
 };
 const ruleHash = declarativeAgronomicRuleHash(rule);
@@ -557,7 +587,9 @@ const policy = publish(env, 'Policy', 'policy.gold.kbs-2015-rge-irrigation', '1'
   abstentionConditions: [],
   limitations: [
     'KBS_2015_RESOURCE_GRADIENT_EXPERIMENT_PROTOCOL',
-    'PROTOCOL_IS_PLANNING_AUTHORITY_NOT_EXECUTION_EVIDENCE'
+    'PROTOCOL_IS_PLANNING_AUTHORITY_NOT_EXECUTION_EVIDENCE',
+    'EVALUATION_START_DATE_REMAINS_UNREPRESENTED_IN_POLICY_V1',
+    'COMMUNICATION_COORDINATOR_REMAINS_UNREPRESENTED_IN_POLICY_V1'
   ]
 }));
 
@@ -613,32 +645,38 @@ const compilation = publishAgronomicPolicyCompilation({
       'Source assertions are independently published as QualifiedKnowledge for AGRONOMIC_POLICY_INPUT before operationalization.',
       'Water-budget semantics remain Model authority; trigger, exception, action timing, amount basis and coordination remain Policy authority.',
       'COPY of prior-day deficit and WAIT fallback are explicit ADR operationalization judgments and are not laundered into source claims.',
+      'The source explicitly starts daily recording on May 1, but the accepted v1 declarative rule has no structured policy-active/start-date field.',
+      'The source explicitly assigns Joe Simmons as communication coordinator, but the accepted v1 coordination contract has no coordinator role field.',
+      'Therefore this first real-source benchmark is intentionally INCOMPLETE rather than claiming lossless representation.',
       'The source itself says the protocol is for planning and that actual operations must be checked in the agronomic field log.'
     ].join(' '),
     losslessCoverage: {
-      status: 'COMPLETE',
+      status: 'INCOMPLETE',
       coveredElements: [
         'ACTION',
         'ACTION_AMOUNT_BASIS',
         'ACTION_TIMING',
-        'COORDINATION',
+        'COORDINATION_CHANNEL_AND_RECIPIENTS',
         'EVALUATION_CADENCE',
         'EXCEPTION',
-        'MODEL_CALCULATION',
+        'MODEL_CALCULATION_SEMANTICS',
         'NEGATIVE_STATE_MEANING',
         'PERSISTENCE',
         'PLANNING_EXECUTION_BOUNDARY',
         'SOURCE_ARTIFACT',
         'TRIGGER'
       ],
-      unrepresentedElements: []
+      unrepresentedElements: EXPECTED_SCHEMA_GAPS
     },
     approverPrincipal: compilationApprover,
     approvalRef: policyAuthority.managementAuthorization.ref,
     limitations: [
       'CURATED_TRANSCRIPTION_ARTIFACT_NOT_ORIGINAL_PDF_BYTES',
       'ACCEPTANCE_IDENTITIES_ARE_FIXTURE_GOVERNANCE_NOT_EXTERNAL_HUMAN_APPROVAL',
-      'PROTOCOL_PLANNING_AUTHORITY_NOT_EXECUTION_EVIDENCE'
+      'PROTOCOL_PLANNING_AUTHORITY_NOT_EXECUTION_EVIDENCE',
+      'SOURCE_DOES_NOT_REPORT_FULL_SPREADSHEET_RECURRENCE_OR_INITIAL_STATE',
+      'EVALUATION_START_DATE_NOT_STRUCTURALLY_REPRESENTABLE_IN_V1',
+      'COORDINATION_COORDINATOR_NOT_STRUCTURALLY_REPRESENTABLE_IN_V1'
     ]
   },
   audit: audit({ type: compilationApprover.type, id: compilationApprover.principalId }, 'kbs-gold-protocol-compilation')
@@ -649,7 +687,8 @@ const validated = validateAgronomicPolicyCompilationAuthority({
   compilationRef: compilation.ref
 });
 
-assert.equal(validated.semanticPayload.losslessCoverage.status, 'COMPLETE');
+assert.equal(validated.semanticPayload.losslessCoverage.status, 'INCOMPLETE');
+assert.deepEqual(validated.semanticPayload.losslessCoverage.unrepresentedElements, EXPECTED_SCHEMA_GAPS);
 assert.equal(validated.semanticPayload.sourceProtocolRefs[0].logicalId, source.ref.logicalId);
 assert.equal(validated.semanticPayload.sourceProtocolArtifactRefs[0].logicalId, artifact.ref.logicalId);
 assert.equal(validated.semanticPayload.rule.trigger.predicates[0].temporal.count, 2);
@@ -670,6 +709,14 @@ for (const knowledge of knowledgeByKey.values()) {
   assert.deepEqual(claim.semanticPayload.sourceRef, source.ref);
   assert.deepEqual(claim.semanticPayload.sourceArtifactRef, artifact.ref);
   assert.equal(claim.semanticPayload.sourceLocator.coordinates.page, PDF_PAGE);
+}
+
+for (const gapKnowledgeKey of ['evaluation-start', 'email-coordinator']) {
+  const gapKnowledge = knowledgeByKey.get(gapKnowledgeKey);
+  assert.ok(
+    validated.semanticPayload.knowledgeRefs.some((ref) => ref.semanticHash === gapKnowledge.ref.semanticHash),
+    `${gapKnowledgeKey} source authority must be preserved even though v1 cannot structure it in the rule`
+  );
 }
 
 const planningKnowledge = knowledgeByKey.get('planning-not-execution');
@@ -696,6 +743,8 @@ console.log(JSON.stringify({
   ruleHash,
   modelDefinitionHash,
   losslessCoverage: validated.semanticPayload.losslessCoverage,
+  schemaGaps: EXPECTED_SCHEMA_GAPS,
+  sourceModelUnderSpecification: 'FULL_SPREADSHEET_RECURRENCE_AND_INITIAL_STATE_NOT_REPORTED',
   planningNotExecutionBoundaryPreserved: true,
   executionAuthorityRecordsCreated: runtimeRecords.length
 }, null, 2));
