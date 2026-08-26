@@ -19,6 +19,14 @@ function knowledgeRef(logicalId) {
   };
 }
 
+function binding(role, logicalId, rationale = 'Source-governed agronomic protocol authority.') {
+  return {
+    role,
+    authorityRef: knowledgeRef(logicalId),
+    rationale
+  };
+}
+
 function protocolRule() {
   return {
     contractVersion: AGRONOMIC_RULE_CONTRACT_VERSION,
@@ -85,25 +93,27 @@ function protocolRule() {
 function protocolRuleV2() {
   const rule = protocolRule();
   rule.contractVersion = AGRONOMIC_RULE_CONTRACT_VERSION_V2;
-  rule.evaluationStart = {
+  rule.temporalConstraints = [{
+    target: 'RULE_EVALUATION',
+    relation: 'NOT_BEFORE_DATE',
     date: '2015-05-01',
-    authorityBindings: [{
-      role: 'EVALUATION_START_DATE',
-      authorityRef: knowledgeRef('knowledge.protocol.evaluation-start'),
-      rationale: 'The 2015 protocol starts daily rainfall and irrigation recording on May 1.'
-    }]
-  };
+    authorityBindings: [binding(
+      'EVALUATION_START_DATE',
+      'knowledge.protocol.evaluation-start',
+      'The 2015 protocol starts daily rainfall and irrigation recording on May 1.'
+    )]
+  }];
   rule.coordination = {
     mode: 'NOTIFY',
     channel: 'EMAIL',
     participants: ['KEY_INVESTIGATORS', 'LTER_STAFF'],
     coordinator: {
       sourceLabel: 'Joe Simmons',
-      authorityBindings: [{
-        role: 'COMMUNICATION_COORDINATOR',
-        authorityRef: knowledgeRef('knowledge.protocol.coordinator'),
-        rationale: 'The source explicitly names Joe Simmons as coordinator.'
-      }]
+      authorityBindings: [binding(
+        'COMMUNICATION_COORDINATOR',
+        'knowledge.protocol.coordinator',
+        'The source explicitly names Joe Simmons as coordinator.'
+      )]
     },
     authorityBindings: []
   };
@@ -128,21 +138,58 @@ test('v1 real irrigation protocol semantics remain representable without droppin
   assert.match(declarativeAgronomicRuleHash(normalized), /^sha256:[0-9a-f]{64}$/);
 });
 
-test('v2 adds source-bound evaluation start and named coordination coordinator without changing v1 semantics', () => {
+test('v2 adds source-bound temporal constraints and named coordination coordinator without changing v1 semantics', () => {
   const normalized = normalizeDeclarativeAgronomicRule(protocolRuleV2());
   assert.equal(normalized.contractVersion, AGRONOMIC_RULE_CONTRACT_VERSION_V2);
   assert.equal(normalized.evaluationCadence, 'P1D');
-  assert.equal(normalized.evaluationStart.date, '2015-05-01');
-  assert.equal(normalized.evaluationStart.authorityBindings[0].role, 'EVALUATION_START_DATE');
+  assert.equal(normalized.temporalConstraints.length, 1);
+  assert.equal(normalized.temporalConstraints[0].target, 'RULE_EVALUATION');
+  assert.equal(normalized.temporalConstraints[0].relation, 'NOT_BEFORE_DATE');
+  assert.equal(normalized.temporalConstraints[0].date, '2015-05-01');
+  assert.equal(normalized.temporalConstraints[0].authorityBindings[0].role, 'EVALUATION_START_DATE');
   assert.equal(normalized.coordination.mode, 'NOTIFY');
   assert.equal(normalized.coordination.coordinator.sourceLabel, 'Joe Simmons');
   assert.equal(normalized.coordination.coordinator.authorityBindings[0].role, 'COMMUNICATION_COORDINATOR');
   assert.match(declarativeAgronomicRuleHash(normalized), /^sha256:[0-9a-f]{64}$/);
 });
 
-test('v1 fails closed when v2-only temporal or coordinator fields are supplied', () => {
+test('v2 represents KBS action not-before calendar boundary such as plant soybeans after May 5', () => {
+  const rule = protocolRuleV2();
+  rule.temporalConstraints = [{
+    target: 'RULE_ACTION',
+    relation: 'NOT_BEFORE_DATE',
+    date: '2015-05-05',
+    authorityBindings: [binding('ACTION_NOT_BEFORE_DATE', 'knowledge.protocol.plant-after-may-5')]
+  }];
+  const normalized = normalizeDeclarativeAgronomicRule(rule);
+  assert.equal(normalized.temporalConstraints[0].target, 'RULE_ACTION');
+  assert.equal(normalized.temporalConstraints[0].relation, 'NOT_BEFORE_DATE');
+  assert.equal(normalized.temporalConstraints[0].date, '2015-05-05');
+});
+
+test('v2 represents KBS event-relative minimum offset such as 2,4-D at least 7 days before planting', () => {
+  const rule = protocolRuleV2();
+  rule.temporalConstraints = [{
+    target: 'RULE_ACTION',
+    relation: 'MIN_OFFSET_BEFORE_EVENT',
+    eventSemanticId: 'operation.planting',
+    duration: 'P7D',
+    authorityBindings: [binding('ACTION_MIN_OFFSET_BEFORE_EVENT', 'knowledge.protocol.24d-seven-days-before-planting')]
+  }];
+  const normalized = normalizeDeclarativeAgronomicRule(rule);
+  assert.equal(normalized.temporalConstraints[0].relation, 'MIN_OFFSET_BEFORE_EVENT');
+  assert.equal(normalized.temporalConstraints[0].eventSemanticId, 'operation.planting');
+  assert.equal(normalized.temporalConstraints[0].duration, 'P7D');
+});
+
+test('v1 fails closed when v2-only temporalConstraints or coordinator fields are supplied', () => {
   const temporal = protocolRule();
-  temporal.evaluationStart = { date: '2015-05-01', authorityBindings: [] };
+  temporal.temporalConstraints = [{
+    target: 'RULE_EVALUATION',
+    relation: 'NOT_BEFORE_DATE',
+    date: '2015-05-01',
+    authorityBindings: []
+  }];
   assert.throws(() => normalizeDeclarativeAgronomicRule(temporal), /not part of/);
 
   const coordinator = protocolRule();
@@ -154,14 +201,40 @@ test('v1 fails closed when v2-only temporal or coordinator fields are supplied',
   assert.throws(() => normalizeDeclarativeAgronomicRule(coordinator), /not part of/);
 });
 
-test('v2 evaluation start requires a valid calendar date and source authority binding', () => {
+test('v2 calendar temporal constraint requires a valid calendar date and source authority binding', () => {
   const invalidDate = protocolRuleV2();
-  invalidDate.evaluationStart.date = '2015-02-30';
-  assert.throws(() => normalizeDeclarativeAgronomicRule(invalidDate), /evaluationStart.date/);
+  invalidDate.temporalConstraints[0].date = '2015-02-30';
+  assert.throws(() => normalizeDeclarativeAgronomicRule(invalidDate), /valid YYYY-MM-DD/);
 
   const missingAuthority = protocolRuleV2();
-  missingAuthority.evaluationStart.authorityBindings = [];
+  missingAuthority.temporalConstraints[0].authorityBindings = [];
   assert.throws(() => normalizeDeclarativeAgronomicRule(missingAuthority), /non-empty/);
+});
+
+test('v2 date relation rejects event or duration fields', () => {
+  const rule = protocolRuleV2();
+  rule.temporalConstraints[0].eventSemanticId = 'operation.planting';
+  assert.throws(() => normalizeDeclarativeAgronomicRule(rule), /accepts date only/);
+});
+
+test('v2 event-offset relation requires both eventSemanticId and duration', () => {
+  const missingEvent = protocolRuleV2();
+  missingEvent.temporalConstraints = [{
+    target: 'RULE_ACTION',
+    relation: 'MIN_OFFSET_BEFORE_EVENT',
+    duration: 'P7D',
+    authorityBindings: [binding('ACTION_OFFSET', 'knowledge.protocol.offset')]
+  }];
+  assert.throws(() => normalizeDeclarativeAgronomicRule(missingEvent), /eventSemanticId/);
+
+  const missingDuration = protocolRuleV2();
+  missingDuration.temporalConstraints = [{
+    target: 'RULE_ACTION',
+    relation: 'MIN_OFFSET_BEFORE_EVENT',
+    eventSemanticId: 'operation.planting',
+    authorityBindings: [binding('ACTION_OFFSET', 'knowledge.protocol.offset')]
+  }];
+  assert.throws(() => normalizeDeclarativeAgronomicRule(missingDuration), /duration/);
 });
 
 test('v2 coordinator is distinct from notification recipients and cannot exist under NONE coordination', () => {
