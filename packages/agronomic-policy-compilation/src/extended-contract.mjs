@@ -92,6 +92,21 @@ function refKey(value) {
   return JSON.stringify([normalized.kind, normalized.logicalId, normalized.version, normalized.semanticHash]);
 }
 
+function authorityRefList(values, name, kinds, { nonEmpty = false } = {}) {
+  if (!Array.isArray(values) || (nonEmpty && values.length === 0)) {
+    throw new AgronomicPolicyCompilationError(
+      'INVALID_AGRONOMIC_POLICY_AUTHORITY_REF',
+      `${name} must be ${nonEmpty ? 'a non-empty ' : ''}array`
+    );
+  }
+  const normalized = values.map((value, index) => ref(value, `${name}[${index}]`, kinds));
+  const keys = normalized.map(refKey);
+  if (new Set(keys).size !== keys.length) {
+    throw new AgronomicPolicyCompilationError('DUPLICATE_AGRONOMIC_POLICY_AUTHORITY_REF', `${name} cannot contain duplicate exact refs`);
+  }
+  return deepFreeze([...normalized].sort((a, b) => refKey(a).localeCompare(refKey(b))));
+}
+
 function stringList(values, name, { nonEmpty = false } = {}) {
   if (!Array.isArray(values) || (nonEmpty && values.length === 0)) {
     throw new AgronomicPolicyCompilationError(
@@ -275,6 +290,7 @@ export function normalizeAgronomicPolicyCompilation(value) {
     'contractVersion',
     'authorityClass',
     'sourceProtocolRefs',
+    'sourceProtocolArtifactRefs',
     'knowledgeRefs',
     'modelRefs',
     'modelDefinitions',
@@ -299,6 +315,12 @@ export function normalizeAgronomicPolicyCompilation(value) {
   const baseRule = normalizeBaseRule(stripExtendedRule(value.rule));
   const baseRuleHash = semanticHash('DeclarativeAgronomicRule', baseRule);
   const base = normalizeBaseCompilation(baseCompilationInput(value, baseRuleHash));
+  const sourceProtocolArtifactRefs = authorityRefList(
+    value.sourceProtocolArtifactRefs,
+    'sourceProtocolArtifactRefs',
+    new Set(['SourceArtifact']),
+    { nonEmpty: true }
+  );
   const modelDefinitions = normalizedModelDefinitions(value.modelDefinitions ?? []);
   const modelRefKeys = base.modelRefs.map(refKey).sort();
   const definitionRefKeys = modelDefinitions.map((item) => refKey(item.modelRef)).sort();
@@ -310,6 +332,7 @@ export function normalizeAgronomicPolicyCompilation(value) {
   }
   return deepFreeze({
     ...base,
+    sourceProtocolArtifactRefs,
     rule: extendedRule,
     ruleHash: suppliedRuleHash,
     modelDefinitions
@@ -320,6 +343,7 @@ export function agronomicPolicyCompilationAuthorityRefs(value) {
   const normalized = normalizeAgronomicPolicyCompilation(value);
   return deepFreeze([
     ...normalized.sourceProtocolRefs,
+    ...normalized.sourceProtocolArtifactRefs,
     ...normalized.knowledgeRefs,
     ...normalized.modelRefs,
     normalized.policyRef,
