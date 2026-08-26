@@ -5,7 +5,7 @@ import {
   agronomicPolicyCompilationAuthorityRefs,
   normalizeAgronomicPolicyCompilation,
   AgronomicPolicyCompilationError
-} from './contract.mjs';
+} from './extended-contract.mjs';
 
 function exactRefKey(ref) {
   return JSON.stringify([ref.kind, ref.logicalId, ref.version, ref.semanticHash]);
@@ -68,7 +68,12 @@ function ruleAuthorityBindings(rule) {
   }
   bindings.push(...rule.action.authorityBindings);
   for (const expression of Object.values(rule.action.parameters)) bindings.push(...expression.authorityBindings);
+  bindings.push(...rule.coordination.authorityBindings);
   return bindings;
+}
+
+function modelAuthorityBindings(modelDefinitions) {
+  return modelDefinitions.flatMap((definition) => definition.authorityBindings);
 }
 
 function ruleSemanticDependencies(rule) {
@@ -83,13 +88,13 @@ function ruleSemanticDependencies(rule) {
   return [...semanticIds].sort();
 }
 
-function assertRuleKnowledgeClosure(normalized) {
+function assertKnowledgeClosure(normalized) {
   const allowed = new Set(normalized.knowledgeRefs.map(exactRefKey));
-  for (const binding of ruleAuthorityBindings(normalized.rule)) {
+  for (const binding of [...ruleAuthorityBindings(normalized.rule), ...modelAuthorityBindings(normalized.modelDefinitions)]) {
     if (!allowed.has(exactRefKey(binding.authorityRef))) {
       throw new AgronomicPolicyCompilationError(
         'AGRONOMIC_POLICY_COMPILATION_RULE_AUTHORITY_NOT_DECLARED',
-        `rule authority binding ${binding.role} is not included in knowledgeRefs`
+        `authority binding ${binding.role} is not included in knowledgeRefs`
       );
     }
   }
@@ -138,6 +143,73 @@ function assertPolicyActionClosure(policyPayload, rule) {
       'AGRONOMIC_POLICY_COMPILATION_ACTION_PARAMETER_REQUIRED',
       `declarative rule omits required Policy action parameters: ${missingRequired.join(', ')}`
     );
+  }
+}
+
+function assertPolicyDefinitionClosure(policyPayload, normalized) {
+  if (policyPayload.decisionLogic?.methodId !== normalized.rule.ruleId) {
+    throw new AgronomicPolicyCompilationError(
+      'AGRONOMIC_POLICY_COMPILATION_POLICY_METHOD_MISMATCH',
+      'Policy decisionLogic.methodId must equal declarative rule ruleId'
+    );
+  }
+  if (policyPayload.decisionLogic?.definitionHash !== normalized.ruleHash) {
+    throw new AgronomicPolicyCompilationError(
+      'AGRONOMIC_POLICY_COMPILATION_POLICY_DEFINITION_HASH_MISMATCH',
+      'Policy decisionLogic.definitionHash must equal the content hash of the declarative agronomic rule'
+    );
+  }
+  const expectedHumanGate = normalized.rule.humanGate.required ? 'REQUIRED' : 'NONE';
+  if (policyPayload.humanGate?.mode !== expectedHumanGate) {
+    throw new AgronomicPolicyCompilationError(
+      'AGRONOMIC_POLICY_COMPILATION_HUMAN_GATE_MISMATCH',
+      'declarative rule human gate must equal the bound Policy humanGate mode'
+    );
+  }
+  if (policyPayload.fallback?.disposition !== normalized.rule.fallback.disposition) {
+    throw new AgronomicPolicyCompilationError(
+      'AGRONOMIC_POLICY_COMPILATION_FALLBACK_MISMATCH',
+      'declarative rule fallback disposition must equal the bound Policy fallback'
+    );
+  }
+}
+
+function modelPortIds(payload, field) {
+  return new Set((payload[field] ?? []).map((port) => port.semanticId));
+}
+
+function assertModelDefinitions({ ledger, normalized }) {
+  for (const definition of normalized.modelDefinitions) {
+    const authority = validateSpecificationAuthority({ ledger, specificationRef: definition.modelRef });
+    const payload = authority.semanticPayload;
+    if (authority.record.ref.kind !== 'Model') {
+      throw new AgronomicPolicyCompilationError(
+        'AGRONOMIC_POLICY_COMPILATION_MODEL_REQUIRED',
+        'modelDefinitions must bind exact governed Model specifications'
+      );
+    }
+    if (payload.computation?.methodId !== definition.methodId) {
+      throw new AgronomicPolicyCompilationError(
+        'AGRONOMIC_MODEL_METHOD_MISMATCH',
+        'declarative model definition methodId must equal the bound Model computation.methodId'
+      );
+    }
+    if (payload.computation?.definitionHash !== definition.definitionHash) {
+      throw new AgronomicPolicyCompilationError(
+        'AGRONOMIC_MODEL_DEFINITION_HASH_SPEC_MISMATCH',
+        'declarative model definition hash must equal the bound Model computation.definitionHash'
+      );
+    }
+    const modelInputs = modelPortIds(payload, 'inputs');
+    const modelOutputs = modelPortIds(payload, 'outputs');
+    const missingInputs = definition.inputSemanticIds.filter((semanticId) => !modelInputs.has(semanticId));
+    const missingOutputs = definition.outputSemanticIds.filter((semanticId) => !modelOutputs.has(semanticId));
+    if (missingInputs.length > 0 || missingOutputs.length > 0) {
+      throw new AgronomicPolicyCompilationError(
+        'AGRONOMIC_MODEL_SEMANTIC_PORT_MISMATCH',
+        `model definition semantic ports are absent from Model specification: inputs=[${missingInputs.join(', ')}], outputs=[${missingOutputs.join(', ')}]`
+      );
+    }
   }
 }
 
@@ -194,16 +266,6 @@ function validateCompilationWorld(ledger, normalized) {
     );
   }
 
-  for (const modelRef of normalized.modelRefs) {
-    const modelAuthority = validateSpecificationAuthority({ ledger, specificationRef: modelRef });
-    if (modelAuthority.record.ref.kind !== 'Model') {
-      throw new AgronomicPolicyCompilationError(
-        'AGRONOMIC_POLICY_COMPILATION_MODEL_REQUIRED',
-        'modelRefs must bind exact governed Model specifications'
-      );
-    }
-  }
-
   const thresholdRefs = policyPayload.thresholdAuthority?.authorityRefs ?? [];
   for (const thresholdRef of thresholdRefs) {
     if (!normalized.knowledgeRefs.some((knowledgeRef) => sameAuthorityRef(knowledgeRef, thresholdRef))) {
@@ -214,9 +276,11 @@ function validateCompilationWorld(ledger, normalized) {
     }
   }
 
-  assertRuleKnowledgeClosure(normalized);
+  assertKnowledgeClosure(normalized);
+  assertModelDefinitions({ ledger, normalized });
   assertPolicySemanticClosure(policyPayload, normalized.rule);
   assertPolicyActionClosure(policyPayload, normalized.rule);
+  assertPolicyDefinitionClosure(policyPayload, normalized);
   const approval = assertPolicyManagementApproval({ ledger, normalized, policyAuthority });
   return deepFreeze({ refs, policyAuthority, approval });
 }
