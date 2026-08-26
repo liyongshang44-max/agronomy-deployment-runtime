@@ -4,8 +4,10 @@ import test from 'node:test';
 import {
   AGRONOMIC_RULE_CONTRACT_VERSION,
   declarativeAgronomicRuleHash,
-  normalizeDeclarativeAgronomicRule
-} from '../src/contract.mjs';
+  normalizeDeclarativeAgronomicRule,
+  publishAgronomicPolicyCompilation,
+  validateAgronomicPolicyCompilationAuthority
+} from '../src/index.mjs';
 
 function knowledgeRef(logicalId) {
   return {
@@ -71,6 +73,11 @@ function protocolRule() {
     limitations: ['SITE_AND_PROTOCOL_SPECIFIC']
   };
 }
+
+test('public module loads contract and authority entry points', () => {
+  assert.equal(typeof publishAgronomicPolicyCompilation, 'function');
+  assert.equal(typeof validateAgronomicPolicyCompilationAuthority, 'function');
+});
 
 test('real irrigation protocol semantics are representable without dropping trigger, persistence, exception, action timing or amount', () => {
   const normalized = normalizeDeclarativeAgronomicRule(protocolRule());
