@@ -6,50 +6,56 @@ Date: 2026-08-26
 
 ## Context
 
-ADR v1.0 correctly separates `Source`, `Claim`, `QualifiedKnowledge`, `DerivedKnowledge`, `Model`, `Policy`, runtime composition, execution and `Outcome` authority. Real agronomic protocols expose an additional provenance question that the current frozen Policy contract does not make directly inspectable:
+ADR v1.0 correctly separates `Source`, `SourceArtifact`, `Claim`, `QualifiedKnowledge`, `DerivedKnowledge`, `Model`, `Policy`, runtime composition, execution and `Outcome` authority. Real agronomic protocols expose one additional provenance question that the frozen Policy contract does not make directly inspectable:
 
-> How were exact qualified agronomic knowledge authorities operationalized into the thresholds, temporal persistence, exceptions, action timing and action-parameter expressions of a deployable Policy?
+> How were exact source materials and qualified agronomic knowledge operationalized into the state calculation, thresholds, temporal persistence, exceptions, timing, amount and coordination semantics of a deployable Policy?
 
-The existing Policy contract records a `decisionLogic` method identity/hash and `thresholdAuthority`, but a method hash alone cannot make the operational rule inspectable without resolving implementation-specific material. A real protocol may require, for example, a threshold that persists for a number of consecutive periods, an override when a restorative event occurs, a delayed action, and an action amount derived from a prior state deficit.
+The existing Policy contract records `decisionLogic.methodId + definitionHash` and `thresholdAuthority`, but the referenced definition is not itself a first-class inspectable protocol-to-policy provenance object. A real protocol can require daily evaluation, a two-consecutive-period trigger, a restorative-event override, a next-day action, an amount derived from a prior state deficit, and communication to designated staff.
 
-This is not a reason to collapse protocol documents, scientific knowledge, models and policies into one object.
+This gap is not a reason to collapse protocol documents, scientific knowledge, models, policies, execution and outcomes into one object.
 
 ## Decision proposal
 
 Introduce an additive `AgronomicPolicyCompilation` authority in the Knowledge Control Plane.
 
-It does **not** replace `Policy`. `Policy` remains the decision-logic specification authority. The compilation object records the governed operationalization provenance that binds:
+It does **not** replace `Policy` or `Model`. The compilation records the governed operationalization provenance that binds:
 
-- exact `Source` references whose `sourceType` is `PROTOCOL`;
+- exact logical `Source` refs with `sourceType=PROTOCOL`;
+- exact `SourceArtifact` refs for the protocol material actually interpreted;
 - exact `QualifiedKnowledge` / `DerivedKnowledge` predecessors;
-- exact governed `Model` specifications referenced as computational dependencies;
+- exact governed `Model` specifications plus content-addressed inspectable model definitions;
 - one exact governed `Policy` specification;
 - one content-addressed declarative agronomic rule;
 - transformation rationale;
 - explicit lossless-coverage status;
 - the exact Policy management authorization and approver.
 
-The declarative rule v1 covers:
+The declarative rule v1 experimental vocabulary covers:
 
 - semantic input identifiers;
+- evaluation cadence;
 - trigger predicates;
 - comparators and typed literals;
 - temporal modes including consecutive-period, trailing-window and forecast-window semantics;
 - exceptions/overrides;
 - action code;
 - immediate or offset action timing;
-- action parameter expressions;
-- knowledge authority binding/rationale for rule elements;
+- action-parameter expressions;
+- coordination semantics (`NONE`, `NOTIFY`, `APPROVAL_REQUIRED`);
+- exact knowledge-authority binding/rationale for rule elements;
 - fallback;
 - human gate;
 - limitations.
+
+Model definitions are separately content-addressed and must close exactly over the bound `Model.computation.methodId/definitionHash`. The declarative rule must close exactly over the bound `Policy.decisionLogic.methodId/definitionHash`.
 
 ## Authority boundary
 
 Permanent separations remain:
 
 ```text
-Source/Protocol Document
+Source
+  != SourceArtifact
   != Claim / QualifiedKnowledge / DerivedKnowledge
   != Model
   != Policy
@@ -58,7 +64,7 @@ Source/Protocol Document
   != execution / Outcome
 ```
 
-`AgronomicPolicyCompilation` may establish only that a particular operationalization was explicitly governed and bound to exact predecessor authorities. It must not:
+`AgronomicPolicyCompilation` may establish only that one operationalization was explicitly governed and bound to exact predecessor authorities. It must not:
 
 - create scientific truth;
 - upgrade a Claim to QualifiedKnowledge;
@@ -68,52 +74,57 @@ Source/Protocol Document
 - assert that execution occurred;
 - assert that an Outcome was caused by the Policy.
 
+Notification is not approval. `NOTIFY` must not silently create a human gate. `APPROVAL_REQUIRED` must bind a required human gate.
+
 ## Fail-closed requirements
 
-1. Every rule-level knowledge authority binding must be present in the compilation `knowledgeRefs`.
-2. Every Policy threshold authority must be present in the compilation `knowledgeRefs`.
-3. Every rule semantic dependency must be declared by the bound Policy as a required input or required runtime output.
-4. The rule action must be a legal member of the Policy action space.
-5. For Policy versions with structured action semantics, supplied parameters must be declared and all required parameters must be present.
-6. `sourceProtocolRefs` must resolve to exact `Source` authority with `sourceType=PROTOCOL`.
-7. Model references must resolve through normal Specification authority validation.
-8. The compilation approval must reuse the exact `SPECIFICATION_MANAGE` authorization that published the bound Policy in v1; a future architecture revision may introduce a narrower agronomic-compilation permission.
-9. `losslessCoverage=COMPLETE` is illegal when any protocol element is declared unrepresented.
-10. An incomplete representation must remain explicitly `INCOMPLETE`; it cannot silently become executable authority.
+1. Every protocol `Source` must have at least one exact bound `SourceArtifact`; every bound artifact must point back to one exact listed protocol Source.
+2. Every rule-level and model-definition knowledge authority binding must be present in `knowledgeRefs`.
+3. Every Policy threshold authority must be present in `knowledgeRefs`.
+4. Every rule semantic dependency must be declared by the bound Policy as a required input or required runtime output.
+5. The rule action must be a legal member of the Policy action space.
+6. For Policy versions with structured action semantics, supplied parameters must be declared and all required parameters must be present.
+7. `Policy.decisionLogic.methodId` must equal the declarative rule ID and `Policy.decisionLogic.definitionHash` must equal its content hash.
+8. Each model definition must have exactly one bound Model; method ID, definition hash and declared semantic ports must agree with the governed Model specification.
+9. `sourceProtocolRefs` must resolve to exact `Source` authority with `sourceType=PROTOCOL`.
+10. Model and Policy refs must pass the existing Specification authority validation chain.
+11. The v1 compilation approval reuses the exact `SPECIFICATION_MANAGE` authorization that published the bound Policy; a future accepted architecture may introduce a narrower compilation permission.
+12. `losslessCoverage=COMPLETE` is illegal when any protocol element is declared unrepresented.
+13. Incomplete representation remains explicitly `INCOMPLETE`; it cannot silently masquerade as complete deployable provenance.
 
 ## Compatibility with v1.0 freeze
 
-This DEC is **PROPOSED** and therefore does not amend the frozen v1.0 architecture by itself. The implementation in the same draft change set is an experimental candidate used to test the schema gap. It must not be merged into protected `main` as normative product authority until this decision is explicitly accepted or the implementation is reworked to fit an already-frozen authority object.
+This DEC is **PROPOSED**. It does not amend the frozen v1.0 architecture by itself. The implementation in the same Draft PR is an experimental schema-gap candidate. It must not be merged into protected `main` as normative product authority until this decision is explicitly accepted, or the implementation is reworked to fit an already-frozen authority object.
 
 ## Rejected alternatives
 
-### Put everything into a single AgronomicProtocol table
+### One `AgronomicProtocol` mega-table
 
-Rejected because it collapses protocol provenance, scientific knowledge, computation, decision logic, execution and outcome authority.
+Rejected because it collapses provenance, science, computation, decision logic, execution and outcome authority.
 
-### Keep only `methodId + definitionHash`
+### Keep only opaque `methodId + definitionHash`
 
-Rejected for protocol-grade audit because it does not make threshold, temporal, exception and action semantics directly inspectable at the specification/provenance layer.
+Rejected for protocol-grade audit because threshold, temporal, exception, amount and coordination semantics cannot be inspected without an external definition body.
 
 ### Rewrite source Claims into operational rules
 
-Rejected because a Claim must remain source-faithful. Operationalization is a new governed judgment and must retain lineage rather than mutate source authority.
+Rejected because Claims must remain source-faithful. Operationalization is a new governed judgment with lineage.
 
 ### Treat actual field logs as the protocol
 
-Rejected because planned policy and actual execution are different authorities.
+Rejected because planned decision logic and actual execution are different authorities.
 
 ## Consequences
 
 Positive:
 
-- real agronomic protocols can be represented without dropping decision-material temporal/exception/action semantics;
-- provenance from knowledge authority to deployable Policy becomes inspectable;
-- ADR can distinguish scientific qualification from operationalization;
-- protocol-to-Policy loss can be benchmarked explicitly.
+- real agronomic protocols can be represented without silently dropping decision-material semantics;
+- exact source material, scientific authority, model calculation and policy rule remain separately auditable;
+- scientific qualification is distinguishable from operationalization;
+- protocol-to-Policy loss becomes measurable through explicit `losslessCoverage`.
 
 Costs:
 
-- one new proposed authority type;
+- one proposed authority type and declarative vocabulary;
 - additional governance/audit validation;
 - architecture acceptance is required before merge because v1.0 is frozen.
