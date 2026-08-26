@@ -100,19 +100,19 @@ function protocolRuleV2() {
     authorityBindings: [binding(
       'EVALUATION_START_DATE',
       'knowledge.protocol.evaluation-start',
-      'The 2015 protocol starts daily rainfall and irrigation recording on May 1.'
+      'The protocol starts daily rainfall and irrigation recording on the stated calendar date.'
     )]
   }];
   rule.coordination = {
     mode: 'NOTIFY',
     channel: 'EMAIL',
-    participants: ['KEY_INVESTIGATORS', 'LTER_STAFF'],
+    participants: ['KEY_INVESTIGATORS', 'FIELD_STAFF'],
     coordinator: {
-      sourceLabel: 'Joe Simmons',
+      sourceLabel: 'Named protocol coordinator',
       authorityBindings: [binding(
         'COMMUNICATION_COORDINATOR',
         'knowledge.protocol.coordinator',
-        'The source explicitly names Joe Simmons as coordinator.'
+        'The source explicitly names a communication coordinator.'
       )]
     },
     authorityBindings: []
@@ -125,7 +125,7 @@ test('public module loads contract and authority entry points', () => {
   assert.equal(typeof validateAgronomicPolicyCompilationAuthority, 'function');
 });
 
-test('v1 real irrigation protocol semantics remain representable without dropping cadence, trigger, persistence, exception, action timing or amount', () => {
+test('v1 irrigation protocol semantics remain representable without dropping cadence, trigger, persistence, exception, action timing or amount', () => {
   const normalized = normalizeDeclarativeAgronomicRule(protocolRule());
   assert.equal(normalized.contractVersion, AGRONOMIC_RULE_CONTRACT_VERSION);
   assert.equal(normalized.evaluationCadence, 'P1D');
@@ -148,18 +148,18 @@ test('v2 adds source-bound temporal constraints and named coordination coordinat
   assert.equal(normalized.temporalConstraints[0].date, '2015-05-01');
   assert.equal(normalized.temporalConstraints[0].authorityBindings[0].role, 'EVALUATION_START_DATE');
   assert.equal(normalized.coordination.mode, 'NOTIFY');
-  assert.equal(normalized.coordination.coordinator.sourceLabel, 'Joe Simmons');
+  assert.equal(normalized.coordination.coordinator.sourceLabel, 'Named protocol coordinator');
   assert.equal(normalized.coordination.coordinator.authorityBindings[0].role, 'COMMUNICATION_COORDINATOR');
   assert.match(declarativeAgronomicRuleHash(normalized), /^sha256:[0-9a-f]{64}$/);
 });
 
-test('v2 represents KBS action not-before calendar boundary such as plant soybeans after May 5', () => {
+test('v2 represents an action not-before calendar boundary', () => {
   const rule = protocolRuleV2();
   rule.temporalConstraints = [{
     target: 'RULE_ACTION',
     relation: 'NOT_BEFORE_DATE',
     date: '2015-05-05',
-    authorityBindings: [binding('ACTION_NOT_BEFORE_DATE', 'knowledge.protocol.plant-after-may-5')]
+    authorityBindings: [binding('ACTION_NOT_BEFORE_DATE', 'knowledge.protocol.action-not-before-date')]
   }];
   const normalized = normalizeDeclarativeAgronomicRule(rule);
   assert.equal(normalized.temporalConstraints[0].target, 'RULE_ACTION');
@@ -167,14 +167,14 @@ test('v2 represents KBS action not-before calendar boundary such as plant soybea
   assert.equal(normalized.temporalConstraints[0].date, '2015-05-05');
 });
 
-test('v2 represents KBS event-relative minimum offset such as 2,4-D at least 7 days before planting', () => {
+test('v2 represents an event-relative minimum offset before an operation', () => {
   const rule = protocolRuleV2();
   rule.temporalConstraints = [{
     target: 'RULE_ACTION',
     relation: 'MIN_OFFSET_BEFORE_EVENT',
     eventSemanticId: 'operation.planting',
     duration: 'P7D',
-    authorityBindings: [binding('ACTION_MIN_OFFSET_BEFORE_EVENT', 'knowledge.protocol.24d-seven-days-before-planting')]
+    authorityBindings: [binding('ACTION_MIN_OFFSET_BEFORE_EVENT', 'knowledge.protocol.minimum-offset-before-event')]
   }];
   const normalized = normalizeDeclarativeAgronomicRule(rule);
   assert.equal(normalized.temporalConstraints[0].relation, 'MIN_OFFSET_BEFORE_EVENT');
@@ -195,8 +195,8 @@ test('v1 fails closed when v2-only temporalConstraints or coordinator fields are
   const coordinator = protocolRule();
   coordinator.coordination = {
     mode: 'NOTIFY',
-    participants: ['LTER_STAFF'],
-    coordinator: { sourceLabel: 'Joe Simmons', authorityBindings: [] }
+    participants: ['FIELD_STAFF'],
+    coordinator: { sourceLabel: 'Named protocol coordinator', authorityBindings: [] }
   };
   assert.throws(() => normalizeDeclarativeAgronomicRule(coordinator), /not part of/);
 });
