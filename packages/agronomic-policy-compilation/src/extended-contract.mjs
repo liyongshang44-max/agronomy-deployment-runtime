@@ -20,8 +20,10 @@ export const AGRONOMIC_TEMPORAL_CONSTRAINT_TARGETS = deepFreeze([
   'RULE_ACTION'
 ]);
 export const AGRONOMIC_TEMPORAL_CONSTRAINT_RELATIONS = deepFreeze([
-  'NOT_BEFORE_DATE',
-  'NOT_AFTER_DATE',
+  'ON_OR_AFTER_DATE',
+  'AFTER_DATE',
+  'ON_OR_BEFORE_DATE',
+  'BEFORE_DATE',
   'BEFORE_EVENT',
   'AFTER_EVENT',
   'MIN_OFFSET_BEFORE_EVENT',
@@ -33,6 +35,12 @@ export const agronomicModelDefinitionHash = v1.agronomicModelDefinitionHash;
 const KNOWLEDGE_KINDS = new Set(['QualifiedKnowledge', 'DerivedKnowledge']);
 const TEMPORAL_TARGETS = new Set(AGRONOMIC_TEMPORAL_CONSTRAINT_TARGETS);
 const TEMPORAL_RELATIONS = new Set(AGRONOMIC_TEMPORAL_CONSTRAINT_RELATIONS);
+const CALENDAR_RELATIONS = new Set([
+  'ON_OR_AFTER_DATE',
+  'AFTER_DATE',
+  'ON_OR_BEFORE_DATE',
+  'BEFORE_DATE'
+]);
 const HASH_RE = /^sha256:[0-9a-f]{64}$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const ISO_DURATION_RE = /^P(?:(\d+(?:\.\d+)?)Y)?(?:(\d+(?:\.\d+)?)M)?(?:(\d+(?:\.\d+)?)W)?(?:(\d+(?:\.\d+)?)D)?(?:T(?:(\d+(?:\.\d+)?)H)?(?:(\d+(?:\.\d+)?)M)?(?:(\d+(?:\.\d+)?)S)?)?$/;
@@ -105,7 +113,8 @@ function calendarDate(value, name) {
 function duration(value, name) {
   const normalized = text(value, name);
   const match = ISO_DURATION_RE.exec(normalized);
-  if (!match || !match.slice(1).some((part) => part !== undefined)) {
+  const parts = match ? match.slice(1).filter((part) => part !== undefined) : [];
+  if (!match || parts.length === 0 || !parts.some((part) => Number(part) > 0)) {
     throw new v1.AgronomicPolicyCompilationError(
       'INVALID_AGRONOMIC_TEMPORAL_DURATION',
       `${name} must be a non-zero ISO-8601 duration`
@@ -139,7 +148,7 @@ function normalizeTemporalConstraint(value, name) {
   }
   const bindings = authorityBindings(value.authorityBindings, `${name}.authorityBindings`, { nonEmpty: true });
 
-  if (relation === 'NOT_BEFORE_DATE' || relation === 'NOT_AFTER_DATE') {
+  if (CALENDAR_RELATIONS.has(relation)) {
     if (value.eventSemanticId !== undefined || value.duration !== undefined) {
       throw new v1.AgronomicPolicyCompilationError(
         'INVALID_AGRONOMIC_TEMPORAL_CONSTRAINT',
