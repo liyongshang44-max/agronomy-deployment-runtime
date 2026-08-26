@@ -23,7 +23,13 @@ function protocolRule() {
     contractVersion: AGRONOMIC_RULE_CONTRACT_VERSION,
     ruleId: 'protocol.soybean.irrigation.2015',
     decisionType: 'IRRIGATION_SCHEDULING',
-    inputs: ['plant_available_water_mm', 'rainfall_mm'],
+    inputs: [
+      'net_plant_available_water_mm',
+      'plant_available_water_mm',
+      'previous_day_plant_available_water_deficit_mm',
+      'rainfall_mm'
+    ],
+    evaluationCadence: 'P1D',
     trigger: {
       logic: 'ALL',
       predicates: [{
@@ -68,8 +74,9 @@ function protocolRule() {
       },
       authorityBindings: []
     },
+    coordination: { mode: 'NONE' },
     fallback: { disposition: 'WAIT' },
-    humanGate: { required: true },
+    humanGate: { required: false },
     limitations: ['SITE_AND_PROTOCOL_SPECIFIC']
   };
 }
@@ -79,13 +86,15 @@ test('public module loads contract and authority entry points', () => {
   assert.equal(typeof validateAgronomicPolicyCompilationAuthority, 'function');
 });
 
-test('real irrigation protocol semantics are representable without dropping trigger, persistence, exception, action timing or amount', () => {
+test('real irrigation protocol semantics are representable without dropping cadence, trigger, persistence, exception, action timing or amount', () => {
   const normalized = normalizeDeclarativeAgronomicRule(protocolRule());
+  assert.equal(normalized.evaluationCadence, 'P1D');
   assert.equal(normalized.trigger.predicates[0].temporal.mode, 'CONSECUTIVE');
   assert.equal(normalized.trigger.predicates[0].temporal.count, 2);
   assert.equal(normalized.exceptions.length, 1);
   assert.equal(normalized.action.timing.offset, 'P1D');
   assert.equal(normalized.action.parameters.irrigation_depth_mm.type, 'ABS');
+  assert.equal(normalized.coordination.mode, 'NONE');
   assert.match(declarativeAgronomicRuleHash(normalized), /^sha256:[0-9a-f]{64}$/);
 });
 
@@ -99,4 +108,10 @@ test('unknown declarative fields fail closed', () => {
   const rule = protocolRule();
   rule.trigger.predicates[0].silentInference = true;
   assert.throws(() => normalizeDeclarativeAgronomicRule(rule), /not part of/);
+});
+
+test('approval-required coordination cannot bypass the human gate', () => {
+  const rule = protocolRule();
+  rule.coordination = { mode: 'APPROVAL_REQUIRED', participants: ['AGRONOMIST'] };
+  assert.throws(() => normalizeDeclarativeAgronomicRule(rule), /humanGate/);
 });
