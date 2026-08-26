@@ -30,6 +30,14 @@ It does **not** replace `Policy` or `Model`. The compilation records the governe
 - explicit lossless-coverage status;
 - the exact Policy management authorization and approver.
 
+The scientific-use semantics of this proposed v1 authority are intentionally fixed rather than caller-selectable:
+
+```text
+required knowledge use = AGRONOMIC_POLICY_INPUT
+```
+
+A `knowledgeRef` is therefore not accepted merely because its authority kind is named `QualifiedKnowledge` or `DerivedKnowledge`. Every predecessor must replay through the existing ADR scientific authority validator and must be current, non-superseded/non-revoked authority for `AGRONOMIC_POLICY_INPUT`. This prevents an unrelated scientific qualification, a historical authority, or a forged kind-tagged ledger record from being laundered into Policy authority.
+
 The declarative rule v1 experimental vocabulary covers:
 
 - semantic input identifiers;
@@ -68,6 +76,7 @@ Source
 
 - create scientific truth;
 - upgrade a Claim to QualifiedKnowledge;
+- re-label knowledge qualified for some other scientific use as Policy input authority;
 - determine Source-to-Target applicability;
 - calculate current target state;
 - select a current field action;
@@ -91,6 +100,8 @@ Notification is not approval. `NOTIFY` must not silently create a human gate. `A
 11. The v1 compilation approval reuses the exact `SPECIFICATION_MANAGE` authorization that published the bound Policy; a future accepted architecture may introduce a narrower compilation permission.
 12. `losslessCoverage=COMPLETE` is illegal when any protocol element is declared unrepresented.
 13. Incomplete representation remains explicitly `INCOMPLETE`; it cannot silently masquerade as complete deployable provenance.
+14. Every `QualifiedKnowledge` predecessor must pass `validateQualifiedKnowledgeAuthority` for the active scientific-use target `AGRONOMIC_POLICY_INPUT`; kind-tag spoofing, superseded authority, revoked authority and unrelated-use qualification are rejected.
+15. Every `DerivedKnowledge` predecessor must pass `validateDerivedKnowledgeAuthority` for the same active scientific-use target and therefore retain its governed derivation, input-qualified-knowledge and origin-context authority chain.
 
 ## Compatibility with v1.0 freeze
 
@@ -106,6 +117,14 @@ Rejected because it collapses provenance, science, computation, decision logic, 
 
 Rejected for protocol-grade audit because threshold, temporal, exception, amount and coordination semantics cannot be inspected without an external definition body.
 
+### Trust `kind=QualifiedKnowledge`
+
+Rejected because a ledger record can carry the right kind label without satisfying source-faithful review, scientific qualification, active-use, lineage and authorization invariants. Operationalization must invoke the existing scientific authority validators rather than reimplementing or bypassing them.
+
+### Let the caller choose any knowledge use
+
+Rejected for the proposed v1 contract. `AgronomicPolicyCompilation` has one fixed purpose, so its predecessor knowledge must be qualified for `AGRONOMIC_POLICY_INPUT`; allowing arbitrary caller-selected use labels would make it easier to launder unrelated scientific authority into a Policy.
+
 ### Rewrite source Claims into operational rules
 
 Rejected because Claims must remain source-faithful. Operationalization is a new governed judgment with lineage.
@@ -119,12 +138,14 @@ Rejected because planned decision logic and actual execution are different autho
 Positive:
 
 - real agronomic protocols can be represented without silently dropping decision-material semantics;
-- exact source material, scientific authority, model calculation and policy rule remain separately auditable;
+- exact source material, active scientific authority, model calculation and policy rule remain separately auditable;
 - scientific qualification is distinguishable from operationalization;
+- a valid scientific authority for another use cannot silently become agronomic Policy authority;
 - protocol-to-Policy loss becomes measurable through explicit `losslessCoverage`.
 
 Costs:
 
 - one proposed authority type and declarative vocabulary;
 - additional governance/audit validation;
+- every compilation publication and replay now traverses the full scientific authority chain for its knowledge predecessors;
 - architecture acceptance is required before merge because v1.0 is frozen.
