@@ -77,7 +77,8 @@ function authorityBindings(values, name, { nonEmpty = false } = {}) {
 function normalizeEvaluationStart(value) {
   exactObject(value, 'evaluationStart', new Set(['date', 'authorityBindings']));
   const date = text(value.date, 'evaluationStart.date');
-  if (!DATE_RE.test(date) || Number.isNaN(new Date(`${date}T00:00:00Z`).getTime())) {
+  const parsed = DATE_RE.test(date) ? new Date(`${date}T00:00:00Z`) : null;
+  if (!parsed || Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date) {
     throw new v1.AgronomicPolicyCompilationError(
       'INVALID_AGRONOMIC_EVALUATION_START_DATE',
       'evaluationStart.date must be a valid YYYY-MM-DD calendar date'
