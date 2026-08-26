@@ -1,0 +1,33 @@
+name: ADR KBS 2015 Gold Protocol
+
+on:
+  pull_request:
+    paths:
+      - 'acceptance/gold-protocol-kbs-2015/**'
+      - 'packages/agronomic-policy-compilation/**'
+      - 'packages/knowledge-registry/**'
+      - 'packages/scientific-compiler/**'
+      - 'packages/source-registry/**'
+      - '.github/workflows/kbs-2015-gold-protocol.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Report runtime
+        run: node --version
+      - name: Constitutional static checks
+        run: npm run check:constitution
+      - name: KBS 2015 irrigation gold protocol acceptance
+        run: node acceptance/gold-protocol-kbs-2015/run.mjs
