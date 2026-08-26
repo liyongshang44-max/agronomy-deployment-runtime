@@ -16,10 +16,10 @@ function knowledgeRef(logicalId) {
   };
 }
 
-function kbsRule() {
+function protocolRule() {
   return {
     contractVersion: AGRONOMIC_RULE_CONTRACT_VERSION,
-    ruleId: 'kbs.rge.soybean.irrigation.2015',
+    ruleId: 'protocol.soybean.irrigation.2015',
     decisionType: 'IRRIGATION_SCHEDULING',
     inputs: ['plant_available_water_mm', 'rainfall_mm'],
     trigger: {
@@ -31,7 +31,7 @@ function kbsRule() {
         temporal: { mode: 'CONSECUTIVE', count: 2, period: 'P1D' },
         authorityBindings: [{
           role: 'TRIGGER_THRESHOLD',
-          authorityRef: knowledgeRef('knowledge.kbs.paw-negative'),
+          authorityRef: knowledgeRef('knowledge.protocol.paw-negative'),
           rationale: 'Protocol requires two consecutive negative plant-available-water days.'
         }]
       }]
@@ -45,7 +45,7 @@ function kbsRule() {
         temporal: { mode: 'INSTANT' },
         authorityBindings: [{
           role: 'RAINFALL_OVERRIDE',
-          authorityRef: knowledgeRef('knowledge.kbs.rainfall-override'),
+          authorityRef: knowledgeRef('knowledge.protocol.rainfall-override'),
           rationale: 'Protocol cancels irrigation when rainfall restores net plant-available water.'
         }]
       }]
@@ -59,7 +59,7 @@ function kbsRule() {
           sourceSemanticId: 'previous_day_plant_available_water_deficit_mm',
           authorityBindings: [{
             role: 'ACTION_AMOUNT',
-            authorityRef: knowledgeRef('knowledge.kbs.irrigation-amount'),
+            authorityRef: knowledgeRef('knowledge.protocol.irrigation-amount'),
             rationale: 'Protocol bases irrigation amount on the prior-day deficit.'
           }]
         }
@@ -72,8 +72,8 @@ function kbsRule() {
   };
 }
 
-test('KBS irrigation protocol semantics are representable without dropping trigger, persistence, exception, action timing or amount', () => {
-  const normalized = normalizeDeclarativeAgronomicRule(kbsRule());
+test('real irrigation protocol semantics are representable without dropping trigger, persistence, exception, action timing or amount', () => {
+  const normalized = normalizeDeclarativeAgronomicRule(protocolRule());
   assert.equal(normalized.trigger.predicates[0].temporal.mode, 'CONSECUTIVE');
   assert.equal(normalized.trigger.predicates[0].temporal.count, 2);
   assert.equal(normalized.exceptions.length, 1);
@@ -83,13 +83,13 @@ test('KBS irrigation protocol semantics are representable without dropping trigg
 });
 
 test('consecutive trigger requires count and period', () => {
-  const rule = kbsRule();
+  const rule = protocolRule();
   delete rule.trigger.predicates[0].temporal.period;
   assert.throws(() => normalizeDeclarativeAgronomicRule(rule), /period/);
 });
 
 test('unknown declarative fields fail closed', () => {
-  const rule = kbsRule();
+  const rule = protocolRule();
   rule.trigger.predicates[0].silentInference = true;
   assert.throws(() => normalizeDeclarativeAgronomicRule(rule), /not part of/);
 });
