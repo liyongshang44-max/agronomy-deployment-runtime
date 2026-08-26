@@ -56,7 +56,7 @@ function validateV2BindingClosure(normalized) {
   if (normalized.rule?.contractVersion !== AGRONOMIC_RULE_CONTRACT_VERSION_V2) return;
   const declared = new Set(normalized.knowledgeRefs.map(refKey));
   const bindings = [
-    ...(normalized.rule.evaluationStart?.authorityBindings ?? []),
+    ...(normalized.rule.temporalConstraints ?? []).flatMap((constraint) => constraint.authorityBindings ?? []),
     ...(normalized.rule.coordination?.coordinator?.authorityBindings ?? [])
   ];
   for (const binding of bindings) {
