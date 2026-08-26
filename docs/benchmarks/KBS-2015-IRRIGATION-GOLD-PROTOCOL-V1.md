@@ -71,11 +71,11 @@ The source contains two decision/operations semantics that accepted DEC-0002 v1 
 
 ### 1. `EVALUATION_START_DATE`
 
-The source says daily recording begins **May 1**. The current rule has `evaluationCadence`, but no structured activation/effective-start field. Encoding May 1 as a cadence, predicate, limitation, or arbitrary text would lose its temporal authority semantics.
+The source says daily recording begins **May 1**. Rule v1 has `evaluationCadence`, but no structured source-bound temporal boundary for when the represented evaluation/data schedule begins. Encoding May 1 as a cadence, predicate, limitation, or arbitrary text would lose its temporal authority semantics.
 
 ### 2. `COORDINATION_COORDINATOR`
 
-The source says communication is **coordinated by Joe Simmons**. The current coordination object can retain notification mode, channel, and participants, but has no field expressing the distinct coordinator role. Adding Joe Simmons to the recipient list would not preserve the source meaning that he is the coordinator.
+The source says communication is **coordinated by Joe Simmons**. The v1 coordination object can retain notification mode, channel, and participants, but has no field expressing the distinct coordinator role. Adding Joe Simmons to the recipient list would not preserve the source meaning that he is the coordinator.
 
 The benchmark therefore requires:
 
@@ -87,7 +87,7 @@ unrepresentedElements = [
 ]
 ```
 
-The corresponding source knowledge remains present in `knowledgeRefs`; the information is not discarded merely because the current Policy vocabulary cannot structure it.
+The corresponding source knowledge remains present in `knowledgeRefs`; the information is not discarded merely because the accepted Policy vocabulary cannot structure it.
 
 ## Source under-specification is separate from schema under-specification
 
@@ -111,7 +111,8 @@ The scientific reviewer and approver identities in this acceptance are fixture g
 
 ## Explicit remaining work
 
-Two different follow-ups are intentionally separated:
+Three follow-ups are intentionally separated:
 
-1. **Schema follow-up:** decide whether to extend the accepted declarative Policy vocabulary with a structured activation/effective window and a structured coordination coordinator role. Until that architecture change is accepted, this Gold Protocol remains `INCOMPLETE`.
-2. **Production source follow-up:** ingest and retain the exact original PDF bytes, subject to rights policy, and bind the same semantic chain to that exact PDF `SourceArtifact`. This v1 benchmark does not claim original-PDF byte retention is complete.
+1. **Candidate schema follow-up:** `DEC-0003` now proposes a finite source-bound `temporalConstraints` vocabulary plus `coordination.coordinator`. The same page-23 source chain is used by the candidate v2 benchmark to test whether these two v1 gaps can be represented without altering the source meaning. DEC-0003 remains `PROPOSED`; this v1 benchmark remains permanently `INCOMPLETE` as the regression baseline.
+2. **Broader protocol follow-up:** the wider 23-page protocol independently exposes explicit prohibition / NO-GO and recurring-action semantics that are not solved by DEC-0003. A page-23 `COMPLETE` result must not be generalized into whole-protocol completeness.
+3. **Production source follow-up:** ingest and retain the exact original PDF bytes, subject to rights policy, and bind the same semantic chain to that exact PDF `SourceArtifact`. This benchmark does not claim original-PDF byte retention is complete.
