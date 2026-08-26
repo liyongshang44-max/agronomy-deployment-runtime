@@ -168,7 +168,7 @@ test('v2 coordinator is distinct from notification recipients and cannot exist u
   const rule = protocolRuleV2();
   rule.coordination.mode = 'NONE';
   rule.coordination.participants = [];
-  rule.coordination.channel = undefined;
+  delete rule.coordination.channel;
   assert.throws(() => normalizeDeclarativeAgronomicRule(rule), /cannot carry a coordinator/);
 });
 
