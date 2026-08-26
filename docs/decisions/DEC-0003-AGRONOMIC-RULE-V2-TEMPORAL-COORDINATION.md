@@ -1,6 +1,6 @@
 # DEC-0003 — Declarative Agronomic Rule v2: Source-Bound Temporal Constraints and Coordination Coordinator
 
-Status: **PROPOSED**
+Status: **ACCEPTED**
 
 Date: 2026-08-27
 
@@ -25,7 +25,7 @@ The wider scan also exposed explicit prohibition / NO-GO semantics such as `Do n
 
 Temporal boundaries, named coordinators, prohibitions and execution facts must not be laundered into free-text limitations, unrelated Policy fields, `Outcome`, `ExecutionReceipt`, or runtime state merely to make a benchmark appear complete.
 
-## Proposed decision
+## Decision
 
 Keep the accepted outer `adr.agronomic-policy-compilation.v1` authority contract unchanged and add a new nested declarative rule contract:
 
@@ -163,7 +163,7 @@ The protocol's separate source limitation remains unchanged: it does not publish
 
 ## Authority boundary
 
-This proposal does not change:
+This decision does not change:
 
 ```text
 Protocol planning
@@ -222,10 +222,11 @@ Rejected because the evidence supports a small finite temporal relation vocabula
 
 Rejected to keep the amendment narrow and independently testable. The source proves that prohibition is needed, but it is a separate semantic primitive with its own scope, exception and runtime-safety implications.
 
-## Acceptance gate
+## Acceptance
 
-This DEC remains **PROPOSED** until explicitly accepted. Candidate implementation and tests may exist on a Draft PR, but rule v2 must not become normative repository authority or be merged into `main` until:
+Accepted on 2026-08-27 after explicit architecture approval. The accepted rule-v2 authority remains subject to the exact-head repository qualification gate before merge:
 
-1. this decision is explicitly accepted;
-2. the exact accepted head passes dedicated Agronomic Policy Compilation acceptance;
-3. the same exact head passes repository-wide ADR Constitution acceptance.
+1. the exact accepted head must pass dedicated Agronomic Policy Compilation acceptance;
+2. the same exact head must pass repository-wide ADR Constitution acceptance.
+
+Acceptance of DEC-0003 does not itself assert those post-acceptance checks have passed, does not merge the implementation, and does not broaden the page-23 `COMPLETE` result into whole-protocol completeness.
