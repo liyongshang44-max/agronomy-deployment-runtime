@@ -1,6 +1,14 @@
 name: ADR KBS 2015 Gold Protocol
 
 on:
+  push:
+    paths:
+      - 'acceptance/gold-protocol-kbs-2015/**'
+      - 'packages/agronomic-policy-compilation/**'
+      - 'packages/knowledge-registry/**'
+      - 'packages/scientific-compiler/**'
+      - 'packages/source-registry/**'
+      - '.github/workflows/kbs-2015-gold-protocol.yml'
   pull_request:
     paths:
       - 'acceptance/gold-protocol-kbs-2015/**'
