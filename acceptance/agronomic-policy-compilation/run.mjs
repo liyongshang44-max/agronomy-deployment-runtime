@@ -228,6 +228,12 @@ const policy = publish(env, 'Policy', 'policy-protocol-irrigation', '1', policyS
 }));
 
 const policyAuthority = validateSpecificationAuthority({ ledger: env.ledger, specificationRef: policy.ref });
+const compilationApprover = {
+  principalId: manager.principalId,
+  type: manager.type,
+  organizationId: manager.organizationId,
+  tenantId: manager.tenantId
+};
 
 const compilation = publishAgronomicPolicyCompilation({
   ledger: env.ledger,
@@ -284,11 +290,11 @@ const compilation = publishAgronomicPolicyCompilation({
       ],
       unrepresentedElements: []
     },
-    approverPrincipal: manager,
+    approverPrincipal: compilationApprover,
     approvalRef: policyAuthority.managementAuthorization.ref,
     limitations: ['PROTOCOL_PLANNING_AUTHORITY_NOT_EXECUTION_EVIDENCE']
   },
-  audit: audit({ type: manager.type, id: manager.principalId }, 'agronomic-compilation')
+  audit: audit({ type: compilationApprover.type, id: compilationApprover.principalId }, 'agronomic-compilation')
 });
 
 const validated = validateAgronomicPolicyCompilationAuthority({
