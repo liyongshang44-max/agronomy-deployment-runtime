@@ -122,6 +122,17 @@ function contextAdjudication() {
   };
 }
 
+function expectCompilationError(fn, code) {
+  let caught;
+  try {
+    fn();
+  } catch (error) {
+    caught = error;
+  }
+  assert.ok(caught, `expected compilation error ${code}`);
+  assert.equal(caught.code, code);
+}
+
 const claimSpecs = [
   ['water-credit', 'RELATIONSHIP', 'In the Resource Gradient Experiment irrigation water budget, rainfall and irrigation amounts are credits to the soil.', 'rainfall and irrigation amounts represent a credit to the soil'],
   ['et-debit', 'RELATIONSHIP', 'In the Resource Gradient Experiment irrigation water budget, evapotranspiration is recorded as a debit to the soil.', 'evapotranspiration (ET) is recorded as a debit to the soil'],
@@ -550,6 +561,28 @@ assert.equal(validated.semanticPayload.rule.action.timing.offset, 'P1D');
 assert.equal(validated.semanticPayload.ruleHash, semanticHash('DeclarativeAgronomicRule', validated.semanticPayload.rule));
 assert.equal(validated.semanticPayload.modelDefinitions[0].definitionHash, modelDefinitionHash);
 
+for (const key of ['evaluation-start', 'email-coordinator']) {
+  const omittedRef = knowledgeByKey.get(key).ref;
+  const missingDeclaredAuthority = structuredClone(validated.semanticPayload);
+  missingDeclaredAuthority.knowledgeRefs = missingDeclaredAuthority.knowledgeRefs.filter((candidate) => !(
+    candidate.kind === omittedRef.kind &&
+    candidate.logicalId === omittedRef.logicalId &&
+    candidate.version === omittedRef.version &&
+    candidate.semanticHash === omittedRef.semanticHash
+  ));
+  assert.equal(
+    missingDeclaredAuthority.knowledgeRefs.some((candidate) => candidate.semanticHash === omittedRef.semanticHash),
+    false
+  );
+  expectCompilationError(() => publishAgronomicPolicyCompilation({
+    ledger: env.ledger,
+    logicalId: `agronomic-policy-compilation.gold.kbs-2015-rge-irrigation.v2.missing-${key}`,
+    version: '1',
+    compilation: missingDeclaredAuthority,
+    audit: audit({ type: compilationApprover.type, id: compilationApprover.principalId }, `kbs-v2-missing-${key}`)
+  }), 'AGRONOMIC_POLICY_COMPILATION_V2_AUTHORITY_NOT_DECLARED');
+}
+
 for (const knowledge of knowledgeByKey.values()) {
   assert.equal(
     qualificationService.qualifiedUseStatus({ qualifiedKnowledgeRef: knowledge.ref, qualificationTarget: AGRONOMIC_POLICY_REQUIRED_KNOWLEDGE_USE }),
@@ -581,6 +614,7 @@ console.log(JSON.stringify({
   temporalConstraints: validated.semanticPayload.rule.temporalConstraints,
   coordinator: validated.semanticPayload.rule.coordination.coordinator,
   losslessCoverage: validated.semanticPayload.losslessCoverage,
+  authorityClosureNegativeCases: ['evaluation-start', 'email-coordinator'],
   sourceModelUnderSpecification: 'FULL_SPREADSHEET_RECURRENCE_AND_INITIAL_STATE_NOT_REPORTED',
   planningNotExecutionBoundaryPreserved: true,
   executionAuthorityRecordsCreated: runtimeRecords.length
