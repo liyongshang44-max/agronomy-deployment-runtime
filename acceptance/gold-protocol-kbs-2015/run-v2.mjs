@@ -375,7 +375,7 @@ const rule = {
   evaluationCadence: 'P1D',
   temporalConstraints: [{
     target: 'RULE_EVALUATION',
-    relation: 'NOT_BEFORE_DATE',
+    relation: 'ON_OR_AFTER_DATE',
     date: '2015-05-01',
     authorityBindings: [{
       role: 'EVALUATION_START_DATE',
@@ -503,7 +503,7 @@ const compilation = publishAgronomicPolicyCompilation({
     policyRef: policy.ref,
     rule,
     ruleHash,
-    transformationRationale: 'The candidate v2 rule preserves the accepted v1 trigger, persistence, exception, action, amount, notification and model semantics while adding a source-bound temporal constraint for the May 1 evaluation boundary and source-bound Joe Simmons coordinator semantics. Protocol planning remains distinct from actual field execution.',
+    transformationRationale: 'The candidate v2 rule preserves the accepted v1 trigger, persistence, exception, action, amount, notification and model semantics while representing the source-bound May 1 evaluation/data boundary as ON_OR_AFTER_DATE and Joe Simmons as the distinct communication coordinator. Protocol planning remains distinct from actual field execution.',
     losslessCoverage: {
       status: 'COMPLETE',
       coveredElements: [
@@ -542,7 +542,7 @@ assert.equal(validated.semanticPayload.losslessCoverage.status, 'COMPLETE');
 assert.deepEqual(validated.semanticPayload.losslessCoverage.unrepresentedElements, []);
 assert.equal(validated.semanticPayload.rule.temporalConstraints.length, 1);
 assert.equal(validated.semanticPayload.rule.temporalConstraints[0].target, 'RULE_EVALUATION');
-assert.equal(validated.semanticPayload.rule.temporalConstraints[0].relation, 'NOT_BEFORE_DATE');
+assert.equal(validated.semanticPayload.rule.temporalConstraints[0].relation, 'ON_OR_AFTER_DATE');
 assert.equal(validated.semanticPayload.rule.temporalConstraints[0].date, '2015-05-01');
 assert.equal(validated.semanticPayload.rule.coordination.coordinator.sourceLabel, 'Joe Simmons');
 assert.equal(validated.semanticPayload.rule.trigger.predicates[0].temporal.count, 2);
