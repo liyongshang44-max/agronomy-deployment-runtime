@@ -23,7 +23,7 @@
     "test:context-datum": "node acceptance/context-datum/run.mjs && node acceptance/context-datum/integrity.mjs",
     "test:context-reference": "node acceptance/context-reference/run.mjs && node acceptance/context-reference/integrity.mjs && node acceptance/context-reference/hardening.mjs",
     "test:context-manifest": "node acceptance/context-manifest/run.mjs && node acceptance/context-manifest/integrity.mjs && node acceptance/context-manifest/identity.mjs",
-    "test:specification": "node acceptance/specification/run.mjs && node acceptance/specification/integrity.mjs && node acceptance/specification/retry.mjs && node acceptance/specification/action-semantics.mjs",
+    "test:specification": "node acceptance/specification/run.mjs && node acceptance/specification/integrity.mjs && node acceptance/specification/retry.mjs && node acceptance/specification/action-semantics.mjs && node acceptance/specification/policy-v3.mjs",
     "test:implementation-registry": "node acceptance/implementation-registry/run.mjs && node acceptance/implementation-registry/integrity.mjs && node acceptance/implementation-registry/retry.mjs",
     "test:implementation-conformance": "node acceptance/implementation-conformance/run.mjs && node acceptance/implementation-conformance/integrity.mjs && node acceptance/implementation-conformance/lifecycle.mjs && node acceptance/implementation-conformance/binding.mjs",
     "test:runtime-profile": "node acceptance/runtime-profile/run.mjs && node acceptance/runtime-profile/integrity.mjs && node acceptance/runtime-profile/lifecycle.mjs && node acceptance/runtime-profile/robustness.mjs",
