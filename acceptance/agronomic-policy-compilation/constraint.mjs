@@ -37,7 +37,7 @@ function boolPort(semanticId) {
     semanticId,
     valueType: 'BOOLEAN',
     unit: '1',
-    epistemicClasses: ['CONFIGURATION']
+    epistemicClasses: ['STATE_ESTIMATE']
   };
 }
 
@@ -111,8 +111,8 @@ const policy = publish(env, 'Policy', 'policy.constraint.operation-control', '1'
   actionSemantics: policyActionSemantics(['SENSITIVE_OPERATION', 'WAIT']),
   requiredInputs: [],
   requiredRuntimeOutputs: [
-    boolPort('context.prohibition_applies'),
-    boolPort('context.exempt_area')
+    boolPort('runtime.prohibition_applies'),
+    boolPort('runtime.exempt_area')
   ],
   decisionLogic: {
     methodId: 'operation-control-policy-v1',
@@ -140,7 +140,7 @@ const constraint = {
   when: {
     logic: 'ALL',
     predicates: [{
-      semanticId: 'context.prohibition_applies',
+      semanticId: 'runtime.prohibition_applies',
       comparator: 'EQ',
       value: { type: 'BOOLEAN', boolean: true },
       authorityBindings: [{
@@ -153,7 +153,7 @@ const constraint = {
   exceptions: [{
     logic: 'ALL',
     predicates: [{
-      semanticId: 'context.exempt_area',
+      semanticId: 'runtime.exempt_area',
       comparator: 'EQ',
       value: { type: 'BOOLEAN', boolean: true },
       authorityBindings: [{
