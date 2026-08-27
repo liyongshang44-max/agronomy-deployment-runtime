@@ -1,6 +1,6 @@
 # DEC-0011 — Governed Conditional Agronomic Action-Realization Compilation
 
-Status: **PROPOSED**
+Status: **ACCEPTED**
 
 Date: 2026-08-28
 
@@ -960,10 +960,52 @@ Before implementation is authorized, architecture review must confirm:
 12. local COMPLETE remains local to the target conditional sentence;
 13. implementation is additive and does not mutate accepted contracts.
 
-## Acceptance gate
+## Acceptance
 
-DEC-0011 remains **PROPOSED** until explicit architecture acceptance.
+Accepted on 2026-08-28 after explicit architecture approval.
 
-No contract implementation, runtime mutation, workflow mutation, Policy mutation, accepted authority mutation, or equipment/runtime operationalization is authorized by this draft.
+Acceptance establishes the source-semantic architecture described by this decision only.
 
-If accepted, implementation must occur on a separate branch created from the resulting accepted main and must include exact real KBS three-Claim positive and negative acceptance evidence.
+In particular, acceptance does **not** establish:
+
+- a runtime-evaluable predicate for `more aggressive tillage is needed`;
+- a measurable or ranked tillage-aggressiveness scale;
+- a current need state;
+- a PERMITTED force from `can be`;
+- BEFORE/AFTER or any ordered workflow between CHISEL_PLOWING and SOIL_FINISHING;
+- automatic membership in the DEC-0010 source-defined open class;
+- runtime eligibility, availability, equipment compatibility, equivalence, ranking, causal efficacy, execution, Field Log truth, or Outcome.
+
+The accepted v1 architecture is restricted to the exact real-source pattern:
+
+`TILL -> [CHISEL_PLOWING AND SOIL_FINISHING] IF_NEEDED("more aggressive tillage")`
+
+with composition semantics:
+
+`SOURCE_CONJUNCTION_NO_ORDER_ASSERTED`.
+
+## Post-acceptance gate
+
+Before this decision is merged as accepted architecture:
+
+1. repository-wide ADR Constitution MUST pass on the exact accepted documentation head;
+2. the PR MUST remain docs-only;
+3. no runtime, schema, workflow, Policy/actionSpace, equipment, acceptance-test, or existing authority-contract mutation may be included;
+4. the PR base MUST still equal the expected main authority head;
+5. the accepted exact head MUST be recorded before merge.
+
+Only after the accepted documentation PR is merged may implementation begin on a separate branch created from the resulting main.
+
+Implementation MUST include exact real KBS three-Claim evidence proving at least:
+
+- Claim A independently supports the parent TILL Regimen;
+- Claim B independently supports the parent Action Realization;
+- Claim C independently supports the conditional compound realization and IF_NEEDED modality;
+- both CHISEL_PLOWING and SOIL_FINISHING components are retained;
+- SOIL_FINISHING identity reuse is established by governed semantic review, not lexical stemming alone;
+- composition remains SOURCE_CONJUNCTION_NO_ORDER_ASSERTED;
+- the exact condition expression and condition-object expression are retained;
+- no runtime predicate/comparator/threshold/current-need state is created;
+- no PERMITTED, aggressiveness ranking, open-class membership, causal efficacy, runtime eligibility/availability/equivalence, Policy mutation, execution, Field Log, or Outcome authority is created.
+
+Acceptance of DEC-0011 does not pre-accept runtime operationalization of need, measurable tillage aggressiveness, equipment mappings, method ordering, open-class membership, runtime alternative generation, or Field Log reconciliation.
