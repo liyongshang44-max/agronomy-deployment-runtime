@@ -138,7 +138,7 @@ export function policySpec(overrides = {}) {
   const contractVersion = overrides.contractVersion ?? 'adr.policy.v2';
   const actionSpace = overrides.actionSpace ?? ['WAIT', 'IRRIGATE_NOW'];
   const actionSemantics = overrides.actionSemantics
-    ?? (contractVersion === 'adr.policy.v2' ? policyActionSemantics(actionSpace) : undefined);
+    ?? (['adr.policy.v2', 'adr.policy.v3'].includes(contractVersion) ? policyActionSemantics(actionSpace) : undefined);
   return {
     contractVersion,
     controlScope: controlScope(),
