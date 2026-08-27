@@ -37,7 +37,7 @@
     "test:information-requirement": "node acceptance/information-requirement/run.mjs && node acceptance/information-requirement/integrity.mjs",
     "test:runtime-eligibility": "node acceptance/runtime-eligibility/run.mjs && node acceptance/runtime-eligibility/integrity.mjs",
     "test:runtime-binding": "node acceptance/runtime-binding/run.mjs && node acceptance/runtime-binding/integrity.mjs",
-    "test:implementation-broker": "node acceptance/implementation-broker/run.mjs && node acceptance/implementation-broker/integrity.mjs && node acceptance/implementation-broker/idempotency.mjs && node acceptance/implementation-broker/hardening.mjs && node acceptance/implementation-broker/post-d03-policy.mjs",
+    "test:implementation-broker": "node acceptance/implementation-broker/run.mjs && node acceptance/implementation-broker/integrity.mjs && node acceptance/implementation-broker/idempotency.mjs && node acceptance/implementation-broker/hardening.mjs && node acceptance/implementation-broker/post-d03-policy.mjs && node acceptance/implementation-broker/policy-v3-context-only.mjs",
     "test:runtime-results": "node acceptance/runtime-results/run.mjs && node acceptance/runtime-results/integrity.mjs",
     "test:runtime-alternative-set": "node acceptance/runtime-alternative-set/run.mjs && node acceptance/runtime-alternative-set/integrity.mjs",
     "test:decision-robustness": "node acceptance/decision-robustness/run.mjs && node acceptance/decision-robustness/integrity.mjs",
