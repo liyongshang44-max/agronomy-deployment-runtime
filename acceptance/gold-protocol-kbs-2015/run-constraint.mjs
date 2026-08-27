@@ -622,7 +622,7 @@ assert.equal(runtimeRecords.length, 0);
 console.log(JSON.stringify({
   ok: true,
   benchmark: 'KBS_2015_AGRONOMIC_PROHIBITION_CONSTRAINT_GOLD',
-  decision: 'STACKED_DEC0004_DEC0005_INTEGRATION_ONLY_NOT_NORMATIVE',
+  decision: 'DEC_0004_PROPOSED_WITH_ACCEPTED_POLICY_V3_PREDECESSOR',
   claimCount: reviewed.length,
   qualifiedKnowledgeCount: knowledgeByKey.size,
   constraintCompilationCount: constraints.length,
