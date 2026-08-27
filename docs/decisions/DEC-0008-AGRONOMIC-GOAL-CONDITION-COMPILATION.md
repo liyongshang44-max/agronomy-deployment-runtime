@@ -126,26 +126,18 @@ Future source material may justify additive versions.
 
 ## v1 target scope
 
-The v1 target scope is restricted to:
+The v1 target scope is restricted to the source-proven form:
 
 - `ACTION`
-- `OCCURRENCE`
-
-### ACTION
 
 The goal/purpose applies to an agronomic action proposition.
 
-Example:
+Examples:
 
-`an insecticide application can be used to control aphids`
+- `an insecticide application can be used to control aphids`
+- `Plots are tilled as needed (2-6 times a year) to prevent plant growth from becoming established.`
 
-### OCCURRENCE
-
-The goal/purpose applies to the source-governed occurrence pattern of an action.
-
-Example:
-
-`Plots are tilled as needed (2-6 times a year) to prevent plant growth from becoming established.`
+DEC-0008 v1 does not claim that the goal relation semantically modifies the occurrence cardinality itself. In B21, `AS_NEEDED` and `2-6 times a year` remain separate modality and occurrence semantics.
 
 This target scope does not create or mutate the operational authority being described.
 
@@ -173,7 +165,6 @@ AgronomicGoalCondition {
 
   targetScope:
     ACTION
-    | OCCURRENCE
 
   relation:
     PREVENT
@@ -200,7 +191,7 @@ For B21, the source expressions include:
 A v1 normalized object may record:
 
 - relation = `PREVENT`
-- targetScope = `OCCURRENCE`
+- targetScope = `ACTION`
 - goalObjectExpression = the source-grounded plant-establishment phrase.
 
 It must not invent a thresholded predicate such as:
@@ -424,7 +415,7 @@ DEC-0008 does not convert planning purpose into executed fact.
 
 ## KBS architecture targets
 
-### A. B21 — PREVENT occurrence goal
+### A. B21 — PREVENT action goal
 
 Source:
 
@@ -547,7 +538,7 @@ Before implementation is authorized, architecture review must confirm:
 1. source purpose is distinct from runtime objective;
 2. goal condition is non-executable source semantics, not a Boolean predicate;
 3. v1 relations are limited to PREVENT / CONTROL;
-4. v1 target scopes are limited to ACTION / OCCURRENCE;
+4. v1 target scope is limited to ACTION;
 5. exact source expression and exact goal-object expression remain inspectable;
 6. publication requires active scientific authority for AGRONOMIC_POLICY_INPUT;
 7. governed semantic review is mandatory;
