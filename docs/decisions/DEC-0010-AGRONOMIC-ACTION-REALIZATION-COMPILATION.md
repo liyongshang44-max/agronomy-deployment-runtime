@@ -1,6 +1,6 @@
 # DEC-0010 — Governed Agronomic Action-Realization Compilation
 
-Status: **PROPOSED**
+Status: **ACCEPTED**
 
 Date: 2026-08-28
 
@@ -789,10 +789,48 @@ Before implementation is authorized, architecture review must confirm:
 12. local COMPLETE remains local to the first method sentence;
 13. implementation is additive and does not mutate accepted contracts.
 
-## Acceptance gate
+## Acceptance
 
-DEC-0010 remains **PROPOSED** until explicit architecture acceptance.
+Accepted on 2026-08-28 after explicit architecture approval.
 
-No implementation, runtime mutation, workflow mutation, existing accepted contract mutation, or Policy/actionSpace mutation is authorized by this draft.
+Acceptance establishes the source-semantic architecture described by this decision only.
 
-If accepted, implementation must occur on a separate branch created from the resulting accepted main and must include exact real KBS B21 positive and negative acceptance evidence.
+In particular, acceptance does **not** establish:
+
+- a PERMITTED modality from the phrase `can be`;
+- a closed or mutually exclusive realization set;
+- causal efficacy of any named or open-class method;
+- runtime eligibility, availability, ranking, equivalence, or implementation identity;
+- conditional chisel-plow semantics from the neighboring sentence;
+- any Policy actionSpace/actionSemantics mutation.
+
+The accepted v1 architecture is restricted to the exact real-source B21 realization pattern:
+
+`TILL -> OPEN_SOURCE_DEFINED { SOIL_FINISHING, ROTOTILLING, source-defined open tillage class }`
+
+with overlap between named methods and the open class left semantically possible.
+
+## Post-acceptance gate
+
+Before this decision is merged as accepted architecture:
+
+1. repository-wide ADR Constitution MUST pass on the exact accepted documentation head;
+2. the PR MUST remain docs-only;
+3. no runtime, schema, workflow, acceptance-test, Policy/actionSpace, or existing authority-contract mutation may be included;
+4. the PR base MUST still equal the expected main authority head;
+5. the accepted exact head MUST be recorded before merge.
+
+Only after the accepted documentation PR is merged may implementation begin on a separate branch created from the resulting main.
+
+Implementation MUST include exact real KBS evidence with:
+
+- one governed parent-regimen source Claim;
+- one independently governed action-realization source Claim;
+- exact parent TILL refinement closure;
+- explicit OPEN_SOURCE_DEFINED preservation;
+- named SOIL_FINISHING and ROTOTILLING methods;
+- explicit source-defined open class and membership criterion;
+- mandatory negatives for PERMITTED, CLOSED/exclusive/disjoint sets, causal efficacy, runtime eligibility/availability/ranking/equivalence, wrong parent, wrong scientific use, source-expression mismatch, and neighboring CHISEL_PLOW laundering;
+- no RuntimeAlternativeSet, RuntimeBinding, DecisionResult, execution, or Outcome authority.
+
+Acceptance of DEC-0010 does not pre-accept conditional method selection, compound chisel-plow/soil-finish semantics, method ordering, runtime realization selection, equipment compatibility, or Field Log reconciliation.
