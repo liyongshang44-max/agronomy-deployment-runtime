@@ -10,7 +10,11 @@ import { normalizeRuntimeExecutionEnvelope } from '../../implementation-broker/s
 import { validateRuntimeAlternativeSet } from '../../runtime-alternative-set/src/index.mjs';
 import { validateRuntimeBinding } from '../../runtime-binding/src/index.mjs';
 import { validateRuntimeProfileAuthority } from '../../runtime-profile/src/index.mjs';
-import { validateSpecificationAuthority } from '../../specification-registry/src/index.mjs';
+import {
+  POLICY_CONTRACT_VERSION,
+  POLICY_CONTRACT_VERSION_V3,
+  validateSpecificationAuthority
+} from '../../specification-registry/src/index.mjs';
 import {
   DECISION_ROBUSTNESS_AUTHORITY_CLASS,
   DECISION_ROBUSTNESS_CONTRACT_VERSION,
@@ -217,7 +221,7 @@ function evaluateBindingAction({ ledger, decision, included, binding, executionM
   validatePolicyDecisionActionSpace(decision, policy);
   if (supplied) assertExecutionMatchesBinding(supplied, binding, tuple);
 
-  if (policy.semanticPayload.contractVersion !== 'adr.policy.v2'
+  if (![POLICY_CONTRACT_VERSION, POLICY_CONTRACT_VERSION_V3].includes(policy.semanticPayload.contractVersion)
     || policy.semanticPayload.actionSemantics?.equivalenceMode !== 'EXACT_MATERIAL_PARAMETERS') {
     return deepFreeze({
       evaluation: unresolvedEvaluation({
