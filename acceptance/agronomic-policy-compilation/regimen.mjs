@@ -102,7 +102,7 @@ function publishModality(bundleValue, label, sourceExpression = SOURCE_EXPRESSIO
   });
 }
 
-function publishGoal(bundleValue, label, sourceExpression = SOURCE_EXPRESSION) {
+function publishGoal(bundleValue, label, sourceExpression = SOURCE_EXPRESSION, goalObjectExpression = 'plant growth from becoming established') {
   const a = auth(bundleValue);
   const goalCondition = {
     contractVersion: AGRONOMIC_GOAL_CONDITION_CONTRACT_VERSION,
@@ -110,7 +110,7 @@ function publishGoal(bundleValue, label, sourceExpression = SOURCE_EXPRESSION) {
     sourceExpression,
     targetScope: 'ACTION',
     relation: 'PREVENT',
-    goalObjectExpression: 'plant growth from becoming established',
+    goalObjectExpression,
     authorityBindings: [{
       role: 'SOURCE_GOAL',
       authorityRef: bundleValue.knowledge.ref,
@@ -302,7 +302,8 @@ const otherGoalBundle = bundle(
 const otherGoal = publishGoal(
   otherGoalBundle,
   'other',
-  'Plots are tilled as needed (2-6 times a year) to prevent a different source-defined target.'
+  'Plots are tilled as needed (2-6 times a year) to prevent a different source-defined target.',
+  'different source-defined target'
 );
 const crossGoal = regimen({
   bundleValue: b21,
