@@ -1,0 +1,36 @@
+name: ADR Agronomic Goal Condition
+
+on:
+  pull_request:
+    paths:
+      - 'packages/agronomic-policy-compilation/src/goal-*.mjs'
+      - 'packages/agronomic-policy-compilation/test/goal-*.test.mjs'
+      - 'acceptance/agronomic-policy-compilation/goal.mjs'
+      - 'acceptance/gold-protocol-kbs-2015/run-goal.mjs'
+      - 'acceptance/gold-protocol-kbs-2015/kbs-2015-modality-excerpts.txt'
+      - 'docs/decisions/DEC-0008-AGRONOMIC-GOAL-CONDITION-COMPILATION.md'
+      - '.github/workflows/agronomic-goal-condition.yml'
+      - 'package.json'
+
+permissions:
+  contents: read
+
+jobs:
+  goal-condition:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Report runtime
+        run: node --version
+      - name: Constitutional static checks
+        run: npm run check:constitution
+      - name: Goal-condition contract tests
+        run: node --test packages/agronomic-policy-compilation/test/goal-contract.test.mjs
+      - name: Governed goal-condition authority acceptance
+        run: node acceptance/agronomic-policy-compilation/goal.mjs
+      - name: KBS 2015 goal-condition gold acceptance
+        run: node acceptance/gold-protocol-kbs-2015/run-goal.mjs

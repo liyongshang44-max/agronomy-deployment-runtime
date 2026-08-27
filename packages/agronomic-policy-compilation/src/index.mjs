@@ -77,3 +77,22 @@ export {
   publishAgronomicNormativeModalityCompilation,
   validateAgronomicNormativeModalityCompilationAuthority
 } from './modality-authority.mjs';
+
+export {
+  AGRONOMIC_GOAL_CONDITION_COMPILATION_CONTRACT_VERSION,
+  AGRONOMIC_GOAL_CONDITION_CONTRACT_VERSION,
+  AGRONOMIC_GOAL_CONDITION_RELATIONS,
+  AGRONOMIC_GOAL_CONDITION_TARGET_SCOPES,
+  AgronomicGoalConditionCompilationError,
+  agronomicGoalConditionCompilationAuthorityRefs,
+  agronomicGoalConditionHash,
+  normalizeAgronomicGoalCondition,
+  normalizeAgronomicGoalConditionCompilation
+} from './goal-contract.mjs';
+
+export {
+  AGRONOMIC_GOAL_CONDITION_REVIEW_DISPOSITIONS,
+  publishAgronomicGoalConditionReviewDecision,
+  publishAgronomicGoalConditionCompilation,
+  validateAgronomicGoalConditionCompilationAuthority
+} from './goal-authority.mjs';

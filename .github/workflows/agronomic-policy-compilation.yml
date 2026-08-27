@@ -11,6 +11,7 @@ on:
       - 'docs/decisions/DEC-0004-AGRONOMIC-POLICY-CONSTRAINT-COMPILATION.md'
       - 'docs/decisions/DEC-0006-AGRONOMIC-POLICY-OBLIGATION-COMPILATION.md'
       - 'docs/decisions/DEC-0007-AGRONOMIC-NORMATIVE-MODALITY-COMPILATION.md'
+      - 'docs/decisions/DEC-0008-AGRONOMIC-GOAL-CONDITION-COMPILATION.md'
       - '.github/workflows/agronomic-policy-compilation.yml'
 
 permissions:
@@ -39,5 +40,7 @@ jobs:
         run: node acceptance/agronomic-policy-compilation/obligation.mjs
       - name: Agronomic normative modality authority acceptance
         run: node acceptance/agronomic-policy-compilation/modality.mjs
-      - name: KBS 2015 gold protocol rule, constraint, obligation and modality acceptance
+      - name: Agronomic goal-condition authority acceptance
+        run: node acceptance/agronomic-policy-compilation/goal.mjs
+      - name: KBS 2015 gold protocol rule, constraint, obligation, modality and goal acceptance
         run: npm run test:gold-protocol-kbs-2015
