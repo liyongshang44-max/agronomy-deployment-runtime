@@ -176,7 +176,7 @@ function normalizeAlternative(value, index) {
       || membershipCriterionExpression !== OPEN_CLASS_CRITERION) {
       throw new AgronomicActionRealizationCompilationError(
         'AGRONOMIC_ACTION_REALIZATION_OPEN_CLASS_SOURCE_MISMATCH',
-        'DEC-0010 v1 must retain the exact KBS source-defined open class and criterion expressions'
+        'DEC-0010 v1 must retain the exact accepted source-defined open class and criterion expressions'
       );
     }
     return deepFreeze({ kind, classExpression, membershipCriterionExpression });
