@@ -384,8 +384,8 @@ function publishPolicy({ logicalId, decisionType, actionSpace, inputs }) {
     decisionType,
     actionSpace,
     actionSemantics: actionSemantics(actionSpace),
-    requiredInputs: inputs,
-    requiredRuntimeOutputs: [],
+    requiredInputs: [],
+    requiredRuntimeOutputs: inputs,
     decisionLogic: {
       methodId: `${logicalId}.candidate-evaluation`,
       definitionHash: `sha256:${'f'.repeat(64)}`
