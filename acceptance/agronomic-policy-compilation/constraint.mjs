@@ -109,11 +109,11 @@ const policy = publish(env, 'Policy', 'policy.constraint.operation-control', '1'
   decisionType: 'OPERATION_CONTROL',
   actionSpace: ['SENSITIVE_OPERATION', 'WAIT'],
   actionSemantics: policyActionSemantics(['SENSITIVE_OPERATION', 'WAIT']),
-  requiredInputs: [
+  requiredInputs: [],
+  requiredRuntimeOutputs: [
     boolPort('context.prohibition_applies'),
     boolPort('context.exempt_area')
   ],
-  requiredRuntimeOutputs: [],
   decisionLogic: {
     methodId: 'operation-control-policy-v1',
     definitionHash: `sha256:${'f'.repeat(64)}`
