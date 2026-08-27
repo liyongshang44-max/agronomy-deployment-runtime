@@ -21,10 +21,10 @@ const world = decisionRobustnessWorld('policy-v3-d02-context-only', {
   policyOverrides: {
     contractVersion: 'adr.policy.v3',
     requiredInputs: [{
-      semanticId: 'crop.code',
-      valueType: 'CATEGORY',
-      unit: '1',
-      epistemicClasses: ['ASSERTION']
+      semanticId: 'soil.volumetric_water_content',
+      valueType: 'DECIMAL',
+      unit: 'm3_per_m3',
+      epistemicClasses: ['OBSERVATION']
     }],
     requiredRuntimeOutputs: []
   }
@@ -33,7 +33,7 @@ const world = decisionRobustnessWorld('policy-v3-d02-context-only', {
 assert.equal(world.policy.semanticPayload.contractVersion, 'adr.policy.v3');
 assert.deepEqual(world.policy.semanticPayload.requiredRuntimeOutputs, []);
 
-const crop = contextDatumBySemanticId(world, 'crop.code');
+const soil = contextDatumBySemanticId(world, 'soil.volumetric_water_content');
 const binding = world.includedBindings[0];
 
 let capturedRequest = null;
@@ -57,7 +57,7 @@ const broker = new RuntimeExecutionBroker({
 const envelope = await broker.execute({
   ledger: world.env.ledger,
   runtimeBindingRef: binding.ref,
-  inputDatumRefs: [crop.ref]
+  inputDatumRefs: [soil.ref]
 });
 
 assert.equal(envelope.status, 'SUCCEEDED');
@@ -65,8 +65,8 @@ assert.ok(capturedRequest);
 assert.equal(capturedRequest.contractVersion, 'adr.executor-request.v1');
 assert.equal(Array.isArray(capturedRequest.inputEntries), true);
 assert.equal(capturedRequest.inputEntries.length, 1);
-assert.equal(capturedRequest.inputEntries[0].semanticId, 'crop.code');
-assert.deepEqual(capturedRequest.inputEntries[0].authorityRef, crop.ref);
+assert.equal(capturedRequest.inputEntries[0].semanticId, 'soil.volumetric_water_content');
+assert.deepEqual(capturedRequest.inputEntries[0].authorityRef, soil.ref);
 assert.equal(Object.hasOwn(capturedRequest, 'runtimeEntries'), false);
 assert.equal(Object.hasOwn(capturedRequest, 'contextEntries'), false);
 assert.equal(envelope.semanticValidation, 'NOT_PERFORMED_D03_REQUIRED');
