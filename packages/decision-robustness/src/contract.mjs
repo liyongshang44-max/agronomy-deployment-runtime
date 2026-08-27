@@ -254,11 +254,11 @@ export function normalizeMaterialActionSignature(value) {
 
 export function deriveMaterialActionSignature({ policyRef, policyPayload, rawOutput }) {
   const exactPolicyRef = exactRef(policyRef, 'Policy', 'policyRef');
-  if (!policyPayload || policyPayload.contractVersion !== 'adr.policy.v2'
+  if (!policyPayload || !['adr.policy.v2', 'adr.policy.v3'].includes(policyPayload.contractVersion)
     || policyPayload.actionSemantics?.equivalenceMode !== 'EXACT_MATERIAL_PARAMETERS') {
     throw new DecisionRobustnessError(
       'POLICY_ACTION_EQUIVALENCE_AUTHORITY_REQUIRED',
-      'MaterialActionSignature requires exact adr.policy.v2 actionSemantics authority'
+      'MaterialActionSignature requires exact governed adr.policy.v2/v3 actionSemantics authority'
     );
   }
   const output = normalizePolicyActionOutput(rawOutput);
