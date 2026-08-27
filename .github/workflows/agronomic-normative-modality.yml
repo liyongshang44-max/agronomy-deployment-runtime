@@ -1,0 +1,36 @@
+name: ADR Agronomic Normative Modality
+
+on:
+  pull_request:
+    paths:
+      - 'packages/agronomic-policy-compilation/src/modality-*.mjs'
+      - 'packages/agronomic-policy-compilation/test/modality-*.test.mjs'
+      - 'acceptance/agronomic-policy-compilation/modality.mjs'
+      - 'acceptance/gold-protocol-kbs-2015/kbs-2015-modality-excerpts.txt'
+      - 'acceptance/gold-protocol-kbs-2015/run-modality.mjs'
+      - 'docs/decisions/DEC-0007-AGRONOMIC-NORMATIVE-MODALITY-COMPILATION.md'
+      - '.github/workflows/agronomic-normative-modality.yml'
+      - 'package.json'
+
+permissions:
+  contents: read
+
+jobs:
+  normative-modality:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Report runtime
+        run: node --version
+      - name: Constitutional static checks
+        run: npm run check:constitution
+      - name: Normative modality contract tests
+        run: node --test packages/agronomic-policy-compilation/test/modality-contract.test.mjs
+      - name: Governed normative modality authority acceptance
+        run: node acceptance/agronomic-policy-compilation/modality.mjs
+      - name: KBS 2015 normative modality gold acceptance
+        run: node acceptance/gold-protocol-kbs-2015/run-modality.mjs
