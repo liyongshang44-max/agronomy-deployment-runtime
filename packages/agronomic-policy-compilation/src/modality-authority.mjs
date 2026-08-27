@@ -387,6 +387,29 @@ function validateReview({ ledger, reviewRef, normalized }) {
       'semantic review must bind the exact modality and scientific predecessor closure'
     );
   }
+  const authAudits = validateReviewAuthorizationSet({
+    ledger,
+    authorizationDecisionAuditRefs: payload.authorizationDecisionAuditRefs,
+    reviewerPrincipal: payload.reviewerPrincipal,
+    sourceRefs: payload.sourceRefs
+  });
+  const directReviewAudit = ledger.auditFor(review.ref)
+    .filter((event) => sameAuthorityRef(event.objectRef, review.ref))
+    .some((event) =>
+      event.action === 'REVIEW_AGRONOMIC_NORMATIVE_MODALITY'
+        && event.actor?.id === payload.reviewerPrincipal?.principalId
+        && event.actor?.type === payload.reviewerPrincipal?.type
+        && payload.knowledgeRefs.every((ref) => exactRefIn(event.inputRefs, ref))
+        && payload.sourceRefs.every((ref) => exactRefIn(event.inputRefs, ref))
+        && payload.sourceArtifactRefs.every((ref) => exactRefIn(event.inputRefs, ref))
+        && authAudits.every((item) => exactRefIn(event.inputRefs, item.ref))
+    );
+  if (!directReviewAudit) {
+    throw new AgronomicNormativeModalityCompilationError(
+      'AGRONOMIC_NORMATIVE_MODALITY_REVIEW_AUDIT_INVALID',
+      'semantic modality review lacks direct reviewer audit over exact science and authorization predecessors'
+    );
+  }
   return review;
 }
 
