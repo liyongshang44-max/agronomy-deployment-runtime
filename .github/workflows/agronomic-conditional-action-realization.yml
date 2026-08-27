@@ -1,0 +1,36 @@
+name: ADR Agronomic Conditional Action Realization
+
+on:
+  pull_request:
+    paths:
+      - 'packages/agronomic-policy-compilation/src/conditional-realization-*.mjs'
+      - 'packages/agronomic-policy-compilation/test/conditional-realization-*.test.mjs'
+      - 'acceptance/agronomic-policy-compilation/conditional-realization.mjs'
+      - 'acceptance/gold-protocol-kbs-2015/run-conditional-realization.mjs'
+      - 'acceptance/gold-protocol-kbs-2015/kbs-2015-realization-excerpts.txt'
+      - 'docs/decisions/DEC-0011-CONDITIONAL-AGRONOMIC-ACTION-REALIZATION-COMPILATION.md'
+      - '.github/workflows/agronomic-conditional-action-realization.yml'
+      - 'package.json'
+
+permissions:
+  contents: read
+
+jobs:
+  conditional-action-realization:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Report runtime
+        run: node --version
+      - name: Constitutional static checks
+        run: npm run check:constitution
+      - name: Conditional action-realization contract tests
+        run: node --test packages/agronomic-policy-compilation/test/conditional-realization-contract.test.mjs
+      - name: Governed conditional action-realization authority acceptance
+        run: node acceptance/agronomic-policy-compilation/conditional-realization.mjs
+      - name: KBS 2015 conditional action-realization gold acceptance
+        run: node acceptance/gold-protocol-kbs-2015/run-conditional-realization.mjs
