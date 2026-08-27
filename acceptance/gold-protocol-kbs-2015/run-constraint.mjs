@@ -2,12 +2,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import {
-  AGRONOMIC_POLICY_CONSTRAINT_COMPILATION_CONTRACT_VERSION,
   AGRONOMIC_POLICY_CONSTRAINT_CONTRACT_VERSION,
   AGRONOMIC_POLICY_REQUIRED_KNOWLEDGE_USE,
-  agronomicPolicyConstraintHash,
-  publishAgronomicPolicyConstraintCompilation,
-  validateAgronomicPolicyConstraintCompilationAuthority
+  normalizeAgronomicPolicyConstraint
 } from '../../packages/agronomic-policy-compilation/src/index.mjs';
 import {
   authorizeKnowledgeInspection,
@@ -35,11 +32,10 @@ import {
   SourceRegistry,
   sourceContentHash
 } from '../../packages/source-registry/src/index.mjs';
-import { validateSpecificationAuthority } from '../../packages/specification-registry/src/index.mjs';
+import { SpecificationError } from '../../packages/specification-registry/src/index.mjs';
 import {
   audit,
   makeEnv,
-  manager,
   policySpec,
   publish
 } from '../specification/fixture.mjs';
@@ -388,27 +384,6 @@ for (let index = 0; index < reviewed.length; index += 1) {
   knowledgeByKey.set(spec.key, knowledge);
 }
 
-function publishPolicy({ logicalId, decisionType, actionSpace, inputs }) {
-  return publish(env, 'Policy', logicalId, '1', policySpec({
-    decisionType,
-    actionSpace,
-    actionSemantics: actionSemantics(actionSpace),
-    requiredInputs: [],
-    requiredRuntimeOutputs: inputs,
-    decisionLogic: {
-      methodId: `${logicalId}.candidate-evaluation`,
-      definitionHash: `sha256:${'f'.repeat(64)}`
-    },
-    thresholdAuthority: { mode: 'SPEC_DEFINED', authorityRefs: [] },
-    operationalConstraints: [],
-    jurisdictionConstraints: [],
-    humanGate: { mode: 'NONE' },
-    fallback: { disposition: 'WAIT' },
-    abstentionConditions: [],
-    limitations: ['KBS_2015_PROTOCOL_CONSTRAINT_BENCHMARK']
-  }));
-}
-
 function condition(semanticId, value, knowledgeRef, role) {
   return {
     logic: 'ALL',
@@ -425,46 +400,79 @@ function condition(semanticId, value, knowledgeRef, role) {
   };
 }
 
-const policies = {
-  t6: publishPolicy({
+function expectContextOnlyPolicyV2Rejected({ logicalId, decisionType, actionSpace, contextInputs }) {
+  let caught;
+  try {
+    publish(env, 'Policy', logicalId, '1', policySpec({
+      decisionType,
+      actionSpace,
+      actionSemantics: actionSemantics(actionSpace),
+      requiredInputs: contextInputs,
+      requiredRuntimeOutputs: [],
+      decisionLogic: {
+        methodId: `${logicalId}.constraint-evaluation`,
+        definitionHash: `sha256:${'f'.repeat(64)}`
+      },
+      thresholdAuthority: { mode: 'SPEC_DEFINED', authorityRefs: [] },
+      operationalConstraints: [],
+      jurisdictionConstraints: [],
+      humanGate: { mode: 'NONE' },
+      fallback: { disposition: 'WAIT' },
+      abstentionConditions: [],
+      limitations: ['KBS_2015_PROTOCOL_CONTEXT_ONLY_CONSTRAINT_POLICY_CANDIDATE']
+    }));
+  } catch (error) {
+    caught = error;
+  }
+  assert.ok(caught instanceof SpecificationError, `expected Policy v2 schema rejection for ${logicalId}`);
+  assert.equal(caught.code, 'INVALID_SPECIFICATION_INPUT');
+  assert.match(caught.message, /requiredRuntimeOutputs cannot be empty/);
+  return {
+    logicalId,
+    decisionType,
+    actionSpace,
+    contextInputSemanticIds: contextInputs.map((port) => port.semanticId),
+    blocker: 'POLICY_V2_REQUIRED_RUNTIME_OUTPUTS_NON_EMPTY'
+  };
+}
+
+const policySchemaGaps = [
+  expectContextOnlyPolicyV2Rejected({
     logicalId: 'policy.gold.kbs.t6.nitrogen-control',
     decisionType: 'NITROGEN_INPUT_CONTROL',
     actionSpace: ['APPLY_NITROGEN', 'DO_NOT_APPLY_NITROGEN'],
-    inputs: [boolPort('context.is_treatment_6')]
+    contextInputs: [boolPort('context.is_treatment_6')]
   }),
-  t7: publishPolicy({
+  expectContextOnlyPolicyV2Rejected({
     logicalId: 'policy.gold.kbs.t7.field-operation-control',
     decisionType: 'FIELD_OPERATION_CONTROL',
     actionSpace: ['TILL', 'MOW', 'DO_NOT_TILL', 'DO_NOT_MOW'],
-    inputs: [boolPort('context.is_treatment_7'), boolPort('context.is_microplot')]
+    contextInputs: [boolPort('context.is_treatment_7'), boolPort('context.is_microplot')]
   }),
-  t8nt: publishPolicy({
+  expectContextOnlyPolicyV2Rejected({
     logicalId: 'policy.gold.kbs.t8nt.tillage-control',
     decisionType: 'TILLAGE_CONTROL',
     actionSpace: ['TILL', 'DO_NOT_TILL'],
-    inputs: [boolPort('context.is_treatment_8nt')]
+    contextInputs: [boolPort('context.is_treatment_8nt')]
   }),
-  nrate: publishPolicy({
+  expectContextOnlyPolicyV2Rejected({
     logicalId: 'policy.gold.kbs.nrate.herbicide-mix-control',
     decisionType: 'HERBICIDE_TANK_MIX_CONTROL',
     actionSpace: ['INCLUDE_2_4_D_IN_TANK_MIX', 'EXCLUDE_2_4_D_FROM_TANK_MIX'],
-    inputs: [decimalPort('derived.days_before_planting', 'd')]
+    contextInputs: [decimalPort('derived.days_before_planting', 'd')]
   })
-};
+];
 
-function publishConstraint({
+function candidateConstraint({
   logicalId,
-  policy,
   knowledgeKey,
   decisionType,
   actionCode,
   when,
-  exceptions = [],
-  coveredElements
+  exceptions = []
 }) {
   const knowledge = knowledgeByKey.get(knowledgeKey);
-  const policyAuthority = validateSpecificationAuthority({ ledger: env.ledger, specificationRef: policy.ref });
-  const constraint = {
+  return normalizeAgronomicPolicyConstraint({
     contractVersion: AGRONOMIC_POLICY_CONSTRAINT_CONTRACT_VERSION,
     constraintId: logicalId,
     decisionType,
@@ -477,45 +485,6 @@ function publishConstraint({
       authorityRef: knowledge.ref,
       rationale: 'The source explicitly prohibits this action in the governed source context.'
     }]
-  };
-  const constraintHash = agronomicPolicyConstraintHash(constraint);
-  const approverPrincipal = {
-    principalId: manager.principalId,
-    type: manager.type,
-    organizationId: manager.organizationId,
-    tenantId: manager.tenantId
-  };
-  const published = publishAgronomicPolicyConstraintCompilation({
-    ledger: env.ledger,
-    logicalId: `constraint-compilation.gold.kbs.${logicalId}`,
-    version: '1',
-    compilation: {
-      contractVersion: AGRONOMIC_POLICY_CONSTRAINT_COMPILATION_CONTRACT_VERSION,
-      authorityClass: 'AGRONOMIC_POLICY_CONSTRAINT_COMPILATION_AUTHORITY',
-      sourceProtocolRefs: [source.ref],
-      sourceProtocolArtifactRefs: [artifact.ref],
-      knowledgeRefs: [knowledge.ref],
-      policyRef: policy.ref,
-      constraint,
-      constraintHash,
-      transformationRationale: 'Compile only source-explicit negative authority. Context flags expose the already-qualified source scope; no positive action, cadence, execution fact, or machine interlock is invented.',
-      losslessCoverage: {
-        status: 'COMPLETE',
-        coveredElements,
-        unrepresentedElements: []
-      },
-      approverPrincipal,
-      approvalRef: policyAuthority.managementAuthorization.ref,
-      limitations: [
-        'CURATED_EXCERPT_ARTIFACT_NOT_ORIGINAL_PDF_BYTES',
-        'PROTOCOL_PLANNING_AUTHORITY_NOT_EXECUTION_EVIDENCE'
-      ]
-    },
-    audit: audit({ type: approverPrincipal.type, id: approverPrincipal.principalId }, `kbs-constraint-publish-${logicalId}`)
-  });
-  return validateAgronomicPolicyConstraintCompilationAuthority({
-    ledger: env.ledger,
-    compilationRef: published.ref
   });
 }
 
@@ -525,48 +494,39 @@ const t7MowKnowledge = knowledgeByKey.get('t7-no-mow-except-microplot').ref;
 const t8Knowledge = knowledgeByKey.get('t8nt-do-not-till').ref;
 const nrateKnowledge = knowledgeByKey.get('nrate-no-24d-within-seven-days').ref;
 
-const constraints = [
-  publishConstraint({
+const constraintCandidates = [
+  candidateConstraint({
     logicalId: 't6-no-nitrogen',
-    policy: policies.t6,
     knowledgeKey: 't6-no-nitrogen',
     decisionType: 'NITROGEN_INPUT_CONTROL',
     actionCode: 'APPLY_NITROGEN',
-    when: condition('context.is_treatment_6', true, t6Knowledge, 'SOURCE_CONTEXT_SCOPE'),
-    coveredElements: ['ACTION_TARGET', 'PROHIBITION', 'SOURCE_CONTEXT_SCOPE']
+    when: condition('context.is_treatment_6', true, t6Knowledge, 'SOURCE_CONTEXT_SCOPE')
   }),
-  publishConstraint({
+  candidateConstraint({
     logicalId: 't7-no-till-except-microplot',
-    policy: policies.t7,
     knowledgeKey: 't7-no-till-except-microplot',
     decisionType: 'FIELD_OPERATION_CONTROL',
     actionCode: 'TILL',
     when: condition('context.is_treatment_7', true, t7TillKnowledge, 'SOURCE_CONTEXT_SCOPE'),
-    exceptions: [condition('context.is_microplot', true, t7TillKnowledge, 'SOURCE_EXCEPTION')],
-    coveredElements: ['ACTION_TARGET_TILL', 'EXCEPTION_MICROPLOT', 'PROHIBITION', 'SOURCE_CONTEXT_SCOPE']
+    exceptions: [condition('context.is_microplot', true, t7TillKnowledge, 'SOURCE_EXCEPTION')]
   }),
-  publishConstraint({
+  candidateConstraint({
     logicalId: 't7-no-mow-except-microplot',
-    policy: policies.t7,
     knowledgeKey: 't7-no-mow-except-microplot',
     decisionType: 'FIELD_OPERATION_CONTROL',
     actionCode: 'MOW',
     when: condition('context.is_treatment_7', true, t7MowKnowledge, 'SOURCE_CONTEXT_SCOPE'),
-    exceptions: [condition('context.is_microplot', true, t7MowKnowledge, 'SOURCE_EXCEPTION')],
-    coveredElements: ['ACTION_TARGET_MOW', 'EXCEPTION_MICROPLOT', 'PROHIBITION', 'SOURCE_CONTEXT_SCOPE']
+    exceptions: [condition('context.is_microplot', true, t7MowKnowledge, 'SOURCE_EXCEPTION')]
   }),
-  publishConstraint({
+  candidateConstraint({
     logicalId: 't8nt-do-not-till',
-    policy: policies.t8nt,
     knowledgeKey: 't8nt-do-not-till',
     decisionType: 'TILLAGE_CONTROL',
     actionCode: 'TILL',
-    when: condition('context.is_treatment_8nt', true, t8Knowledge, 'SOURCE_CONTEXT_SCOPE'),
-    coveredElements: ['ACTION_TARGET', 'PROHIBITION', 'SOURCE_CONTEXT_SCOPE']
+    when: condition('context.is_treatment_8nt', true, t8Knowledge, 'SOURCE_CONTEXT_SCOPE')
   }),
-  publishConstraint({
+  candidateConstraint({
     logicalId: 'nrate-no-24d-within-seven-days',
-    policy: policies.nrate,
     knowledgeKey: 'nrate-no-24d-within-seven-days',
     decisionType: 'HERBICIDE_TANK_MIX_CONTROL',
     actionCode: 'INCLUDE_2_4_D_IN_TANK_MIX',
@@ -582,16 +542,16 @@ const constraints = [
           rationale: 'The source requires 2,4-D seven days before planting and prohibits it in the tank mix when the application is within seven days; LT 7 preserves the stated boundary.'
         }]
       }]
-    },
-    coveredElements: ['ACTION_TARGET', 'CONDITIONAL_BOUNDARY_LT_7_DAYS', 'PROHIBITION']
+    }
   })
 ];
 
-assert.equal(constraints.length, 5);
-assert.equal(constraints[1].semanticPayload.constraint.exceptions.length, 1);
-assert.equal(constraints[2].semanticPayload.constraint.exceptions.length, 1);
-assert.equal(constraints[4].semanticPayload.constraint.when.predicates[0].comparator, 'LT');
-assert.equal(constraints[4].semanticPayload.constraint.when.predicates[0].value.decimal, '7');
+assert.equal(policySchemaGaps.length, 4);
+assert.equal(constraintCandidates.length, 5);
+assert.equal(constraintCandidates[1].exceptions.length, 1);
+assert.equal(constraintCandidates[2].exceptions.length, 1);
+assert.equal(constraintCandidates[4].when.predicates[0].comparator, 'LT');
+assert.equal(constraintCandidates[4].when.predicates[0].value.decimal, '7');
 
 for (let index = 0; index < reviewed.length; index += 1) {
   const knowledge = knowledgeByKey.get(specs[index].key);
@@ -624,7 +584,11 @@ console.log(JSON.stringify({
   decision: 'DEC-0004_PROPOSED_NOT_NORMATIVE',
   claimCount: reviewed.length,
   qualifiedKnowledgeCount: knowledgeByKey.size,
-  constraintCompilationCount: constraints.length,
+  constraintCandidateCount: constraintCandidates.length,
+  constraintCompilationCount: 0,
+  operationalBindingStatus: 'INCOMPLETE',
+  operationalBindingBlocker: 'POLICY_V2_REQUIRED_RUNTIME_OUTPUTS_NON_EMPTY',
+  rejectedContextOnlyPolicyV2Candidates: policySchemaGaps.length,
   shapes: [
     'UNCONDITIONAL_SOURCE_CONTEXT_PROHIBITION',
     'EXPLICIT_EXCEPTION_TILL',
