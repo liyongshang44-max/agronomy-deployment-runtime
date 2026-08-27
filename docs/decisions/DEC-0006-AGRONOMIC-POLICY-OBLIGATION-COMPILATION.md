@@ -1,6 +1,6 @@
 # DEC-0006 — Governed Agronomic Policy Obligation Compilation
 
-Status: **PROPOSED**
+Status: **ACCEPTED**
 
 Date: 2026-08-27
 
@@ -324,19 +324,18 @@ Rejected. The evidence proves the need for modality, but DEC-0006 is intentional
 
 Rejected because source obligation authority and obligation-satisfaction/execution authority are distinct governance classes.
 
-## Acceptance gate
+## Acceptance
 
-DEC-0006 remains **PROPOSED** until explicitly accepted.
+Accepted on 2026-08-27 after explicit architecture approval.
 
-No implementation is authorized by this decision draft.
+The accepted architecture decision authorizes a separate implementation phase for `AgronomicPolicyObligationCompilation`, subject to these constraints:
 
-Before any implementation or merge is considered, architecture review must confirm:
+1. v1 effect remains limited to `REQUIRE`;
+2. occurrence cardinality remains limited to `EXACT_COUNT` and `BOUNDED_COUNT`;
+3. counting-period semantics remain limited to `FIXED_CALENDAR_YEAR` and `EACH_CALENDAR_YEAR`;
+4. Treatment 6 and Biodiversity System A must be representable without inventing trigger, schedule, due-state, fallback, or execution semantics;
+5. Treatment B21 must fail closed against `COMPLETE REQUIRE` because the source-explicit qualifier `as needed` remains unresolved;
+6. source-qualified knowledge, exact Policy authority, content hashing, approval, and direct audit closure must be enforced;
+7. obligation authority must remain distinct from Applicability, RuntimeEligibility, RuntimeBinding, scheduling, occurrence counting, obligation satisfaction/violation, Field Log truth, DecisionResult, execution evidence, and Outcome.
 
-1. a separate obligation authority is justified rather than extending an existing accepted object;
-2. REQUIRE remains the only v1 modality;
-3. occurrence cardinality and counting-period semantics are sufficiently narrow;
-4. T6 and System A can be represented without invented trigger/schedule semantics;
-5. B21 fails closed against hard-REQUIRE completion because `as needed` remains unresolved;
-6. the planning-protocol versus actual-execution boundary remains intact.
-
-Only after explicit architecture acceptance should an implementation branch and exact-head qualification plan be created.
+Acceptance of DEC-0006 does not itself make `AgronomicPolicyObligationCompilation` normative repository authority. The implementation must be developed on a separate branch, pass dedicated real-source acceptance, preserve prior DEC-0002/0003/0004/0005 authority invariants, and pass repository-wide ADR Constitution before any implementation PR may merge.
