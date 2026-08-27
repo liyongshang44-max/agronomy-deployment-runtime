@@ -1,0 +1,36 @@
+name: ADR Agronomic Action Realization
+
+on:
+  pull_request:
+    paths:
+      - 'packages/agronomic-policy-compilation/src/realization-*.mjs'
+      - 'packages/agronomic-policy-compilation/test/realization-*.test.mjs'
+      - 'acceptance/agronomic-policy-compilation/realization.mjs'
+      - 'acceptance/gold-protocol-kbs-2015/run-realization.mjs'
+      - 'acceptance/gold-protocol-kbs-2015/kbs-2015-realization-excerpts.txt'
+      - 'docs/decisions/DEC-0010-AGRONOMIC-ACTION-REALIZATION-COMPILATION.md'
+      - '.github/workflows/agronomic-action-realization.yml'
+      - 'package.json'
+
+permissions:
+  contents: read
+
+jobs:
+  action-realization:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Report runtime
+        run: node --version
+      - name: Constitutional static checks
+        run: npm run check:constitution
+      - name: Action-realization contract tests
+        run: node --test packages/agronomic-policy-compilation/test/realization-contract.test.mjs
+      - name: Governed action-realization authority acceptance
+        run: node acceptance/agronomic-policy-compilation/realization.mjs
+      - name: KBS 2015 action-realization gold acceptance
+        run: node acceptance/gold-protocol-kbs-2015/run-realization.mjs
