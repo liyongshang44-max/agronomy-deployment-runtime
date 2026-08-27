@@ -1,6 +1,6 @@
 # DEC-0007 — Governed Agronomic Normative Modality Compilation
 
-Status: **PROPOSED**
+Status: **ACCEPTED**
 
 Date: 2026-08-27
 
@@ -353,10 +353,23 @@ Before implementation is authorized, architecture review must confirm:
 11. the Treatment 6 `may need to be specially ordered` lookalike is rejected as non-normative;
 12. planning protocol authority remains distinct from actual field execution.
 
-## Acceptance gate
+## Acceptance
 
-DEC-0007 remains **PROPOSED** until explicit architecture acceptance.
+Accepted on 2026-08-27 after explicit architecture approval.
 
-No implementation, contract mutation, runtime change, or existing authority version change is authorized by this draft.
+Acceptance establishes the source-semantic architecture described by this decision only. It does not itself authorize runtime conclusions, execution truth, legal permission, current-field applicability, or mutation of previously accepted authority contracts.
 
-If accepted, implementation must occur on a separate branch and must include real KBS positive and negative semantic-classification acceptance before merge.
+## Post-acceptance gate
+
+Before this decision is merged as accepted architecture:
+
+1. repository-wide ADR Constitution MUST pass on the exact accepted documentation head;
+2. the PR MUST remain docs-only and contain no schema, runtime, workflow, acceptance-test, or existing-contract mutation;
+3. the PR base MUST still equal the expected main authority head;
+4. the accepted exact head MUST be recorded before merge.
+
+Only after the accepted documentation PR is merged may implementation begin on a separate branch from the resulting main.
+
+Implementation MUST include real KBS positive and negative semantic-classification acceptance, including the mandatory non-normative logistical `may` case.
+
+Acceptance of DEC-0007 does not pre-accept any future version change to AgronomicPolicyCompilation, AgronomicPolicyConstraintCompilation, AgronomicPolicyObligationCompilation, Policy v3, or Declarative Agronomic Rule v2.
