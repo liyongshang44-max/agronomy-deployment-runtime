@@ -6,6 +6,7 @@ export const QUALIFIED_TRANSFORMATION_CONTRACT_VERSION = 'adr.qualified-transfor
 export const MODEL_CONTRACT_VERSION = 'adr.model.v1';
 export const POLICY_LEGACY_CONTRACT_VERSION = 'adr.policy.v1';
 export const POLICY_CONTRACT_VERSION = 'adr.policy.v2';
+export const POLICY_CONTRACT_VERSION_V3 = 'adr.policy.v3';
 
 export const SPECIFICATION_KINDS = deepFreeze(['QualifiedTransformation', 'Model', 'Policy']);
 export const SPECIFICATION_AUTHORITY_CLASSES = deepFreeze({
@@ -322,7 +323,9 @@ export function normalizePolicy(value) {
     'abstentionConditions', 'limitations'
   ]));
   const contractVersion = text(value.contractVersion, 'contractVersion');
-  if (contractVersion !== POLICY_CONTRACT_VERSION && contractVersion !== POLICY_LEGACY_CONTRACT_VERSION) {
+  if (contractVersion !== POLICY_CONTRACT_VERSION
+    && contractVersion !== POLICY_CONTRACT_VERSION_V3
+    && contractVersion !== POLICY_LEGACY_CONTRACT_VERSION) {
     throw new SpecificationError('UNSUPPORTED_SPECIFICATION_CONTRACT', 'unsupported Policy contractVersion');
   }
   if (value.authorityClass !== undefined && value.authorityClass !== SPECIFICATION_AUTHORITY_CLASSES.Policy) {
@@ -341,7 +344,7 @@ export function normalizePolicy(value) {
     if (value.actionSemantics === undefined) {
       throw new SpecificationError(
         'POLICY_ACTION_SEMANTICS_REQUIRED',
-        'adr.policy.v2 requires governed action semantics and material-equivalence authority'
+        'adr.policy.v2/v3 requires governed action semantics and material-equivalence authority'
       );
     }
     actionSemantics = policyActionSemantics(value.actionSemantics, actionSpace);
@@ -367,7 +370,11 @@ export function normalizePolicy(value) {
     actionSpace,
     ...(actionSemantics ? { actionSemantics } : {}),
     requiredInputs: portList(value.requiredInputs ?? [], 'requiredInputs', { allowEmpty: true }),
-    requiredRuntimeOutputs: portList(value.requiredRuntimeOutputs, 'requiredRuntimeOutputs'),
+    requiredRuntimeOutputs: portList(
+      value.requiredRuntimeOutputs,
+      'requiredRuntimeOutputs',
+      { allowEmpty: contractVersion === POLICY_CONTRACT_VERSION_V3 }
+    ),
     decisionLogic: method(value.decisionLogic, 'decisionLogic'),
     thresholdAuthority: deepFreeze({ mode: thresholdMode, authorityRefs: thresholdRefs }),
     operationalConstraints: list(value.operationalConstraints ?? [], 'operationalConstraints'),
