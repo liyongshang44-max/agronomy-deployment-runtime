@@ -345,6 +345,25 @@ or that either is equivalent to every member of the source-defined open class.
 
 No action-equivalence authority is created.
 
+## No exclusivity or disjointness laundering
+
+The source connective `or` does not establish exclusive-or semantics.
+
+DEC-0010 must not assert that:
+
+- exactly one realization category can apply;
+- named methods are disjoint from the source-defined open class;
+- `SOIL_FINISHING` cannot also satisfy the source-defined class criterion;
+- `ROTOTILLING` cannot also satisfy the source-defined class criterion.
+
+The named methods are source-mentioned realizations.
+
+The open class is a source-defined class expression.
+
+These representations may overlap semantically.
+
+DEC-0010 records source realization structure; it does not partition the method universe into mutually exclusive buckets.
+
 ## No preference/ranking laundering
 
 The source sentence does not rank:
@@ -677,12 +696,13 @@ If DEC-0010 is accepted, implementation acceptance must prove at least:
 6. adding `force=PERMITTED` or equivalent normative field fails closed;
 7. creating runtime eligibility/availability/ranking/equivalence fields fails closed;
 8. treating the open-class criterion as proven causal efficacy fails closed;
-9. binding the realization set to an unrelated parent regimen fails closed;
-10. wrong scientific use fails closed;
-11. source-expression mismatch fails closed;
-12. adding `CHISEL_PLOW` from the next conditional sentence to the v1 realization set fails closed;
-13. local COMPLETE does not mean B21 section completeness;
-14. no RuntimeAlternativeSet, RuntimeBinding, DecisionResult, execution, or Outcome authority is created.
+9. asserting mutually exclusive/disjoint alternatives fails closed;
+10. binding the realization set to an unrelated parent regimen fails closed;
+11. wrong scientific use fails closed;
+12. source-expression mismatch fails closed;
+13. adding `CHISEL_PLOW` from the next conditional sentence to the v1 realization set fails closed;
+14. local COMPLETE does not mean B21 section completeness;
+15. no RuntimeAlternativeSet, RuntimeBinding, DecisionResult, execution, or Outcome authority is created.
 
 At least one negative test must use the exact real KBS source sentence.
 
@@ -764,9 +784,10 @@ Before implementation is authorized, architecture review must confirm:
 7. named methods and source-defined open class remain distinct;
 8. source-defined membership criterion is not causal-effect or runtime predicate authority;
 9. no preference, ranking, equivalence, availability, or eligibility is inferred;
-10. the next conditional chisel-plow sentence remains out of scope;
-11. local COMPLETE remains local to the first method sentence;
-12. implementation is additive and does not mutate accepted contracts.
+10. named methods and the open class are not assumed mutually exclusive or disjoint;
+11. the next conditional chisel-plow sentence remains out of scope;
+12. local COMPLETE remains local to the first method sentence;
+13. implementation is additive and does not mutate accepted contracts.
 
 ## Acceptance gate
 
