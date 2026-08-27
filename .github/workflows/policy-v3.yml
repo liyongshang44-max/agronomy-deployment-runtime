@@ -1,0 +1,38 @@
+name: ADR Policy v3
+
+on:
+  pull_request:
+    paths:
+      - 'packages/specification-registry/**'
+      - 'packages/decision-robustness/**'
+      - 'packages/implementation-broker/**'
+      - 'acceptance/specification/policy-v3.mjs'
+      - 'acceptance/specification/fixture.mjs'
+      - 'acceptance/implementation-broker/policy-v3-context-only.mjs'
+      - 'acceptance/decision-robustness/run.mjs'
+      - 'docs/decisions/DEC-0005-POLICY-V3-CONTEXT-ONLY-RUNTIME-OUTPUTS.md'
+      - '.github/workflows/policy-v3.yml'
+      - 'package.json'
+
+permissions:
+  contents: read
+
+jobs:
+  qualification:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Report runtime
+        run: node --version
+      - name: Constitutional static checks
+        run: npm run check:constitution
+      - name: Policy v3 specification acceptance
+        run: node acceptance/specification/policy-v3.mjs
+      - name: Policy v3 context-only D02 acceptance
+        run: node acceptance/implementation-broker/policy-v3-context-only.mjs
+      - name: Policy v3 D05 action-semantics acceptance
+        run: node acceptance/decision-robustness/run.mjs
