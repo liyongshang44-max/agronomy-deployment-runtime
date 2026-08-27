@@ -1,0 +1,36 @@
+name: ADR Agronomic Action Regimen
+
+on:
+  pull_request:
+    paths:
+      - 'packages/agronomic-policy-compilation/src/regimen-*.mjs'
+      - 'packages/agronomic-policy-compilation/test/regimen-*.test.mjs'
+      - 'acceptance/agronomic-policy-compilation/regimen.mjs'
+      - 'acceptance/gold-protocol-kbs-2015/run-regimen.mjs'
+      - 'acceptance/gold-protocol-kbs-2015/kbs-2015-modality-excerpts.txt'
+      - 'docs/decisions/DEC-0009-AGRONOMIC-ACTION-REGIMEN-COMPILATION.md'
+      - '.github/workflows/agronomic-action-regimen.yml'
+      - 'package.json'
+
+permissions:
+  contents: read
+
+jobs:
+  action-regimen:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Report runtime
+        run: node --version
+      - name: Constitutional static checks
+        run: npm run check:constitution
+      - name: Action-regimen contract tests
+        run: node --test packages/agronomic-policy-compilation/test/regimen-contract.test.mjs
+      - name: Governed action-regimen authority acceptance
+        run: node acceptance/agronomic-policy-compilation/regimen.mjs
+      - name: KBS 2015 action-regimen gold acceptance
+        run: node acceptance/gold-protocol-kbs-2015/run-regimen.mjs
