@@ -41,8 +41,8 @@ test('Policy v3 preserves governed material-action comparison with context-only 
       requiredRuntimeOutputs: []
     }
   });
-  assert.equal(world.executionAuthority.policy.semanticPayload.contractVersion, 'adr.policy.v3');
-  assert.deepEqual(world.executionAuthority.policy.semanticPayload.requiredRuntimeOutputs, []);
+  assert.equal(world.policy.semanticPayload.contractVersion, 'adr.policy.v3');
+  assert.deepEqual(world.policy.semanticPayload.requiredRuntimeOutputs, []);
   const outputs = world.includedBindings.map((binding, index) => envelope(
     world,
     binding,
