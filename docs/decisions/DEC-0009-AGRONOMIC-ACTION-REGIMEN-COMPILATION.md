@@ -1,6 +1,6 @@
 # DEC-0009 — Governed Agronomic Action-Regimen Compilation
 
-Status: **PROPOSED**
+Status: **ACCEPTED**
 
 Date: 2026-08-28
 
@@ -647,10 +647,40 @@ Before implementation is authorized, architecture review must confirm:
 11. planning protocol remains distinct from Field Log execution;
 12. implementation must be additive and versioned.
 
-## Acceptance gate
+## Acceptance
 
-DEC-0009 remains **PROPOSED** until explicit architecture acceptance.
+Accepted on 2026-08-28 after explicit architecture approval.
 
-No contract implementation, runtime mutation, workflow mutation, or existing accepted authority mutation is authorized by this draft.
+Acceptance establishes the source-semantic architecture described by this decision only.
 
-If accepted, implementation must occur on a separate branch created from the resulting accepted main and must include exact real-source B21 positive and negative acceptance evidence.
+In particular, acceptance does **not** establish a hard REQUIRE for KBS B21 and does not reinterpret the literal `2-6 times a year` range as mandatory minimum/maximum obligation semantics.
+
+The accepted v1 architecture is restricted to the exact real-source pattern:
+
+`AS_NEEDED + SOURCE_STATED_BOUNDED_RANGE + PREVENT + ACTION`
+
+with normative force absent.
+
+## Post-acceptance gate
+
+Before this decision is merged as accepted architecture:
+
+1. repository-wide ADR Constitution MUST pass on the exact accepted documentation head;
+2. the PR MUST remain docs-only;
+3. no runtime, schema, workflow, acceptance-test, or existing authority-contract mutation may be included;
+4. the PR base MUST still equal the expected main authority head;
+5. the accepted exact head MUST be recorded before merge.
+
+Only after the accepted documentation PR is merged may implementation begin on a separate branch created from the resulting main.
+
+Implementation MUST include exact real-source KBS B21 positive and negative acceptance evidence proving at least:
+
+- no hard REQUIRE laundering;
+- no mandatory min/max obligation semantics;
+- no runtime need predicate;
+- no inferred schedule;
+- no cross-proposition modality/goal composition;
+- no runtime/execution/Outcome authority;
+- local COMPLETE does not mean full B21 operational completeness.
+
+Acceptance of DEC-0009 does not pre-accept Obligation v2, action-option semantics, runtime operationalization of AS_NEEDED, or Field Log reconciliation.
