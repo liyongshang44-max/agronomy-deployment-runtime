@@ -8,6 +8,7 @@ on:
       - 'acceptance/gold-protocol-kbs-2015/**'
       - 'docs/decisions/DEC-0002-AGRONOMIC-POLICY-COMPILATION.md'
       - 'docs/decisions/DEC-0003-AGRONOMIC-RULE-V2-TEMPORAL-COORDINATION.md'
+      - 'docs/decisions/DEC-0004-AGRONOMIC-POLICY-CONSTRAINT-COMPILATION.md'
       - '.github/workflows/agronomic-policy-compilation.yml'
 
 permissions:
@@ -30,5 +31,7 @@ jobs:
         run: node --test packages/agronomic-policy-compilation/test/*.test.mjs
       - name: Agronomic policy compilation authority acceptance
         run: node acceptance/agronomic-policy-compilation/run.mjs
-      - name: KBS 2015 gold protocol v1 and v2 acceptance
+      - name: Agronomic policy constraint authority acceptance
+        run: node acceptance/agronomic-policy-compilation/constraint.mjs
+      - name: KBS 2015 gold protocol rule and constraint acceptance
         run: npm run test:gold-protocol-kbs-2015
