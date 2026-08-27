@@ -2,6 +2,7 @@ import { deepFreeze } from '../../canonicalization/src/index.mjs';
 import { validateQualifiedKnowledgeAuthority } from '../../knowledge-registry/src/qualified-authority.mjs';
 import { validateDerivedKnowledgeAuthority } from '../../synthesis-engine/src/authority.mjs';
 import {
+  AGRONOMIC_RULE_CONTRACT_VERSION_V2,
   AgronomicPolicyCompilationError,
   normalizeAgronomicPolicyCompilation
 } from './extended-contract.mjs';
@@ -13,6 +14,10 @@ import {
 export const AGRONOMIC_POLICY_REQUIRED_KNOWLEDGE_USE = deepFreeze({
   use: 'AGRONOMIC_POLICY_INPUT'
 });
+
+function refKey(ref) {
+  return JSON.stringify([ref.kind, ref.logicalId, ref.version, ref.semanticHash]);
+}
 
 function validateKnowledgePredecessor({ ledger, knowledgeRef }) {
   try {
@@ -47,6 +52,23 @@ function validateKnowledgePredecessors({ ledger, normalized }) {
     validateKnowledgePredecessor({ ledger, knowledgeRef })));
 }
 
+function validateV2BindingClosure(normalized) {
+  if (normalized.rule?.contractVersion !== AGRONOMIC_RULE_CONTRACT_VERSION_V2) return;
+  const declared = new Set(normalized.knowledgeRefs.map(refKey));
+  const bindings = [
+    ...(normalized.rule.temporalConstraints ?? []).flatMap((constraint) => constraint.authorityBindings ?? []),
+    ...(normalized.rule.coordination?.coordinator?.authorityBindings ?? [])
+  ];
+  for (const binding of bindings) {
+    if (!declared.has(refKey(binding.authorityRef))) {
+      throw new AgronomicPolicyCompilationError(
+        'AGRONOMIC_POLICY_COMPILATION_V2_AUTHORITY_NOT_DECLARED',
+        `v2 rule authority binding ${binding.role} is not included in knowledgeRefs`
+      );
+    }
+  }
+}
+
 export function publishAgronomicPolicyCompilation({
   ledger,
   logicalId,
@@ -56,6 +78,7 @@ export function publishAgronomicPolicyCompilation({
 }) {
   const normalized = normalizeAgronomicPolicyCompilation(compilation);
   validateKnowledgePredecessors({ ledger, normalized });
+  validateV2BindingClosure(normalized);
   return publishBaseCompilation({
     ledger,
     logicalId,
@@ -68,5 +91,6 @@ export function publishAgronomicPolicyCompilation({
 export function validateAgronomicPolicyCompilationAuthority({ ledger, compilationRef }) {
   const validated = validateBaseCompilationAuthority({ ledger, compilationRef });
   validateKnowledgePredecessors({ ledger, normalized: validated.semanticPayload });
+  validateV2BindingClosure(validated.semanticPayload);
   return validated;
 }
