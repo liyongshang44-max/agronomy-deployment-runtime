@@ -1,6 +1,6 @@
 # DEC-0005 — Policy v3: Context-Only Decision Logic with Explicit Optional Runtime Outputs
 
-Status: **PROPOSED**
+Status: **ACCEPTED**
 
 Date: 2026-08-27
 
@@ -149,14 +149,16 @@ Candidate exact-head acceptance must prove:
 8. D05 produces normal governed material-action evaluation for v3 rather than POLICY_ACTION_EQUIVALENCE_AUTHORITY_REQUIRED;
 9. repository-wide Constitution remains green.
 
-## Acceptance gate
+## Acceptance
 
-DEC-0005 remains **PROPOSED** until explicitly accepted.
+Accepted on 2026-08-27 after explicit architecture approval.
 
-The candidate implementation may remain on a Draft PR for technical qualification. It MUST NOT merge into main until:
+The accepted Policy-v3 authority remains subject to the exact-head post-acceptance repository qualification gate before merge:
 
-1. dedicated specification/D02/D05 acceptance succeeds on the exact candidate head;
-2. repository-wide ADR Constitution succeeds on the same exact head;
-3. DEC-0005 receives explicit architecture acceptance.
+1. the exact accepted head must pass dedicated ADR Policy v3 qualification;
+2. the same exact head must pass repository-wide ADR Constitution acceptance;
+3. Policy v1/v2 historical replay must remain unchanged;
+4. D02 must still prove that a context-only Policy v3 reuses the existing ContextDatum-only execution path without fabricating RuntimeDatum inputs;
+5. D05 must still prove that Policy v3 receives governed material-action treatment under the same equivalence semantics as Policy v2.
 
-Acceptance of DEC-0005 does not automatically accept DEC-0004.
+Acceptance of DEC-0005 does not accept DEC-0004, does not itself publish AgronomicPolicyConstraintCompilation authority, does not create ApplicabilityAssessment, RuntimeEligibility, RuntimeBinding, DecisionResult, execution truth, or Outcome, and does not authorize merge until the exact accepted head completes those qualification gates.
