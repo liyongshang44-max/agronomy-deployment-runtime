@@ -1,6 +1,6 @@
 # DEC-0008 — Governed Agronomic Goal-Condition Compilation
 
-Status: **PROPOSED**
+Status: **ACCEPTED**
 
 Date: 2026-08-27
 
@@ -424,7 +424,7 @@ Source:
 Candidate source-goal semantics:
 
 - relation = `PREVENT`
-- targetScope = `OCCURRENCE`
+- targetScope = `ACTION`
 - goalObjectExpression = source-grounded plant-growth-establishment expression.
 
 Required boundaries:
@@ -548,10 +548,25 @@ Before implementation is authorized, architecture review must confirm:
 11. B21 remains Obligation-v1 INCOMPLETE after DEC-0008 alone;
 12. planning protocol purpose remains distinct from field execution and Outcome.
 
-## Acceptance gate
+## Acceptance
 
-DEC-0008 remains **PROPOSED** until explicit architecture acceptance.
+Accepted on 2026-08-28 after explicit architecture approval.
 
-No implementation, contract mutation, runtime change, workflow change, or existing authority version change is authorized by this draft.
+Acceptance establishes the source-semantic architecture described by this decision only. It does not authorize runtime predicates, current-state inference, causal-effect claims, execution truth, Outcome authority, or in-place mutation of accepted authority contracts.
 
-If accepted, implementation must occur on a separate branch created from the resulting accepted main and must include both real KBS positive cases plus the mandatory real-source negative boundary tests.
+The accepted v1 target scope is ACTION only. The B21 goal phrase qualifies the tillage action; it does not establish that the source goal relation semantically modifies the 2–6/year occurrence cardinality.
+
+## Post-acceptance gate
+
+Before this decision is merged as accepted architecture:
+
+1. repository-wide ADR Constitution MUST pass on the exact accepted documentation head;
+2. the PR MUST remain docs-only and contain no schema, runtime, workflow, acceptance-test, or existing-contract mutation;
+3. the PR base MUST still equal the expected main authority head;
+4. the accepted exact head MUST be recorded before merge.
+
+Only after the accepted documentation PR is merged may implementation begin on a separate branch from the resulting main.
+
+Implementation MUST include both real KBS positive cases and mandatory negative tests proving that source purpose does not become runtime trigger, current-state evidence, causal-effect authority, Outcome authority, or B21 Obligation-v1 completeness.
+
+Acceptance of DEC-0008 does not pre-accept any future obligation version that binds modality, occurrence, and goal-condition authorities.
