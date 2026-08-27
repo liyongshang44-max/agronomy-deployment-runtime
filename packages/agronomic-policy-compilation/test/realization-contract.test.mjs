@@ -63,7 +63,7 @@ function compilation(value = realization(), status = 'COMPLETE') {
   };
 }
 
-test('normalizes source-open B21 realization set', () => {
+test('normalizes source-open source-proven realization set', () => {
   const normalized = normalizeAgronomicActionRealization(realization());
   assert.equal(normalized.targetActionCode, 'TILL');
   assert.equal(normalized.realizationSet.closure, 'OPEN_SOURCE_DEFINED');
@@ -108,7 +108,7 @@ test('rejects source-expression drift inside named and open-class alternatives',
   const open = realization();
   const target = open.realizationSet.alternatives.find((item) => item.kind === 'SOURCE_DEFINED_OPEN_CLASS');
   target.membershipCriterionExpression = 'prevents plant establishment';
-  assert.throws(() => normalizeAgronomicActionRealization(open), /exact KBS source-defined open class/);
+  assert.throws(() => normalizeAgronomicActionRealization(open), /exact accepted source-defined open class/);
 });
 
 test('rejects normative, exclusivity, runtime, ranking, equivalence and causal laundering fields', () => {
