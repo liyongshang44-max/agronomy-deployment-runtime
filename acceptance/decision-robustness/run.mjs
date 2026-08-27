@@ -34,6 +34,31 @@ function envelope(world, binding, output, seed) {
 const tests = [];
 function test(name, fn) { tests.push({ name, fn }); }
 
+test('Policy v3 preserves governed material-action comparison with context-only runtime requirements', () => {
+  const world = decisionRobustnessWorld('policy-v3-context-only', {
+    policyOverrides: {
+      contractVersion: 'adr.policy.v3',
+      requiredRuntimeOutputs: []
+    }
+  });
+  assert.equal(world.executionAuthority.policy.semanticPayload.contractVersion, 'adr.policy.v3');
+  assert.deepEqual(world.executionAuthority.policy.semanticPayload.requiredRuntimeOutputs, []);
+  const outputs = world.includedBindings.map((binding, index) => envelope(
+    world,
+    binding,
+    makePolicyActionOutput({ amount: '10', note: `v3-trace-${index + 1}` }),
+    index === 0 ? 'v3a' : 'v3b'
+  ));
+  const record = publish(world, outputs, 'policy-v3-context-only');
+  const validated = validateDecisionRobustness({
+    ledger: world.env.ledger,
+    decisionRobustnessRef: record.ref
+  });
+  assert.equal(validated.semanticPayload.robustnessClass, 'ROBUST');
+  assert.equal(validated.semanticPayload.actionEvaluations.every((item) => item.status === 'ACTION_AVAILABLE'), true);
+  assert.equal(validated.semanticPayload.unresolvedReasonCodes.includes('POLICY_ACTION_EQUIVALENCE_AUTHORITY_REQUIRED'), false);
+});
+
 test('same exact material action across exhaustive runtime worlds is ROBUST', () => {
   const world = decisionRobustnessWorld('robust-same');
   const outputs = world.includedBindings.map((binding, index) => envelope(
