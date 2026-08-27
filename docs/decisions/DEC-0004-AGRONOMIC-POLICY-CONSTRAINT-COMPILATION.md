@@ -69,7 +69,7 @@ exceptions?:
 authorityBindings
 ```
 
-The compilation binds:
+When an exact compatible Policy exists, the compilation binds:
 
 ```text
 exact Protocol Source
@@ -81,6 +81,10 @@ exact Protocol Source
 + lossless-coverage declaration
 + direct audit
 ```
+
+The first real KBS benchmark additionally exposed a predecessor schema limitation: accepted `adr.policy.v2` requires non-empty `requiredRuntimeOutputs`. The KBS prohibitions on Treatment 6, Treatment 7, Treatment 8nt and the 2,4-D tank mix can be source-bounded entirely by ContextManifest/configuration or derived temporal context; the source does not establish a runtime model output merely to make those constraints valid.
+
+ADR must not relabel static context as `requiredRuntimeOutputs` to satisfy the Policy contract. Until a compatible Policy authority exists, real-source KBS operational binding remains `INCOMPLETE` even though the constraint grammar and publication authority can be tested independently.
 
 ## Why this is not DeclarativeAgronomicRule v3
 
@@ -161,7 +165,19 @@ The exact Policy-management authorization that published the bound Policy is reu
 
 ## KBS acceptance targets
 
-The governed real-source benchmark must cover at least these shapes.
+The governed real-source benchmark must cover at least these shapes at the source-faithful Claim / QualifiedKnowledge / normalized Constraint level.
+
+Publication of a real KBS `AgronomicPolicyConstraintCompilation` additionally requires a compatible exact Policy. Under accepted Policy v2, a context-only Policy with `requiredRuntimeOutputs=[]` fails closed. Therefore the current benchmark must report:
+
+```text
+constraint candidates = source-faithful / normalized
+operational constraint compilation = INCOMPLETE
+blocker = POLICY_V2_REQUIRED_RUNTIME_OUTPUTS_NON_EMPTY
+```
+
+A synthetic authority fixture may publish a constraint against a genuinely runtime-output-bearing Policy solely to test exact authority closure and negative cases. That synthetic publication is not evidence that the real KBS source has an operationally bindable Policy.
+
+The real source shapes are:
 
 ### Treatment 6 — nitrogen prohibition
 
@@ -248,14 +264,28 @@ Rejected because decision-material negative authority must be structured, source
 
 Rejected because agronomic planning authority and machine safety authority are different governance classes.
 
+## Discovered predecessor gap
+
+The real KBS benchmark proves that negative agronomic authority can be decision-material without requiring any runtime model output.
+
+Accepted `adr.policy.v2` currently rejects an otherwise valid context-only Policy because `requiredRuntimeOutputs` cannot be empty.
+
+Using a ContextDatum/configuration semantic as a fake runtime output is rejected by this decision. The correct fix must be handled by a separate versioned Policy architecture decision so accepted Policy v1/v2 replay remains immutable.
+
+This is a predecessor capability gap, not a reason to weaken the ConstraintCompilation authority.
+
 ## Acceptance gate
 
 DEC-0004 remains **PROPOSED** until explicitly accepted.
 
 Candidate implementation may exist on a Draft PR, but the new authority must not merge into main until:
 
-1. real KBS source acceptance proves unconditional, conditional, and exception-bearing prohibition shapes;
-2. existing DEC-0002/DEC-0003 replay and acceptance remain intact;
-3. dedicated Agronomic Policy Compilation acceptance succeeds on the exact candidate head;
-4. repository-wide ADR Constitution succeeds on the same exact head;
-5. DEC-0004 receives explicit architecture acceptance.
+1. real KBS source acceptance proves unconditional, conditional, and exception-bearing prohibition shapes without invented runtime semantics;
+2. the current Policy-v2 context-only blocker is explicitly recorded and not bypassed;
+3. synthetic authority acceptance proves publication fail-closed behavior when a compatible exact Policy exists;
+4. existing DEC-0002/DEC-0003 replay and acceptance remain intact;
+5. dedicated Agronomic Policy Compilation acceptance succeeds on the exact candidate head;
+6. repository-wide ADR Constitution succeeds on the same exact head;
+7. DEC-0004 receives explicit architecture acceptance.
+
+A later Policy contract extension may close the real-source operational binding gap. DEC-0004 does not pre-accept that extension.
