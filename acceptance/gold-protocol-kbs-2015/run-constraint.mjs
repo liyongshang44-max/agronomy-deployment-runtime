@@ -59,12 +59,21 @@ const specs = [
     evidenceText: 'Do not add any nitrogen to treatment 6.'
   },
   {
-    key: 't7-no-mow-till-except-microplot',
+    key: 't7-no-till-except-microplot',
     page: 11,
     treatment: 'Main Site Treatment 7',
     crop: null,
-    decisionDomain: 'mowing and tillage control',
-    assertion: 'For Main Site Treatment 7, mowing and tillage are prohibited at any time except in the micro-plot area.',
+    decisionDomain: 'tillage control',
+    assertion: 'For Main Site Treatment 7, tillage is prohibited at any time except in the micro-plot area.',
+    evidenceText: 'No mowing or tillage within any treatment 7 plot at any time, except for the micro-plot area.'
+  },
+  {
+    key: 't7-no-mow-except-microplot',
+    page: 11,
+    treatment: 'Main Site Treatment 7',
+    crop: null,
+    decisionDomain: 'mowing control',
+    assertion: 'For Main Site Treatment 7, mowing is prohibited at any time except in the micro-plot area.',
     evidenceText: 'No mowing or tillage within any treatment 7 plot at any time, except for the micro-plot area.'
   },
   {
@@ -511,7 +520,8 @@ function publishConstraint({
 }
 
 const t6Knowledge = knowledgeByKey.get('t6-no-nitrogen').ref;
-const t7Knowledge = knowledgeByKey.get('t7-no-mow-till-except-microplot').ref;
+const t7TillKnowledge = knowledgeByKey.get('t7-no-till-except-microplot').ref;
+const t7MowKnowledge = knowledgeByKey.get('t7-no-mow-except-microplot').ref;
 const t8Knowledge = knowledgeByKey.get('t8nt-do-not-till').ref;
 const nrateKnowledge = knowledgeByKey.get('nrate-no-24d-within-seven-days').ref;
 
@@ -528,21 +538,21 @@ const constraints = [
   publishConstraint({
     logicalId: 't7-no-till-except-microplot',
     policy: policies.t7,
-    knowledgeKey: 't7-no-mow-till-except-microplot',
+    knowledgeKey: 't7-no-till-except-microplot',
     decisionType: 'FIELD_OPERATION_CONTROL',
     actionCode: 'TILL',
-    when: condition('context.is_treatment_7', true, t7Knowledge, 'SOURCE_CONTEXT_SCOPE'),
-    exceptions: [condition('context.is_microplot', true, t7Knowledge, 'SOURCE_EXCEPTION')],
+    when: condition('context.is_treatment_7', true, t7TillKnowledge, 'SOURCE_CONTEXT_SCOPE'),
+    exceptions: [condition('context.is_microplot', true, t7TillKnowledge, 'SOURCE_EXCEPTION')],
     coveredElements: ['ACTION_TARGET_TILL', 'EXCEPTION_MICROPLOT', 'PROHIBITION', 'SOURCE_CONTEXT_SCOPE']
   }),
   publishConstraint({
     logicalId: 't7-no-mow-except-microplot',
     policy: policies.t7,
-    knowledgeKey: 't7-no-mow-till-except-microplot',
+    knowledgeKey: 't7-no-mow-except-microplot',
     decisionType: 'FIELD_OPERATION_CONTROL',
     actionCode: 'MOW',
-    when: condition('context.is_treatment_7', true, t7Knowledge, 'SOURCE_CONTEXT_SCOPE'),
-    exceptions: [condition('context.is_microplot', true, t7Knowledge, 'SOURCE_EXCEPTION')],
+    when: condition('context.is_treatment_7', true, t7MowKnowledge, 'SOURCE_CONTEXT_SCOPE'),
+    exceptions: [condition('context.is_microplot', true, t7MowKnowledge, 'SOURCE_EXCEPTION')],
     coveredElements: ['ACTION_TARGET_MOW', 'EXCEPTION_MICROPLOT', 'PROHIBITION', 'SOURCE_CONTEXT_SCOPE']
   }),
   publishConstraint({
