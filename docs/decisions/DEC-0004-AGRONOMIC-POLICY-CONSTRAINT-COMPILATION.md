@@ -1,6 +1,6 @@
 # DEC-0004 — Governed Agronomic Policy Constraint Compilation
 
-Status: **PROPOSED**
+Status: **ACCEPTED**
 
 Date: 2026-08-27
 
@@ -281,17 +281,17 @@ Using a ContextDatum/configuration semantic as a fake runtime output remains rej
 
 The predecessor capability gap is therefore resolved without weakening the ConstraintCompilation authority.
 
-## Acceptance gate
+## Acceptance
 
-DEC-0004 remains **PROPOSED** until explicitly accepted.
+Accepted on 2026-08-27 after explicit architecture approval.
 
-Candidate implementation may exist on a Draft PR, but the new authority must not merge into main until:
+The accepted AgronomicPolicyConstraintCompilation authority remains subject to exact-head post-acceptance qualification before merge:
 
-1. real KBS source acceptance proves unconditional, conditional, and exception-bearing prohibition shapes without invented runtime semantics;
-2. those real-source constraints publish against accepted `adr.policy.v3` with `requiredRuntimeOutputs=[]`;
-3. the benchmark proves zero execution-authority records are created;
-4. synthetic authority acceptance proves publication fail-closed behavior and negative cases;
-5. existing DEC-0002/DEC-0003/DEC-0005 replay and acceptance remain intact;
-6. dedicated Agronomic Policy Compilation acceptance succeeds on the exact candidate head;
-7. repository-wide ADR Constitution succeeds on the same exact head;
-8. DEC-0004 receives explicit architecture acceptance.
+1. the exact accepted head must pass dedicated ADR Agronomic Policy Compilation acceptance;
+2. accepted Policy v3 qualification must continue to pass on the same head;
+3. repository-wide ADR Constitution must pass on the same head;
+4. the real KBS benchmark must still publish 5 source-bound AgronomicPolicyConstraintCompilation authorities against exact adr.policy.v3 Policies with requiredRuntimeOutputs = [];
+5. the benchmark must still prove zero execution-authority records are created;
+6. DEC-0002, DEC-0003 and DEC-0005 replay/authority invariants must remain intact.
+
+Acceptance of DEC-0004 does not establish current-field applicability, RuntimeEligibility, RuntimeBinding, machine safety interlock state, legal/regulatory prohibition, proof of blocked/non-executed action, Field Log truth, DecisionResult, execution truth, or Outcome. Those remain separate authority classes.
