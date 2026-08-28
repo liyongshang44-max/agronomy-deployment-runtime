@@ -267,6 +267,135 @@ It does not make the row:
 - a runtime datum;
 - an Outcome.
 
+## Why ContextDatum is insufficient as the final source-occurrence authority
+
+ADR already has a frozen public `ContextDatum` contract.
+
+That contract is intentionally broad enough to represent target-world facts with epistemic classes such as:
+
+- `OBSERVATION`;
+- `ASSERTION`;
+- `DERIVED`;
+- `STATE_ESTIMATE`.
+
+The frozen architecture explicitly gives examples including:
+
+- planter telemetry event;
+- grower-stated planting date;
+- `management.irrigation_event`.
+
+DEC-0013 therefore must not claim that ADR lacks all operation/event representation.
+
+The narrower gap is **source-record occurrence authority before target-world reconciliation**.
+
+A public source row such as:
+
+```text
+SERF | 2011-05-03 | plant_corn
+```
+
+does not yet provide the information required to publish a faithful target `ContextDatum`.
+
+### ContextDatum requires target-world authority
+
+Current ContextDatum publication is scoped to an ADR target and `CONTEXT_WRITE` authorization.
+
+A source-native site identifier such as:
+
+`SERF`
+
+is not automatically an ADR:
+
+- organization;
+- tenant;
+- farm;
+- field;
+- season;
+- zone.
+
+Publishing the row directly as target ContextDatum would require identity reconciliation that DEC-0013 explicitly does not infer.
+
+### ContextDatum v1 requires timestamped effectiveInterval
+
+Current ContextDatum v1 requires:
+
+```text
+effectiveInterval.start = RFC3339 timestamp
+effectiveInterval.end   = RFC3339 timestamp
+availableAt             = RFC3339 timestamp
+```
+
+The proposed first Gold source supports only:
+
+`2011-05-03`
+
+at day precision.
+
+DEC-0013 must not fabricate:
+
+- midnight UTC;
+- local midnight;
+- noon;
+- start time;
+- end time;
+- timezone.
+
+Therefore the exact source occurrence cannot be losslessly forced into ContextDatum v1 without a separately governed temporal projection.
+
+### ContextDatum source is provider provenance, not source-artifact review closure
+
+ContextDatum v1 retains:
+
+```text
+source {
+  providerId
+  sourceRef
+  contentHash
+}
+```
+
+That is useful runtime provenance.
+
+DEC-0013 requires stronger source-governance closure for the source record itself:
+
+- exact `Source`;
+- exact `SourceArtifact`;
+- retained exact bytes;
+- row/source locator;
+- rights snapshot;
+- governed operation-semantic review.
+
+Those are different responsibilities.
+
+### Required relationship
+
+The proposed relationship is:
+
+```text
+exact external operation record
+  ↓
+AgronomicRecordedOperationOccurrence
+  source-native identity + source precision + exact artifact lineage
+  ↓
+separate identity / temporal / semantic projection, if justified
+  ↓
+ContextDatum
+  target-world fact usable by ContextManifest/runtime
+```
+
+DEC-0013 does not itself create the downstream ContextDatum.
+
+A later projection must preserve the original occurrence authority as lineage and must not silently upgrade:
+
+- source-native subject identity;
+- temporal precision;
+- epistemic class;
+- normalized operation semantics.
+
+If a source already provides a fully reconciled ADR target, exact timestamp support and governed context-write authority, an implementation may be able to publish ContextDatum directly.
+
+That does not eliminate the need for a source-record authority when those conditions are absent.
+
 ## Why packages/operations is insufficient
 
 The current pilot operational-job contract explicitly declares:
