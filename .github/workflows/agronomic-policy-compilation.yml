@@ -15,6 +15,7 @@ on:
       - 'docs/decisions/DEC-0009-AGRONOMIC-ACTION-REGIMEN-COMPILATION.md'
       - 'docs/decisions/DEC-0010-AGRONOMIC-ACTION-REALIZATION-COMPILATION.md'
       - 'docs/decisions/DEC-0011-CONDITIONAL-AGRONOMIC-ACTION-REALIZATION-COMPILATION.md'
+      - 'docs/decisions/DEC-0012-AGRONOMIC-SOURCE-AUTHORITY-ROUTING.md'
       - '.github/workflows/agronomic-policy-compilation.yml'
 
 permissions:
@@ -51,5 +52,7 @@ jobs:
         run: node acceptance/agronomic-policy-compilation/realization.mjs
       - name: Agronomic conditional action-realization authority acceptance
         run: node acceptance/agronomic-policy-compilation/conditional-realization.mjs
-      - name: KBS 2015 gold protocol rule, constraint, obligation, modality, goal, regimen, realization and conditional realization acceptance
+      - name: Agronomic source-authority routing acceptance
+        run: node acceptance/agronomic-policy-compilation/source-routing.mjs
+      - name: KBS 2015 gold protocol rule, constraint, obligation, modality, goal, regimen, realization, conditional realization and source routing acceptance
         run: npm run test:gold-protocol-kbs-2015
