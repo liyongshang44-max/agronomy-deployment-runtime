@@ -1162,7 +1162,10 @@ Before implementation is authorized, architecture review must confirm:
 12. public Gold evidence must have rights permitting retention;
 13. implementation is additive and does not mutate accepted SourceRegistry, Scientific Compiler, Policy, Outcome or runtime contracts in place;
 14. Sustainable Corn CAP provides a legitimate public real-source Gold target;
-15. the first implementation remains source-generic and does not hard-code SERF, corn or Sustainable Corn CAP in core contracts.
+15. the first implementation remains source-generic and does not hard-code SERF, corn or Sustainable Corn CAP in core contracts;
+16. existing ContextDatum event/observation capability is preserved and DEC-0013 is limited to source-record authority before target/time reconciliation;
+17. a date-only source-native occurrence cannot be forced into ContextDatum v1 by fabricating ADR target identity, timezone or RFC3339 effective-interval timestamps;
+18. any structured XLSX row locator used for Gold is deterministically replayed against exact retained workbook bytes, rather than trusting caller-supplied coordinates or evidenceHash.
 
 ## Proposed post-acceptance implementation gate
 
