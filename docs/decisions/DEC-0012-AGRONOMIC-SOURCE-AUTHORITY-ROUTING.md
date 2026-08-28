@@ -1,6 +1,6 @@
 # DEC-0012 — Governed Agronomic Source-Authority Routing
 
-Status: **PROPOSED**
+Status: **ACCEPTED**
 
 Date: 2026-08-28
 
@@ -730,10 +730,67 @@ Before implementation is authorized, architecture review must confirm:
 11. implementation remains additive;
 12. no accepted SourceRegistry, Outcome, Policy or runtime contract is mutated in place.
 
-## Acceptance gate
+## Acceptance
 
-DEC-0012 remains **PROPOSED** until explicit architecture acceptance.
+Accepted on 2026-08-28 after explicit architecture approval.
 
-No contract implementation, SourceRegistry mutation, source supersession, field-log row ingestion, runtime mutation, Policy mutation, event synthesis, ExecutionReceipt or Outcome mutation is authorized by this draft.
+Acceptance establishes the scoped source-authority routing architecture described by this decision only.
 
-If accepted, implementation must occur on a separate branch created from the resulting accepted main and must include exact real-source positive and negative acceptance evidence.
+In particular, acceptance does **not** establish:
+
+- global precedence of field logs over protocols;
+- whole-source supersession;
+- event-level field-log ingestion;
+- operation occurrence merely from planning statements;
+- non-execution merely from absent log rows;
+- operation identifiers, timestamps, rates, materials, equipment or operators;
+- ExecutionReceipt, DecisionResult, RuntimeBinding, RuntimeAlternativeSet, Policy or Outcome authority;
+- record completeness;
+- planned-versus-actual reconciliation;
+- causal or performance evaluation.
+
+The accepted v1 semantic routing is restricted to:
+
+```text
+subjectScope =
+  FIELD_OPERATION_OCCURRENCE
+
+planningRole =
+  PLANNED_MANAGEMENT_GUIDANCE
+
+actualOperationRole =
+  ACTUAL_FIELD_OPERATION_RECORD
+
+routingRelation =
+  ACTUAL_OCCURRENCE_DEFER_TO_RECORD_SOURCE
+
+temporalScope =
+  CALENDAR_YEAR 2015
+```
+
+The planning source remains valid for planning semantics while the actual-operation record source is the governed source to inspect for recorded actual field-operation occurrence.
+
+## Post-acceptance gate
+
+Before this decision is merged as accepted architecture:
+
+1. repository-wide ADR Constitution MUST pass on the exact accepted documentation head;
+2. the PR MUST remain docs-only;
+3. no SourceRegistry, Outcome, Policy, runtime, schema, workflow, field-log row, event or existing authority-contract mutation may be included;
+4. the PR base MUST still equal the expected main authority head;
+5. the accepted exact head MUST be recorded before merge.
+
+Only after the accepted documentation PR is merged may implementation begin on a separate branch created from the resulting main.
+
+Implementation MUST include exact real-source positive and negative evidence proving at least:
+
+- exact planning-source statement and exact record-source catalog evidence are separately retained;
+- planning and record Sources remain distinct;
+- routing is scoped to FIELD_OPERATION_OCCURRENCE and CALENDAR_YEAR 2015;
+- no whole-source supersedes relation is created;
+- no planning statement is accepted as actual-operation occurrence;
+- missing record rows do not produce non-execution facts;
+- no operation event, ExecutionReceipt, DecisionResult, RuntimeBinding, RuntimeAlternativeSet, Policy or Outcome authority is created;
+- core contracts remain source-generic and KBS-specific names remain in Gold acceptance only.
+
+Acceptance of DEC-0012 does not pre-accept event-level field-log extraction, actual-operation event schemas, completeness semantics, planned-versus-actual reconciliation, equipment/material normalization, restricted-row ingestion or Outcome external-execution integration.
