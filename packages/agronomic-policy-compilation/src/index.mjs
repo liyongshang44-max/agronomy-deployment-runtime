@@ -155,3 +155,24 @@ export {
   publishAgronomicConditionalActionRealizationCompilation,
   validateAgronomicConditionalActionRealizationCompilationAuthority
 } from './conditional-realization-authority.mjs';
+
+export {
+  AGRONOMIC_SOURCE_AUTHORITY_ROUTING_COMPILATION_CONTRACT_VERSION,
+  AGRONOMIC_SOURCE_AUTHORITY_ROUTING_CONTRACT_VERSION,
+  AGRONOMIC_SOURCE_AUTHORITY_ROUTING_SUBJECT_SCOPES,
+  AGRONOMIC_SOURCE_AUTHORITY_ROUTING_PLANNING_ROLES,
+  AGRONOMIC_SOURCE_AUTHORITY_ROUTING_ACTUAL_OPERATION_ROLES,
+  AGRONOMIC_SOURCE_AUTHORITY_ROUTING_RELATIONS,
+  AgronomicSourceAuthorityRoutingCompilationError,
+  agronomicSourceAuthorityRoutingCompilationAuthorityRefs,
+  agronomicSourceAuthorityRoutingHash,
+  normalizeAgronomicSourceAuthorityRouting,
+  normalizeAgronomicSourceAuthorityRoutingCompilation
+} from './source-routing-contract.mjs';
+
+export {
+  AGRONOMIC_SOURCE_AUTHORITY_ROUTING_REVIEW_DISPOSITIONS,
+  publishAgronomicSourceAuthorityRoutingReviewDecision,
+  publishAgronomicSourceAuthorityRoutingCompilation,
+  validateAgronomicSourceAuthorityRoutingCompilationAuthority
+} from './source-routing-authority.mjs';
