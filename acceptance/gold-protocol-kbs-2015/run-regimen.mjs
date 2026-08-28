@@ -275,6 +275,21 @@ const reviewed = sourceFaithful.reviewCandidate({
   audit: audit({ type: reviewer.type, id: reviewer.principalId }, 'kbs-regimen-source-faithful')
 });
 
+assert.equal(
+  reviewed.sourceContext.semanticPayload.contextFamilies.ENVIRONMENTAL
+    .dimensions[0].value.string,
+  'Kellogg Biological Station'
+);
+assert.deepEqual(
+  reviewed.sourceContext.semanticPayload.contextFamilies.MANAGEMENT.dimensions
+    .map((dimension) => [dimension.semanticId, dimension.value]),
+  [
+    ['system.name', { type: 'STRING', string: 'System H' }],
+    ['treatment.name', { type: 'STRING', string: 'B21' }],
+    ['management.system', { type: 'CATEGORY', category: 'Continuous fallow' }]
+  ]
+);
+
 const scientificApprover = createPrincipal({
   principalId: 'gold-kbs-regimen-scientific-approver',
   type: 'USER',
