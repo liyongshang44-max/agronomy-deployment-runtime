@@ -51,10 +51,14 @@ import {
 import { makeEnv, audit } from '../specification/fixture.mjs';
 
 const OWNERSHIP = { organizationId: 'org-a', tenantId: 'tenant-a' };
-const EXPECTED_EXCERPT_HASH = 'sha256:6226c321b68c2f13fc024f5805eceaa4c69639e2a638bd41264861d47c39eceb';
+const EXPECTED_EXCERPT_HASH = 'sha256:8ac1dcc6f329b05cc8c0c2bdca8cb4f2ef2fc0e89ac3820e1dcf98d232cc7cf9';
 const SOURCE_EXPRESSION =
   'Plots are tilled as needed (2-6 times a year) to prevent plant growth from becoming established.';
 const GOAL_OBJECT = 'plant growth from becoming established';
+const SITE_CONTEXT = 'Kellogg Biological Station, Michigan State University';
+const SYSTEM_CONTEXT =
+  'System H: Continuous fallow system: No crop growth, no cover growth and no weed growth.';
+const TREATMENT_CONTEXT = 'Treatment B21 Continuous fallow:';
 
 function locator() {
   return {
@@ -64,14 +68,69 @@ function locator() {
   };
 }
 
-function emptyContextFamilies() {
-  return Object.fromEntries(
-    SOURCE_CONTEXT_FAMILIES.map((family) => [family, { status: 'NOT_REPORTED', dimensions: [] }])
-  );
+function contextLocator(page, evidenceText) {
+  return {
+    kind: 'DOCUMENT_COORDINATE',
+    scheme: 'PDF_PAGE_TEXT_V1',
+    coordinates: { page, evidenceText }
+  };
 }
 
-function emptyContextAdjudication() {
-  return Object.fromEntries(SOURCE_CONTEXT_FAMILIES.map((family) => [family, []]));
+function b21ContextFamilies() {
+  const families = Object.fromEntries(
+    SOURCE_CONTEXT_FAMILIES.map((family) => [
+      family,
+      { status: 'NOT_REPORTED', dimensions: [] }
+    ])
+  );
+  families.ENVIRONMENTAL = {
+    status: 'REPORTED',
+    dimensions: [{
+      semanticHint: 'site.identity',
+      valueCandidate: 'Kellogg Biological Station',
+      supportClass: 'EXPLICIT_SOURCE',
+      sourceLocator: contextLocator(0, SITE_CONTEXT)
+    }]
+  };
+  families.MANAGEMENT = {
+    status: 'REPORTED',
+    dimensions: [
+      {
+        semanticHint: 'system.identity',
+        valueCandidate: 'System H',
+        supportClass: 'EXPLICIT_SOURCE',
+        sourceLocator: contextLocator(20, SYSTEM_CONTEXT)
+      },
+      {
+        semanticHint: 'treatment.identity',
+        valueCandidate: 'B21',
+        supportClass: 'EXPLICIT_SOURCE',
+        sourceLocator: contextLocator(20, TREATMENT_CONTEXT)
+      },
+      {
+        semanticHint: 'management.system',
+        valueCandidate: 'Continuous fallow',
+        supportClass: 'EXPLICIT_SOURCE',
+        sourceLocator: contextLocator(20, TREATMENT_CONTEXT)
+      }
+    ]
+  };
+  return families;
+}
+
+function b21ContextAdjudication() {
+  const adjudication = Object.fromEntries(
+    SOURCE_CONTEXT_FAMILIES.map((family) => [family, []])
+  );
+  adjudication.ENVIRONMENTAL = [
+    { semanticId: 'site.name', valueType: 'STRING' }
+  ];
+  adjudication.MANAGEMENT = [
+    { semanticId: 'system.name', valueType: 'STRING' },
+    { semanticId: 'treatment.name', valueType: 'STRING' },
+    { semanticId: 'management.system', valueType: 'CATEGORY' }
+  ];
+  return adjudication;
 }
 
 const env = makeEnv();
@@ -80,7 +139,7 @@ env.sourceRegistry = new SourceRegistry({
   artifactStore: new ExactArtifactStore()
 });
 
-const excerptBytes = readFileSync(new URL('./kbs-2015-modality-excerpts.txt', import.meta.url));
+const excerptBytes = readFileSync(new URL('./kbs-2015-realization-excerpts.txt', import.meta.url));
 assert.equal(sourceContentHash(excerptBytes), EXPECTED_EXCERPT_HASH);
 
 const source = env.sourceRegistry.registerSource({
@@ -95,9 +154,9 @@ const source = env.sourceRegistry.registerSource({
     date: '2015-01-01'
   },
   sourceVersionLabel: '2015',
-  originLocator: 'current_agronomic_protocol.pdf#page=20',
+  originLocator: 'current_agronomic_protocol.pdf#pages=0,20',
   metadata: {
-    sourcePage: 20,
+    sourcePages: [0, 20],
     benchmarkClass: 'REAL_SOURCE_CURATED_ACTION_REGIMEN_EXCERPT'
   },
   audit: audit({ type: 'USER', id: 'kbs-regimen-source-curator' }, 'kbs-regimen-source')
@@ -113,9 +172,9 @@ const artifact = env.sourceRegistry.materializeArtifact({
   acquisition: {
     method: 'CURATED_PAGE_TRANSCRIPTION',
     acquiredAt: '2026-08-28T02:15:00.000+08:00',
-    locator: 'current_agronomic_protocol.pdf#page=20',
+    locator: 'current_agronomic_protocol.pdf#pages=0,20',
     metadata: {
-      sourcePage: 20,
+      sourcePages: [0, 20],
       transcriptionPolicy: 'WHITESPACE_NORMALIZED_NO_SEMANTIC_EDIT'
     }
   },
@@ -151,7 +210,7 @@ const bundle = compiler.materializeCompilationProposal({
       claimType: 'OPERATIONAL_RECOMMENDATION',
       assertion: SOURCE_EXPRESSION,
       sourceLocator: locator(),
-      sourceContext: emptyContextFamilies()
+      sourceContext: b21ContextFamilies()
     }],
     runMetadata: {
       benchmark: 'KBS_2015_AGRONOMIC_ACTION_REGIMEN_GOLD',
@@ -206,7 +265,7 @@ const reviewed = sourceFaithful.reviewCandidate({
   claimCandidateRef: bundle.claimCandidates[0].ref,
   sourceContextCandidateRef: bundle.sourceContextCandidates[0].ref,
   disposition: 'ACCEPT_SOURCE_FAITHFUL',
-  contextAdjudication: emptyContextAdjudication(),
+  contextAdjudication: b21ContextAdjudication(),
   reviewPrincipal: reviewer,
   authorizationDecisionAuditRef: reviewAuthorization.ref,
   claimLogicalId: 'claim.gold.kbs.regimen.b21',
@@ -215,6 +274,21 @@ const reviewed = sourceFaithful.reviewCandidate({
   sourceContextVersion: '1',
   audit: audit({ type: reviewer.type, id: reviewer.principalId }, 'kbs-regimen-source-faithful')
 });
+
+assert.equal(
+  reviewed.sourceContext.semanticPayload.contextFamilies.ENVIRONMENTAL
+    .dimensions[0].value.string,
+  'Kellogg Biological Station'
+);
+assert.deepEqual(
+  reviewed.sourceContext.semanticPayload.contextFamilies.MANAGEMENT.dimensions
+    .map((dimension) => [dimension.semanticId, dimension.value]),
+  [
+    ['system.name', { type: 'STRING', string: 'System H' }],
+    ['treatment.name', { type: 'STRING', string: 'B21' }],
+    ['management.system', { type: 'CATEGORY', category: 'Continuous fallow' }]
+  ]
+);
 
 const scientificApprover = createPrincipal({
   principalId: 'gold-kbs-regimen-scientific-approver',

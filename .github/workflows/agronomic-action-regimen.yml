@@ -7,7 +7,7 @@ on:
       - 'packages/agronomic-policy-compilation/test/regimen-*.test.mjs'
       - 'acceptance/agronomic-policy-compilation/regimen.mjs'
       - 'acceptance/gold-protocol-kbs-2015/run-regimen.mjs'
-      - 'acceptance/gold-protocol-kbs-2015/kbs-2015-modality-excerpts.txt'
+      - 'acceptance/gold-protocol-kbs-2015/kbs-2015-realization-excerpts.txt'
       - 'docs/decisions/DEC-0009-AGRONOMIC-ACTION-REGIMEN-COMPILATION.md'
       - '.github/workflows/agronomic-action-regimen.yml'
       - 'package.json'

@@ -37,7 +37,7 @@ import { ExactArtifactStore, SourceRegistry, sourceContentHash } from '../../pac
 import { makeEnv, audit } from '../specification/fixture.mjs';
 
 const OWNERSHIP = { organizationId: 'org-a', tenantId: 'tenant-a' };
-const EXPECTED_EXCERPT_HASH = 'sha256:6226c321b68c2f13fc024f5805eceaa4c69639e2a638bd41264861d47c39eceb';
+const EXPECTED_EXCERPT_HASH = 'sha256:7e315b5e6ea0f6a65b9c2a919178585d36adc7ad42ceb06cf0dd708f19a2d140';
 
 const specs = [
   {
@@ -60,12 +60,76 @@ function locator(spec) {
   return { kind: 'DOCUMENT_COORDINATE', scheme: 'PDF_PAGE_TEXT_V1', coordinates: { page: spec.page, evidenceText: spec.evidenceText } };
 }
 
-function emptyContextFamilies() {
-  return Object.fromEntries(SOURCE_CONTEXT_FAMILIES.map((family) => [family, { status: 'NOT_REPORTED', dimensions: [] }]));
+const SITE_CONTEXT = 'Kellogg Biological Station, Michigan State University';
+const SYSTEM_CONTEXT =
+  'System H: Continuous fallow system: No crop growth, no cover growth and no weed growth.';
+const TREATMENT_CONTEXT = 'Treatment B21 Continuous fallow:';
+
+function contextLocator(page, evidenceText) {
+  return {
+    kind: 'DOCUMENT_COORDINATE',
+    scheme: 'PDF_PAGE_TEXT_V1',
+    coordinates: { page, evidenceText }
+  };
 }
 
-function emptyContextAdjudication() {
-  return Object.fromEntries(SOURCE_CONTEXT_FAMILIES.map((family) => [family, []]));
+function contextFamilies(spec) {
+  const families = Object.fromEntries(
+    SOURCE_CONTEXT_FAMILIES.map((family) => [
+      family,
+      { status: 'NOT_REPORTED', dimensions: [] }
+    ])
+  );
+  if (spec.key !== 'b21-prevent-establishment') return families;
+  families.ENVIRONMENTAL = {
+    status: 'REPORTED',
+    dimensions: [{
+      semanticHint: 'site.identity',
+      valueCandidate: 'Kellogg Biological Station',
+      supportClass: 'EXPLICIT_SOURCE',
+      sourceLocator: contextLocator(0, SITE_CONTEXT)
+    }]
+  };
+  families.MANAGEMENT = {
+    status: 'REPORTED',
+    dimensions: [
+      {
+        semanticHint: 'system.identity',
+        valueCandidate: 'System H',
+        supportClass: 'EXPLICIT_SOURCE',
+        sourceLocator: contextLocator(20, SYSTEM_CONTEXT)
+      },
+      {
+        semanticHint: 'treatment.identity',
+        valueCandidate: 'B21',
+        supportClass: 'EXPLICIT_SOURCE',
+        sourceLocator: contextLocator(20, TREATMENT_CONTEXT)
+      },
+      {
+        semanticHint: 'management.system',
+        valueCandidate: 'Continuous fallow',
+        supportClass: 'EXPLICIT_SOURCE',
+        sourceLocator: contextLocator(20, TREATMENT_CONTEXT)
+      }
+    ]
+  };
+  return families;
+}
+
+function contextAdjudication(spec) {
+  const adjudication = Object.fromEntries(
+    SOURCE_CONTEXT_FAMILIES.map((family) => [family, []])
+  );
+  if (spec.key !== 'b21-prevent-establishment') return adjudication;
+  adjudication.ENVIRONMENTAL = [
+    { semanticId: 'site.name', valueType: 'STRING' }
+  ];
+  adjudication.MANAGEMENT = [
+    { semanticId: 'system.name', valueType: 'STRING' },
+    { semanticId: 'treatment.name', valueType: 'STRING' },
+    { semanticId: 'management.system', valueType: 'CATEGORY' }
+  ];
+  return adjudication;
 }
 
 const env = makeEnv();
@@ -121,7 +185,7 @@ const bundle = compiler.materializeCompilationProposal({
       claimType: 'OPERATIONAL_RECOMMENDATION',
       assertion: spec.evidenceText,
       sourceLocator: locator(spec),
-      sourceContext: emptyContextFamilies()
+      sourceContext: contextFamilies(spec)
     })),
     runMetadata: { benchmark: 'KBS_2015_AGRONOMIC_GOAL_CONDITION_GOLD', curationMode: 'HUMAN_CURATED_ACCEPTANCE_FIXTURE' }
   },
@@ -175,7 +239,7 @@ const reviewed = bundle.claimCandidates.map((candidate, index) => {
     claimCandidateRef: candidate.ref,
     sourceContextCandidateRef: bundle.sourceContextCandidates[index].ref,
     disposition: 'ACCEPT_SOURCE_FAITHFUL',
-    contextAdjudication: emptyContextAdjudication(),
+    contextAdjudication: contextAdjudication(spec),
     reviewPrincipal: reviewer,
     authorizationDecisionAuditRef: reviewAuthorization.ref,
     claimLogicalId: `claim.gold.kbs.goal.${spec.key}`,
@@ -185,6 +249,22 @@ const reviewed = bundle.claimCandidates.map((candidate, index) => {
     audit: audit({ type: reviewer.type, id: reviewer.principalId }, `kbs-goal-source-faithful-${spec.key}`)
   });
 });
+
+const b21Reviewed = reviewed[specs.findIndex((spec) => spec.key === 'b21-prevent-establishment')];
+assert.equal(
+  b21Reviewed.sourceContext.semanticPayload.contextFamilies.ENVIRONMENTAL
+    .dimensions[0].value.string,
+  'Kellogg Biological Station'
+);
+assert.deepEqual(
+  b21Reviewed.sourceContext.semanticPayload.contextFamilies.MANAGEMENT.dimensions
+    .map((dimension) => [dimension.semanticId, dimension.value]),
+  [
+    ['system.name', { type: 'STRING', string: 'System H' }],
+    ['treatment.name', { type: 'STRING', string: 'B21' }],
+    ['management.system', { type: 'CATEGORY', category: 'Continuous fallow' }]
+  ]
+);
 
 const scientificApprover = createPrincipal({
   principalId: 'gold-kbs-goal-scientific-approver',
