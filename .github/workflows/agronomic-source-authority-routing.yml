@@ -1,0 +1,37 @@
+name: ADR Agronomic Source Authority Routing
+
+on:
+  pull_request:
+    paths:
+      - 'packages/agronomic-policy-compilation/src/source-routing-*.mjs'
+      - 'packages/agronomic-policy-compilation/test/source-routing-*.test.mjs'
+      - 'acceptance/agronomic-policy-compilation/source-routing.mjs'
+      - 'acceptance/gold-protocol-kbs-2015/run-source-routing.mjs'
+      - 'acceptance/gold-protocol-kbs-2015/kbs-2015-source-routing-planning.txt'
+      - 'acceptance/gold-protocol-kbs-2015/kbs-field-log-source-routing-catalog.txt'
+      - 'docs/decisions/DEC-0012-AGRONOMIC-SOURCE-AUTHORITY-ROUTING.md'
+      - '.github/workflows/agronomic-source-authority-routing.yml'
+      - 'package.json'
+
+permissions:
+  contents: read
+
+jobs:
+  source-authority-routing:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Report runtime
+        run: node --version
+      - name: Constitutional static checks
+        run: npm run check:constitution
+      - name: Source-authority routing contract tests
+        run: node --test packages/agronomic-policy-compilation/test/source-routing-contract.test.mjs
+      - name: Governed source-authority routing acceptance
+        run: node acceptance/agronomic-policy-compilation/source-routing.mjs
+      - name: Real public source-authority routing gold acceptance
+        run: node acceptance/gold-protocol-kbs-2015/run-source-routing.mjs
