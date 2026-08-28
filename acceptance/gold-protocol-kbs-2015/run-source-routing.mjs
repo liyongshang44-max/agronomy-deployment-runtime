@@ -194,7 +194,7 @@ const compilerDefinition = createDeterministicCompilerDefinition({
 
 const compiler = new ScientificCompiler({ ledger, sourceRegistry });
 
-function compileClaim({ label, artifact, assertion }) {
+function compileClaim({ label, artifact, assertion, claimType }) {
   return compiler.materializeCompilationProposal({
     compilationLogicalId: `compilation.gold.source-routing.${label}`,
     version: '1',
@@ -203,7 +203,7 @@ function compileClaim({ label, artifact, assertion }) {
     proposal: {
       claims: [{
         key: label,
-        claimType: 'OPERATIONAL_RECOMMENDATION',
+        claimType,
         assertion,
         sourceLocator: { kind: 'WHOLE_ARTIFACT' },
         sourceContext: emptyContextFamilies()
@@ -223,12 +223,14 @@ function compileClaim({ label, artifact, assertion }) {
 const planningBundle = compileClaim({
   label: 'planning-routing',
   artifact: planningArtifact,
-  assertion: PLANNING_EXPRESSION
+  assertion: PLANNING_EXPRESSION,
+  claimType: 'RELATIONSHIP'
 });
 const recordBundle = compileClaim({
   label: 'actual-operation-record-source',
   artifact: recordArtifact,
-  assertion: RECORD_EXPRESSION
+  assertion: RECORD_EXPRESSION,
+  claimType: 'SEMANTIC_DEFINITION'
 });
 
 const reviewer = createPrincipal({
@@ -314,6 +316,9 @@ const recordReviewed = reviewClaim({
   bundle: recordBundle,
   authRef: recordReviewAuth.ref
 });
+
+assert.equal(planningReviewed.claim.semanticPayload.claimType, 'RELATIONSHIP');
+assert.equal(recordReviewed.claim.semanticPayload.claimType, 'SEMANTIC_DEFINITION');
 
 const approver = createPrincipal({
   principalId: 'gold-source-routing-scientific-approver',
@@ -631,6 +636,10 @@ console.log(JSON.stringify({
   actualOperationRecordSourceRef: recordSource.ref,
   planningClaimRef: planningReviewed.claim.ref,
   actualOperationRecordSourceClaimRef: recordReviewed.claim.ref,
+  claimTypes: {
+    planningRouting: planningReviewed.claim.semanticPayload.claimType,
+    actualOperationRecordSource: recordReviewed.claim.semanticPayload.claimType
+  },
   routingCompilationRef: compilation.ref,
   publishedShape: {
     subjectScope: 'FIELD_OPERATION_OCCURRENCE',
