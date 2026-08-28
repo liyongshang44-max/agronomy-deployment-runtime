@@ -45,7 +45,7 @@ import {
 } from '../specification/fixture.mjs';
 
 const OWNERSHIP = { organizationId: 'org-a', tenantId: 'tenant-a' };
-const EXPECTED_EXCERPT_HASH = 'sha256:5021d6c3f01414a3f8c5633d746eca5cd0c68db3f041aa8274647e5ffec358cf';
+const EXPECTED_EXCERPT_HASH = 'sha256:55bc293d56f16f7d804c1dd1530937bd9e6b6d3cfbef0e177beb1b971857e196';
 const SOURCE_LOCATOR = 'current_agronomic_protocol.pdf#prohibition-excerpts';
 
 const specs = [
@@ -95,6 +95,22 @@ const specs = [
     evidenceText: 'If Roundup application is within 7 days of planting do not use 2,4-D in the tank mix.'
   }
 ];
+
+const descriptiveNegativeSpec = {
+  key: 'b21-no-crop-descriptive-not-prohibition',
+  page: 20,
+  evidenceText: 'No crop is planted.',
+  assertion: 'For Treatment B21, planting is prohibited.'
+};
+
+function emptyContextFamilies() {
+  return Object.fromEntries(
+    SOURCE_CONTEXT_FAMILIES.map((family) => [
+      family,
+      { status: 'NOT_REPORTED', dimensions: [] }
+    ])
+  );
+}
 
 function locator(spec) {
   return {
@@ -199,7 +215,7 @@ const source = env.sourceRegistry.registerSource({
   sourceVersionLabel: '2015',
   originLocator: SOURCE_LOCATOR,
   metadata: {
-    sourcePages: [10, 11, 13, 21],
+    sourcePages: [10, 11, 13, 20, 21],
     benchmarkClass: 'REAL_SOURCE_CURATED_PROHIBITION_EXCERPTS'
   },
   audit: audit({ type: 'USER', id: 'kbs-constraint-source-curator' }, 'kbs-constraint-source')
@@ -217,7 +233,7 @@ const artifact = env.sourceRegistry.materializeArtifact({
     acquiredAt: '2026-08-27T03:45:00.000Z',
     locator: SOURCE_LOCATOR,
     metadata: {
-      sourcePages: [10, 11, 13, 21],
+      sourcePages: [10, 11, 13, 20, 21],
       transcriptionPolicy: 'WHITESPACE_NORMALIZED_NO_SEMANTIC_EDIT'
     }
   },
@@ -263,6 +279,30 @@ const compilationBundle = compiler.materializeCompilationProposal({
   audit: audit({ type: 'SERVICE_ACCOUNT', id: 'gold-prohibition-compiler' }, 'kbs-constraint-compilation')
 });
 
+const negativeCompilationBundle = compiler.materializeCompilationProposal({
+  compilationLogicalId: 'compilation.gold.kbs-2015-prohibition-descriptive-negative-control',
+  version: '1',
+  sourceArtifactRef: artifact.ref,
+  compilerDefinitionRef: compilerDefinition.ref,
+  proposal: {
+    claims: [{
+      key: descriptiveNegativeSpec.key,
+      claimType: 'BOUNDARY_CONSTRAINT',
+      assertion: descriptiveNegativeSpec.assertion,
+      sourceLocator: locator(descriptiveNegativeSpec),
+      sourceContext: emptyContextFamilies()
+    }],
+    runMetadata: {
+      benchmark: 'KBS_2015_AGRONOMIC_PROHIBITION_FALSE_POSITIVE_GOLD',
+      curationMode: 'HUMAN_CURATED_ACCEPTANCE_FIXTURE'
+    }
+  },
+  audit: audit(
+    { type: 'SERVICE_ACCOUNT', id: 'gold-prohibition-compiler' },
+    'kbs-constraint-descriptive-negative-compilation'
+  )
+});
+
 const reviewer = createPrincipal({
   principalId: 'gold-kbs-prohibition-agronomy-reviewer',
   type: 'USER',
@@ -301,6 +341,33 @@ const reviewAuthorization = recordAuthorizationDecision({
 });
 
 const sourceFaithful = new SourceFaithfulReviewService({ ledger: env.ledger });
+const descriptiveNegativeReview = sourceFaithful.reviewCandidate({
+  reviewLogicalId: 'review.gold.kbs.prohibition.b21-no-crop-descriptive-not-prohibition',
+  reviewVersion: '1',
+  compilationResultRef: negativeCompilationBundle.result.ref,
+  claimCandidateRef: negativeCompilationBundle.claimCandidates[0].ref,
+  sourceContextCandidateRef: negativeCompilationBundle.sourceContextCandidates[0].ref,
+  disposition: 'REJECT_SOURCE_FAITHFUL',
+  reasonCodes: ['DESCRIPTIVE_TREATMENT_STATE_NOT_EXPLICIT_PROHIBITION'],
+  rationale: 'Within System H / Treatment B21 continuous-fallow context, "No crop is planted." describes the treatment management pattern; unlike explicit source prohibitions such as "DO NOT TILL", it does not independently establish PROHIBIT PLANT authority.',
+  reviewPrincipal: reviewer,
+  authorizationDecisionAuditRef: reviewAuthorization.ref,
+  audit: audit(
+    { type: reviewer.type, id: reviewer.principalId },
+    'kbs-constraint-descriptive-negative-review'
+  )
+});
+assert.equal(
+  descriptiveNegativeReview.review.semanticPayload.disposition,
+  'REJECT_SOURCE_FAITHFUL'
+);
+assert.deepEqual(
+  descriptiveNegativeReview.review.semanticPayload.reasonCodes,
+  ['DESCRIPTIVE_TREATMENT_STATE_NOT_EXPLICIT_PROHIBITION']
+);
+assert.equal(descriptiveNegativeReview.claim, null);
+assert.equal(descriptiveNegativeReview.sourceContext, null);
+
 const reviewed = compilationBundle.claimCandidates.map((candidate, index) => {
   const spec = specs[index];
   return sourceFaithful.reviewCandidate({
@@ -609,6 +676,16 @@ for (let index = 0; index < reviewed.length; index += 1) {
   assert.equal(claim.semanticPayload.sourceLocator.coordinates.page, specs[index].page);
 }
 
+const rejectedPlantingClaims = env.ledger.exportSnapshot().records.filter(
+  (record) => record.ref.kind === 'Claim'
+    && record.semanticPayload.assertion === descriptiveNegativeSpec.assertion
+);
+assert.equal(rejectedPlantingClaims.length, 0);
+assert.equal(
+  constraints.some((item) => item.semanticPayload.constraint.actionCode === 'PLANT'),
+  false
+);
+
 const forbiddenRuntimeKinds = new Set([
   'RuntimeBinding',
   'DecisionResult',
@@ -626,9 +703,11 @@ console.log(JSON.stringify({
   claimCount: reviewed.length,
   qualifiedKnowledgeCount: knowledgeByKey.size,
   constraintCompilationCount: constraints.length,
+  rejectedSourceFaithfulCandidateCount: 1,
   policyContractVersion: 'adr.policy.v3',
   policyRuntimeOutputCount: 0,
   integrationConclusion: 'REAL_KBS_CONSTRAINTS_BIND_TO_CONTEXT_ONLY_POLICY_V3_WITHOUT_FAKE_RUNTIME_OUTPUTS',
+  negativeControls: ['DESCRIPTIVE_NO_CROP_NOT_PROHIBITION'],
   shapes: [
     'UNCONDITIONAL_SOURCE_CONTEXT_PROHIBITION',
     'EXPLICIT_EXCEPTION_TILL',
