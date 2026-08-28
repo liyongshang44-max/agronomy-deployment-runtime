@@ -49,6 +49,9 @@ import {
 const OWNERSHIP = { organizationId: 'org-a', tenantId: 'tenant-a' };
 const EXPECTED_EXCERPT_HASH = 'sha256:9a8122ffaf634a86e6e9d07c6ea0d4fa607ecdf3c3ba6a2969125a9655d4c2a4';
 const SOURCE_LOCATOR = 'current_agronomic_protocol.pdf#obligation-excerpts';
+const SYSTEM_CONTEXT =
+  'System H: Continuous fallow system: No crop growth, no cover growth and no weed growth.';
+const TREATMENT_CONTEXT = 'Treatment B21 Continuous fallow:';
 
 const specs = [
   {
@@ -72,10 +75,10 @@ const specs = [
   {
     key: 'b21-till-as-needed-two-six-year',
     page: 20,
-    scope: 'Biodiversity Treatment B21',
+    scope: 'Treatment B21',
     crop: null,
     decisionDomain: 'continuous fallow tillage occurrence',
-    assertion: 'For Biodiversity Treatment B21, plots are tilled as needed, two to six times a year, to prevent plant growth from becoming established.',
+    assertion: 'Plots are tilled as needed (2-6 times a year) to prevent plant growth from becoming established.',
     evidenceText: 'Plots are tilled as needed (2-6 times a year) to prevent plant growth from becoming established.'
   }
 ];
@@ -116,15 +119,53 @@ function contextFamilies(spec) {
       }
     }]
   };
-  families.MANAGEMENT = {
-    status: 'REPORTED',
-    dimensions: [{
-      semanticHint: 'protocol.scope',
-      valueCandidate: spec.scope,
-      supportClass: 'EXPLICIT_SOURCE',
-      sourceLocator: locator(spec)
-    }]
-  };
+  if (spec.key === 'b21-till-as-needed-two-six-year') {
+    families.MANAGEMENT = {
+      status: 'REPORTED',
+      dimensions: [
+        {
+          semanticHint: 'system.identity',
+          valueCandidate: 'System H',
+          supportClass: 'EXPLICIT_SOURCE',
+          sourceLocator: {
+            kind: 'DOCUMENT_COORDINATE',
+            scheme: 'PDF_PAGE_TEXT_V1',
+            coordinates: { page: 20, evidenceText: SYSTEM_CONTEXT }
+          }
+        },
+        {
+          semanticHint: 'treatment.identity',
+          valueCandidate: 'B21',
+          supportClass: 'EXPLICIT_SOURCE',
+          sourceLocator: {
+            kind: 'DOCUMENT_COORDINATE',
+            scheme: 'PDF_PAGE_TEXT_V1',
+            coordinates: { page: 20, evidenceText: TREATMENT_CONTEXT }
+          }
+        },
+        {
+          semanticHint: 'management.system',
+          valueCandidate: 'Continuous fallow',
+          supportClass: 'EXPLICIT_SOURCE',
+          sourceLocator: {
+            kind: 'DOCUMENT_COORDINATE',
+            scheme: 'PDF_PAGE_TEXT_V1',
+            coordinates: { page: 20, evidenceText: TREATMENT_CONTEXT }
+          }
+        }
+      ]
+    };
+  } else {
+    families.MANAGEMENT = {
+      status: 'REPORTED',
+      dimensions: [{
+        semanticHint: 'protocol.scope',
+        valueCandidate: spec.scope,
+        supportClass: 'EXPLICIT_SOURCE',
+        sourceLocator: locator(spec)
+      }]
+    };
+  }
   families.OPERATIONAL = {
     status: 'REPORTED',
     dimensions: [{
@@ -141,11 +182,28 @@ function contextAdjudication(spec) {
   return {
     BIOLOGICAL: spec.crop ? [{ semanticId: 'crop.code', valueType: 'CATEGORY' }] : [],
     ENVIRONMENTAL: [{ semanticId: 'site.name', valueType: 'STRING' }],
-    MANAGEMENT: [{ semanticId: 'protocol.scope', valueType: 'STRING' }],
+    MANAGEMENT: spec.key === 'b21-till-as-needed-two-six-year'
+      ? [
+          { semanticId: 'system.name', valueType: 'STRING' },
+          { semanticId: 'treatment.name', valueType: 'STRING' },
+          { semanticId: 'management.system', valueType: 'CATEGORY' }
+        ]
+      : [{ semanticId: 'protocol.scope', valueType: 'STRING' }],
     OPERATIONAL: [{ semanticId: 'decision.domain', valueType: 'CATEGORY' }],
     MEASUREMENT: [],
     JURISDICTION_ECONOMIC: []
   };
+}
+
+function qualificationPreconditions(spec) {
+  if (spec.key !== 'b21-till-as-needed-two-six-year') {
+    return [{ semanticId: 'protocol.scope', operator: 'EQUALS', value: spec.scope }];
+  }
+  return [
+    { semanticId: 'system.name', operator: 'EQUALS', value: 'System H' },
+    { semanticId: 'treatment.name', operator: 'EQUALS', value: 'B21' },
+    { semanticId: 'management.system', operator: 'EQUALS', value: 'Continuous fallow' }
+  ];
 }
 
 function boolPort(semanticId) {
@@ -304,6 +362,18 @@ const reviewed = compilationBundle.claimCandidates.map((candidate, index) => {
   });
 });
 
+const b21Reviewed = reviewed[specs.findIndex((spec) =>
+  spec.key === 'b21-till-as-needed-two-six-year')];
+assert.deepEqual(
+  b21Reviewed.sourceContext.semanticPayload.contextFamilies.MANAGEMENT.dimensions
+    .map((dimension) => [dimension.semanticId, dimension.value]),
+  [
+    ['system.name', { type: 'STRING', string: 'System H' }],
+    ['treatment.name', { type: 'STRING', string: 'B21' }],
+    ['management.system', { type: 'CATEGORY', category: 'Continuous fallow' }]
+  ]
+);
+
 const scientificApprover = createPrincipal({
   principalId: 'gold-kbs-obligation-scientific-approver',
   type: 'USER',
@@ -355,9 +425,7 @@ for (let index = 0; index < reviewed.length; index += 1) {
     sourceContextRef: reviewedItem.sourceContext.ref,
     disposition: 'QUALIFY_USE',
     qualificationTarget: AGRONOMIC_POLICY_REQUIRED_KNOWLEDGE_USE,
-    semanticPreconditions: [
-      { semanticId: 'protocol.scope', operator: 'EQUALS', value: spec.scope }
-    ],
+    semanticPreconditions: qualificationPreconditions(spec),
     approverPrincipal: scientificApprover,
     authorizationDecisionAuditRef: qualificationAuthorization.ref,
     audit: audit({ type: scientificApprover.type, id: scientificApprover.principalId }, `kbs-obligation-qualification-${spec.key}`)
@@ -649,7 +717,7 @@ console.log(JSON.stringify({
     'EXACT_COUNT_EACH_CALENDAR_YEAR'
   ],
   boundedCandidate: {
-    sourceScope: 'Biodiversity Treatment B21',
+    sourceScope: 'Treatment B21',
     minCount: normalizedB21.obligation.occurrence.minCount,
     maxCount: normalizedB21.obligation.occurrence.maxCount,
     periodKind: normalizedB21.obligation.occurrence.period.kind,
