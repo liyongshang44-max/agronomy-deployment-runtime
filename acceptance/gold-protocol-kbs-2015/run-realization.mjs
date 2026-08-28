@@ -56,7 +56,7 @@ import {
 import { makeEnv, audit } from '../specification/fixture.mjs';
 
 const OWNERSHIP = { organizationId: 'org-a', tenantId: 'tenant-a' };
-const EXPECTED_EXCERPT_HASH = 'sha256:fe7e3ff2e3f69562e8452d0456b7bb5b290a5edc651e3f95ecc202d4f120a1d2';
+const EXPECTED_EXCERPT_HASH = 'sha256:8ac1dcc6f329b05cc8c0c2bdca8cb4f2ef2fc0e89ac3820e1dcf98d232cc7cf9';
 
 const REGIMEN_SOURCE =
   'Plots are tilled as needed (2-6 times a year) to prevent plant growth from becoming established.';
@@ -65,6 +65,10 @@ const REALIZATION_SOURCE =
 const NEIGHBOR_SOURCE =
   'Plots can be chisel plowed and soil finished if more aggressive tillage is needed.';
 const GOAL_OBJECT = 'plant growth from becoming established';
+const SITE_CONTEXT = 'Kellogg Biological Station, Michigan State University';
+const SYSTEM_CONTEXT =
+  'System H: Continuous fallow system: No crop growth, no cover growth and no weed growth.';
+const TREATMENT_CONTEXT = 'Treatment B21 Continuous fallow:';
 
 const claimSpecs = [
   { key: 'b21-regimen-parent', evidenceText: REGIMEN_SOURCE },
@@ -80,14 +84,69 @@ function locator(spec) {
   };
 }
 
-function emptyContextFamilies() {
-  return Object.fromEntries(
-    SOURCE_CONTEXT_FAMILIES.map((family) => [family, { status: 'NOT_REPORTED', dimensions: [] }])
-  );
+function contextLocator(page, evidenceText) {
+  return {
+    kind: 'DOCUMENT_COORDINATE',
+    scheme: 'PDF_PAGE_TEXT_V1',
+    coordinates: { page, evidenceText }
+  };
 }
 
-function emptyContextAdjudication() {
-  return Object.fromEntries(SOURCE_CONTEXT_FAMILIES.map((family) => [family, []]));
+function b21ContextFamilies() {
+  const families = Object.fromEntries(
+    SOURCE_CONTEXT_FAMILIES.map((family) => [
+      family,
+      { status: 'NOT_REPORTED', dimensions: [] }
+    ])
+  );
+  families.ENVIRONMENTAL = {
+    status: 'REPORTED',
+    dimensions: [{
+      semanticHint: 'site.identity',
+      valueCandidate: 'Kellogg Biological Station',
+      supportClass: 'EXPLICIT_SOURCE',
+      sourceLocator: contextLocator(0, SITE_CONTEXT)
+    }]
+  };
+  families.MANAGEMENT = {
+    status: 'REPORTED',
+    dimensions: [
+      {
+        semanticHint: 'system.identity',
+        valueCandidate: 'System H',
+        supportClass: 'EXPLICIT_SOURCE',
+        sourceLocator: contextLocator(20, SYSTEM_CONTEXT)
+      },
+      {
+        semanticHint: 'treatment.identity',
+        valueCandidate: 'B21',
+        supportClass: 'EXPLICIT_SOURCE',
+        sourceLocator: contextLocator(20, TREATMENT_CONTEXT)
+      },
+      {
+        semanticHint: 'management.system',
+        valueCandidate: 'Continuous fallow',
+        supportClass: 'EXPLICIT_SOURCE',
+        sourceLocator: contextLocator(20, TREATMENT_CONTEXT)
+      }
+    ]
+  };
+  return families;
+}
+
+function b21ContextAdjudication() {
+  const adjudication = Object.fromEntries(
+    SOURCE_CONTEXT_FAMILIES.map((family) => [family, []])
+  );
+  adjudication.ENVIRONMENTAL = [
+    { semanticId: 'site.name', valueType: 'STRING' }
+  ];
+  adjudication.MANAGEMENT = [
+    { semanticId: 'system.name', valueType: 'STRING' },
+    { semanticId: 'treatment.name', valueType: 'STRING' },
+    { semanticId: 'management.system', valueType: 'CATEGORY' }
+  ];
+  return adjudication;
 }
 
 const env = makeEnv();
@@ -111,9 +170,9 @@ const source = env.sourceRegistry.registerSource({
     date: '2015-01-01'
   },
   sourceVersionLabel: '2015',
-  originLocator: 'current_agronomic_protocol.pdf#page=20',
+  originLocator: 'current_agronomic_protocol.pdf#pages=0,20',
   metadata: {
-    sourcePage: 20,
+    sourcePages: [0, 20],
     benchmarkClass: 'REAL_SOURCE_CURATED_ACTION_REALIZATION_EXCERPTS'
   },
   audit: audit({ type: 'USER', id: 'kbs-realization-source-curator' }, 'kbs-realization-source')
@@ -129,9 +188,9 @@ const artifact = env.sourceRegistry.materializeArtifact({
   acquisition: {
     method: 'CURATED_PAGE_TRANSCRIPTION',
     acquiredAt: '2026-08-28T03:15:00.000+08:00',
-    locator: 'current_agronomic_protocol.pdf#page=20',
+    locator: 'current_agronomic_protocol.pdf#pages=0,20',
     metadata: {
-      sourcePage: 20,
+      sourcePages: [0, 20],
       transcriptionPolicy: 'WHITESPACE_NORMALIZED_NO_SEMANTIC_EDIT'
     }
   },
@@ -167,7 +226,7 @@ const bundle = compiler.materializeCompilationProposal({
       claimType: 'OPERATIONAL_RECOMMENDATION',
       assertion: spec.evidenceText,
       sourceLocator: locator(spec),
-      sourceContext: emptyContextFamilies()
+      sourceContext: b21ContextFamilies()
     })),
     runMetadata: {
       benchmark: 'KBS_2015_AGRONOMIC_ACTION_REALIZATION_GOLD',
@@ -222,7 +281,7 @@ const reviewed = claimSpecs.map((spec, index) => sourceFaithful.reviewCandidate(
   claimCandidateRef: bundle.claimCandidates[index].ref,
   sourceContextCandidateRef: bundle.sourceContextCandidates[index].ref,
   disposition: 'ACCEPT_SOURCE_FAITHFUL',
-  contextAdjudication: emptyContextAdjudication(),
+  contextAdjudication: b21ContextAdjudication(),
   reviewPrincipal: reviewer,
   authorizationDecisionAuditRef: reviewAuthorization.ref,
   claimLogicalId: `claim.gold.kbs.realization.${spec.key}`,
@@ -231,6 +290,23 @@ const reviewed = claimSpecs.map((spec, index) => sourceFaithful.reviewCandidate(
   sourceContextVersion: '1',
   audit: audit({ type: reviewer.type, id: reviewer.principalId }, `kbs-realization-source-faithful-${spec.key}`)
 }));
+
+for (const item of reviewed) {
+  assert.equal(
+    item.sourceContext.semanticPayload.contextFamilies.ENVIRONMENTAL
+      .dimensions[0].value.string,
+    'Kellogg Biological Station'
+  );
+  assert.deepEqual(
+    item.sourceContext.semanticPayload.contextFamilies.MANAGEMENT.dimensions
+      .map((dimension) => [dimension.semanticId, dimension.value]),
+    [
+      ['system.name', { type: 'STRING', string: 'System H' }],
+      ['treatment.name', { type: 'STRING', string: 'B21' }],
+      ['management.system', { type: 'CATEGORY', category: 'Continuous fallow' }]
+    ]
+  );
+}
 
 const scientificApprover = createPrincipal({
   principalId: 'gold-kbs-realization-scientific-approver',
