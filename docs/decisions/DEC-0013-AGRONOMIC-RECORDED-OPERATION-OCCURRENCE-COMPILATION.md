@@ -586,6 +586,76 @@ A locator that points only to:
 
 is insufficient for an occurrence authority.
 
+## Structured tabular locator replay
+
+ADR source-locator v1 already supports the generic carrier:
+
+```text
+DOCUMENT_COORDINATE {
+  scheme
+  coordinates
+  evidenceHash?
+}
+```
+
+DEC-0013 therefore does not require mutating the frozen source-locator contract merely because the first Gold artifact is XLSX.
+
+However, storing a coordinate object is not sufficient occurrence authority.
+
+For structured tabular evidence, occurrence publication must deterministically replay the coordinate against the exact retained SourceArtifact bytes.
+
+For an XLSX Gold artifact, an implementation may define an occurrence-specific locator scheme such as:
+
+```text
+XLSX_WORKSHEET_ROW_V1
+```
+
+with coordinates sufficient to identify at least:
+
+- workbook artifact;
+- worksheet name;
+- exact row identity;
+- exact source columns used for the occurrence;
+- header/schema identity where required to interpret the row.
+
+The occurrence authority must recompute the selected evidence from the exact XLSX bytes and verify its evidence hash.
+
+It must not accept a caller-supplied:
+
+- worksheet name;
+- row number;
+- cell value;
+- evidenceHash
+
+without replay against the retained artifact.
+
+A changed workbook, changed worksheet, changed row, changed source column or changed extracted value must either:
+
+- change the occurrence semantic identity; or
+- fail publication/replay closure.
+
+The extractor must use deterministic canonicalization for the selected row values.
+
+The canonical extraction rules are part of the implementation acceptance surface and may not depend on spreadsheet UI rendering, locale formatting or current external service behavior.
+
+An alternative implementation may retain an exact extracted row artifact with explicit lineage back to the original workbook SourceArtifact, but it must still prove deterministic extraction from the original exact bytes.
+
+The architecture requirement is:
+
+```text
+exact workbook bytes
+  + replayable structured coordinate
+  -> exact selected row evidence
+  -> occurrence semantics
+```
+
+not:
+
+```text
+human-entered sheet/row label
+  -> trusted event fact
+```
+
 ## Source-native subject identity
 
 DEC-0013 v1 preserves source-native subject identity.
