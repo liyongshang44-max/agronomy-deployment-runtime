@@ -240,8 +240,8 @@ test('occurrence hash closes source, artifact, locator and semantic drift', () =
 
   const mutations = [
     (x) => { x.occurrence.sourceArtifactContentHash = `sha256:${'9'.repeat(64)}`; },
-    (x) => { x.occurrence.sourceLocator.coordinates.rowNumber = 43; },
     (x) => {
+      x.occurrence.sourceLocator.coordinates.rowNumber = 43;
       x.occurrence.sourceLocator.coordinates.cells =
         x.occurrence.sourceLocator.coordinates.cells.map((cell) => ({
           ...cell,
