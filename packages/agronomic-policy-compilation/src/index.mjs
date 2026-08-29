@@ -193,3 +193,11 @@ export {
   normalizeAgronomicRecordedOperationOccurrence,
   normalizeAgronomicRecordedOperationOccurrenceCompilation
 } from './recorded-occurrence-contract.mjs';
+
+export {
+  AGRONOMIC_RECORDED_OPERATION_EVIDENCE_CONTRACT_VERSION,
+  AgronomicRecordedOperationEvidenceError,
+  agronomicRecordedOperationEvidenceHash,
+  extractAgronomicRecordedOperationXlsxRowEvidence,
+  replayAgronomicRecordedOperationEvidence
+} from './recorded-occurrence-evidence.mjs';
