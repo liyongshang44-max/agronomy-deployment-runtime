@@ -1,6 +1,6 @@
 # DEC-0013 — Governed Agronomic Recorded-Operation Occurrence Compilation
 
-Status: **PROPOSED**
+Status: **ACCEPTED**
 
 Date: 2026-08-29
 
@@ -1167,11 +1167,19 @@ Before implementation is authorized, architecture review must confirm:
 17. a date-only source-native occurrence cannot be forced into ContextDatum v1 by fabricating ADR target identity, timezone or RFC3339 effective-interval timestamps;
 18. any structured XLSX row locator used for Gold is deterministically replayed against exact retained workbook bytes, rather than trusting caller-supplied coordinates or evidenceHash.
 
-## Proposed post-acceptance implementation gate
+## Post-acceptance gate
 
-If explicitly accepted, implementation should begin on a separate branch created from the resulting accepted DEC merge head.
+Before this decision is merged as accepted architecture:
 
-The first implementation slice should contain only:
+1. repository-wide ADR Constitution MUST pass on the exact accepted documentation head;
+2. the PR MUST remain docs-only;
+3. no SourceRegistry, Scientific Compiler, ContextDatum, Policy, runtime, Outcome, workflow, schema or existing authority-contract mutation may be included;
+4. the PR base MUST still equal the expected main authority head;
+5. the accepted exact head MUST be recorded before merge.
+
+Only after the accepted documentation PR is merged may implementation begin on a separate branch created from the resulting main.
+
+The first implementation slice MUST contain only:
 
 1. recorded-occurrence contract;
 2. occurrence semantic review authority;
@@ -1190,12 +1198,54 @@ It must not include:
 - Policy mutation;
 - completeness inference.
 
-## Proposal status
+## Acceptance
 
-This decision remains **PROPOSED**.
+Accepted on 2026-08-29 after explicit architecture approval.
 
-No implementation is authorized by this document until explicit architecture acceptance.
+Acceptance establishes only the architecture for governed positive source-recorded agronomic operation occurrence described by this decision.
 
-Acceptance of this proposal would establish only the architecture for governed positive source-recorded agronomic operation occurrence.
+In particular, acceptance does **not** establish that any source row is:
 
-It would not establish that any source row is an ADR execution receipt, an Outcome, a normative instruction, a complete field history, or a causal claim.
+- an ADR ExecutionReceipt;
+- an Outcome;
+- a normative instruction;
+- a complete field history;
+- a causal claim;
+- a negative/nonoccurrence fact;
+- a reconciled ADR field/target identity;
+- a timestamp more precise than the source reports;
+- evidence of plan adherence or deviation.
+
+The accepted v1 authority is restricted to:
+
+```text
+source-backed positive recorded operation occurrence
++ exact Source / SourceArtifact closure
++ exact replayable event-level locator
++ source-native subject identity
++ source-native operation identity
++ source-supported temporal precision
++ governed optional normalization
+```
+
+with the explicit boundary:
+
+```text
+recorded occurrence
+!= planned management
+!= AGRONOMIC_POLICY_INPUT
+!= generic scientific Claim by semantic substitution
+!= OperationalJob / OperationalAttempt
+!= ADR ExecutionReceipt
+!= Outcome
+!= Runtime authority
+!= negative nonoccurrence authority
+```
+
+Existing ContextDatum event/observation capability remains unchanged.
+
+DEC-0013 governs source-record authority before any separately governed ADR target/time projection into ContextDatum.
+
+For structured XLSX evidence, accepted architecture requires deterministic replay from exact retained workbook bytes; a caller-supplied worksheet/row/evidenceHash is not sufficient authority.
+
+Acceptance does not pre-accept planned-versus-actual reconciliation, record completeness, negative occurrence authority, cross-source identity, equipment/material/rate normalization, machine-execution reconciliation, Outcome integration, runtime use of historical operations, or target/field identity reconciliation.
