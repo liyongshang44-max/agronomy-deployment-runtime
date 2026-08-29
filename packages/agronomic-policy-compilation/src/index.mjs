@@ -176,3 +176,20 @@ export {
   publishAgronomicSourceAuthorityRoutingCompilation,
   validateAgronomicSourceAuthorityRoutingCompilationAuthority
 } from './source-routing-authority.mjs';
+
+export {
+  AGRONOMIC_RECORDED_OPERATION_OCCURRENCE_COMPILATION_CONTRACT_VERSION,
+  AGRONOMIC_RECORDED_OPERATION_OCCURRENCE_CONTRACT_VERSION,
+  AGRONOMIC_RECORDED_OPERATION_OCCURRENCE_CLASSES,
+  AGRONOMIC_RECORDED_OPERATION_RECORD_ROLES,
+  AGRONOMIC_RECORDED_OPERATION_TEMPORAL_KINDS,
+  AGRONOMIC_RECORDED_OPERATION_TEMPORAL_PRECISIONS,
+  AGRONOMIC_RECORDED_OPERATION_LOCATOR_KINDS,
+  AGRONOMIC_RECORDED_OPERATION_LOCATOR_SCHEMES,
+  AGRONOMIC_RECORDED_OPERATION_EVIDENCE_CELL_ROLES,
+  AgronomicRecordedOperationOccurrenceCompilationError,
+  agronomicRecordedOperationOccurrenceCompilationAuthorityRefs,
+  agronomicRecordedOperationOccurrenceHash,
+  normalizeAgronomicRecordedOperationOccurrence,
+  normalizeAgronomicRecordedOperationOccurrenceCompilation
+} from './recorded-occurrence-contract.mjs';
