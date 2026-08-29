@@ -138,20 +138,16 @@ test('same-row coordinate consistency fails before ZIP replay', () => {
   );
 });
 
-test('corrupt workbook bytes cannot be replayed as trusted row evidence', () => {
-  const corrupt = Buffer.from(XLSX_FIXTURE);
-  corrupt.fill(0, 0, 64);
+test('structurally truncated workbook bytes cannot be replayed as trusted row evidence', () => {
+  const truncated = XLSX_FIXTURE.subarray(0, XLSX_FIXTURE.length - 22);
 
   assert.throws(
     () => extractAgronomicRecordedOperationXlsxRowEvidence({
-      bytes: corrupt,
+      bytes: truncated,
       coordinates: COORDINATES
     }),
     (error) =>
       error instanceof AgronomicRecordedOperationEvidenceError
-        && [
-          'INVALID_XLSX_ZIP',
-          'XLSX_PART_NOT_FOUND'
-        ].includes(error.code)
+        && error.code === 'INVALID_XLSX_ZIP'
   );
 });
