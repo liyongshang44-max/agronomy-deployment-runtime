@@ -289,3 +289,81 @@ test('COMPLETE remains local to one recorded occurrence, not source completeness
     /COMPLETE occurrence coverage/
   );
 });
+
+
+test('normalizes exact persisted notebook table-row coordinates', () => {
+  const value = occurrence();
+  value.sourceLocator = {
+    kind: 'DOCUMENT_COORDINATE',
+    scheme: 'JUPYTER_OUTPUT_TABLE_ROW_V1',
+    coordinates: {
+      cellIndex: 3,
+      outputIndex: 0,
+      mimeType: 'text/plain',
+      headerLineIndex: 0,
+      rowIndex: '33',
+      columns: [
+        { role: 'SOURCE_NATIVE_SUBJECT', name: 'siteid' },
+        { role: 'SOURCE_OPERATION_CODE', name: 'operation' },
+        { role: 'TEMPORAL_SUPPORT', name: 'date' }
+      ]
+    },
+    evidenceHash: `sha256:${'d'.repeat(64)}`
+  };
+  const normalized = normalizeAgronomicRecordedOperationOccurrence(value);
+  assert.equal(normalized.sourceLocator.scheme, 'JUPYTER_OUTPUT_TABLE_ROW_V1');
+  assert.equal(normalized.sourceLocator.coordinates.cellIndex, 3);
+  assert.equal(normalized.sourceLocator.coordinates.outputIndex, 0);
+  assert.equal(normalized.sourceLocator.coordinates.headerLineIndex, 0);
+  assert.equal(normalized.sourceLocator.coordinates.rowIndex, '33');
+  assert.deepEqual(
+    normalized.sourceLocator.coordinates.columns.map((column) => [column.role, column.name]),
+    [
+      ['SOURCE_NATIVE_SUBJECT', 'siteid'],
+      ['SOURCE_OPERATION_CODE', 'operation'],
+      ['TEMPORAL_SUPPORT', 'date']
+    ]
+  );
+});
+
+test('notebook locator fails closed on implicit header, unsupported MIME or duplicate columns', () => {
+  const base = occurrence();
+  base.sourceLocator = {
+    kind: 'DOCUMENT_COORDINATE',
+    scheme: 'JUPYTER_OUTPUT_TABLE_ROW_V1',
+    coordinates: {
+      cellIndex: 3,
+      outputIndex: 0,
+      mimeType: 'text/plain',
+      headerLineIndex: 0,
+      rowIndex: '33',
+      columns: [
+        { role: 'SOURCE_NATIVE_SUBJECT', name: 'siteid' },
+        { role: 'SOURCE_OPERATION_CODE', name: 'operation' },
+        { role: 'TEMPORAL_SUPPORT', name: 'date' }
+      ]
+    },
+    evidenceHash: `sha256:${'d'.repeat(64)}`
+  };
+
+  const missingHeader = structuredClone(base);
+  delete missingHeader.sourceLocator.coordinates.headerLineIndex;
+  assert.throws(
+    () => normalizeAgronomicRecordedOperationOccurrence(missingHeader),
+    /headerLineIndex must be a non-negative safe integer/
+  );
+
+  const html = structuredClone(base);
+  html.sourceLocator.coordinates.mimeType = 'text/html';
+  assert.throws(
+    () => normalizeAgronomicRecordedOperationOccurrence(html),
+    /supports only text\/plain/
+  );
+
+  const duplicate = structuredClone(base);
+  duplicate.sourceLocator.coordinates.columns[2].name = 'operation';
+  assert.throws(
+    () => normalizeAgronomicRecordedOperationOccurrence(duplicate),
+    /roles and source column names must be unique/
+  );
+});
