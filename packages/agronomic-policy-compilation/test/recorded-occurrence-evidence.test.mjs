@@ -5,7 +5,8 @@ import {
   AGRONOMIC_RECORDED_OPERATION_EVIDENCE_CONTRACT_VERSION,
   AgronomicRecordedOperationEvidenceError,
   agronomicRecordedOperationEvidenceHash,
-  extractAgronomicRecordedOperationXlsxRowEvidence
+  extractAgronomicRecordedOperationXlsxRowEvidence,
+  extractAgronomicRecordedOperationJupyterTableRowEvidence
 } from '../src/index.mjs';
 
 const XLSX_FIXTURE = Buffer.from(
@@ -149,5 +150,102 @@ test('structurally truncated workbook bytes cannot be replayed as trusted row ev
     (error) =>
       error instanceof AgronomicRecordedOperationEvidenceError
         && error.code === 'INVALID_XLSX_ZIP'
+  );
+});
+
+
+const NOTEBOOK_FIXTURE = Buffer.from(JSON.stringify({
+  cells: [
+    { cell_type: 'markdown', source: ['fixture'] },
+    { cell_type: 'code', outputs: [] },
+    { cell_type: 'code', outputs: [] },
+    {
+      cell_type: 'code',
+      source: ["df2[['date', 'operation', 'siteid', 'year']]"],
+      outputs: [{
+        output_type: 'execute_result',
+        execution_count: 93,
+        data: {
+          'text/plain': [
+            '           date   operation         siteid  year\n',
+            '32   2011-05-03  plant_corn          NWREC  2011\n',
+            '33   2011-05-03  plant_corn           SERF  2011\n'
+          ]
+        },
+        metadata: {}
+      }]
+    }
+  ]
+}), 'utf8');
+
+const NOTEBOOK_COORDINATES = {
+  cellIndex: 3,
+  outputIndex: 0,
+  mimeType: 'text/plain',
+  headerLineIndex: 0,
+  rowIndex: '33',
+  columns: [
+    { role: 'SOURCE_NATIVE_SUBJECT', name: 'siteid' },
+    { role: 'SOURCE_OPERATION_CODE', name: 'operation' },
+    { role: 'TEMPORAL_SUPPORT', name: 'date' }
+  ]
+};
+
+test('replays an exact persisted notebook table row without global string search', () => {
+  const evidence = extractAgronomicRecordedOperationJupyterTableRowEvidence({
+    bytes: NOTEBOOK_FIXTURE,
+    coordinates: NOTEBOOK_COORDINATES
+  });
+  assert.equal(evidence.scheme, 'JUPYTER_OUTPUT_TABLE_ROW_V1');
+  assert.equal(evidence.cellIndex, 3);
+  assert.equal(evidence.outputIndex, 0);
+  assert.equal(evidence.headerLineIndex, 0);
+  assert.equal(evidence.rowIndex, '33');
+  assert.deepEqual(
+    evidence.cells.map((cell) => [cell.role, cell.sourceColumn, cell.resolvedText]),
+    [
+      ['SOURCE_NATIVE_SUBJECT', 'siteid', 'SERF'],
+      ['SOURCE_OPERATION_CODE', 'operation', 'plant_corn'],
+      ['TEMPORAL_SUPPORT', 'date', '2011-05-03']
+    ]
+  );
+});
+
+test('notebook row replay fails closed on wrong row identity, source column or output coordinate', () => {
+  assert.throws(
+    () => extractAgronomicRecordedOperationJupyterTableRowEvidence({
+      bytes: NOTEBOOK_FIXTURE,
+      coordinates: { ...NOTEBOOK_COORDINATES, rowIndex: '999' }
+    }),
+    (error) =>
+      error instanceof AgronomicRecordedOperationEvidenceError
+        && error.code === 'JUPYTER_ROW_IDENTITY_INVALID'
+  );
+
+  assert.throws(
+    () => extractAgronomicRecordedOperationJupyterTableRowEvidence({
+      bytes: NOTEBOOK_FIXTURE,
+      coordinates: {
+        ...NOTEBOOK_COORDINATES,
+        columns: NOTEBOOK_COORDINATES.columns.map((column) =>
+          column.role === 'SOURCE_NATIVE_SUBJECT'
+            ? { ...column, name: 'missing_site' }
+            : column
+        )
+      }
+    }),
+    (error) =>
+      error instanceof AgronomicRecordedOperationEvidenceError
+        && error.code === 'JUPYTER_SOURCE_COLUMN_NOT_FOUND'
+  );
+
+  assert.throws(
+    () => extractAgronomicRecordedOperationJupyterTableRowEvidence({
+      bytes: NOTEBOOK_FIXTURE,
+      coordinates: { ...NOTEBOOK_COORDINATES, outputIndex: 1 }
+    }),
+    (error) =>
+      error instanceof AgronomicRecordedOperationEvidenceError
+        && error.code === 'JUPYTER_OUTPUT_NOT_FOUND'
   );
 });
