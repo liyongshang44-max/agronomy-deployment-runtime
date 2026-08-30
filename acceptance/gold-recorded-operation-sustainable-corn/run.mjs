@@ -320,7 +320,7 @@ assert.equal(
 );
 assert.deepEqual(
   validated.semanticPayload.occurrence.occurrenceSemantics.sourceNativeSubject,
-  { identifiers: [{ name: 'siteId', value: 'SERF' }] }
+  { identifiers: [{ name: 'siteid', value: 'SERF' }] }
 );
 assert.deepEqual(
   validated.semanticPayload.occurrence.occurrenceSemantics.temporalSupport,
