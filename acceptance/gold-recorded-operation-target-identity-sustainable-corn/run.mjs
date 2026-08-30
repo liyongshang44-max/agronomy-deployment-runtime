@@ -564,6 +564,17 @@ assert.match(
   validated.semanticPayload.binding.sourceBackedTargetIdentity.targetId,
   /^target_src_[0-9a-f]{64}$/
 );
+const hypotheticalFieldTargetId =
+  deriveAgronomicRecordedOperationSourceBackedTargetId({
+    namespaceRef: parent.source.ref,
+    identifierName: 'siteid',
+    identifierValue: 'SERF',
+    granularity: 'FIELD'
+  });
+assert.notEqual(
+  hypotheticalFieldTargetId,
+  validated.semanticPayload.binding.sourceBackedTargetIdentity.targetId
+);
 assert.deepEqual(
   validated.replayedEvidence.map((item) => item.evidenceRole),
   ['SOURCE_NATIVE_IDENTIFIER_CONTEXT', 'TARGET_GRANULARITY_MEANING']
@@ -1002,6 +1013,7 @@ console.log(JSON.stringify({
     'ARTIFACT_HASH_DRIFT_DENIED',
     'INCOMPLETE_REVIEW_DENIED',
     'UNAUTHORIZED_REVIEWER_DENIED',
+    'GRANULARITY_CHANGES_CANDIDATE_TARGET_ID',
     'SOURCE_NAMESPACE_DRIFT_CHANGES_IDENTITY_AND_IS_DENIED',
     'UNRELATED_IDENTITY_EVIDENCE_REJECTED',
     'REJECTED_REVIEW_DENIED'
