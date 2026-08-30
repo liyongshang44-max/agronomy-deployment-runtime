@@ -61,6 +61,7 @@
     "test:agronomic-source-authority-routing": "node acceptance/agronomic-policy-compilation/source-routing.mjs",
     "test:agronomic-recorded-operation-occurrence": "node acceptance/agronomic-policy-compilation/recorded-occurrence.mjs",
     "test:gold-recorded-operation-sustainable-corn": "node acceptance/gold-recorded-operation-sustainable-corn/run.mjs",
-    "test:gold-recorded-operation-semantic-normalization-sustainable-corn": "node acceptance/gold-recorded-operation-semantic-normalization-sustainable-corn/run.mjs",\n    "test:gold-recorded-operation-target-identity-sustainable-corn": "node acceptance/gold-recorded-operation-target-identity-sustainable-corn/run.mjs"
+    "test:gold-recorded-operation-semantic-normalization-sustainable-corn": "node acceptance/gold-recorded-operation-semantic-normalization-sustainable-corn/run.mjs",
+    "test:gold-recorded-operation-target-identity-sustainable-corn": "node acceptance/gold-recorded-operation-target-identity-sustainable-corn/run.mjs"
   }
 }
