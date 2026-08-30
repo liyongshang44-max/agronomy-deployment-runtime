@@ -214,6 +214,53 @@ function resolveAuthorizationForSource({
   return auth;
 }
 
+function evidenceCellByRole(evidence, role) {
+  return evidence.cells.find((cell) => cell.role === role);
+}
+
+function validateEvidenceSemanticClosure(normalized, evidence) {
+  const operationCell = evidenceCellByRole(evidence, 'SOURCE_OPERATION_CODE');
+  const subjectCell = evidenceCellByRole(evidence, 'SOURCE_NATIVE_SUBJECT');
+  const temporalCell = evidenceCellByRole(evidence, 'TEMPORAL_SUPPORT');
+
+  if (!operationCell
+    || operationCell.resolvedText !== normalized.occurrenceSemantics.sourceOperationCode) {
+    throw new AgronomicRecordedOperationOccurrenceCompilationError(
+      'AGRONOMIC_RECORDED_OPERATION_OCCURRENCE_OPERATION_EVIDENCE_MISMATCH',
+      'sourceOperationCode must equal the exact replayed SOURCE_OPERATION_CODE cell text'
+    );
+  }
+
+  const identifiers = normalized.occurrenceSemantics.sourceNativeSubject.identifiers;
+  if (identifiers.length !== 1) {
+    throw new AgronomicRecordedOperationOccurrenceCompilationError(
+      'AGRONOMIC_RECORDED_OPERATION_OCCURRENCE_V1_SUBJECT_EVIDENCE_AMBIGUOUS',
+      'v1 publication requires exactly one source-native subject identifier for the single SOURCE_NATIVE_SUBJECT evidence cell'
+    );
+  }
+  if (!subjectCell || subjectCell.resolvedText !== identifiers[0].value) {
+    throw new AgronomicRecordedOperationOccurrenceCompilationError(
+      'AGRONOMIC_RECORDED_OPERATION_OCCURRENCE_SUBJECT_EVIDENCE_MISMATCH',
+      'source-native subject identifier value must equal the exact replayed SOURCE_NATIVE_SUBJECT cell text'
+    );
+  }
+
+  if (!temporalCell
+    || temporalCell.resolvedText !== normalized.occurrenceSemantics.temporalSupport.date) {
+    throw new AgronomicRecordedOperationOccurrenceCompilationError(
+      'AGRONOMIC_RECORDED_OPERATION_OCCURRENCE_TEMPORAL_EVIDENCE_MISMATCH',
+      'v1 CALENDAR_DATE must equal the exact replayed TEMPORAL_SUPPORT cell text; non-ISO spreadsheet date encodings require a later governed temporal-decoding authority'
+    );
+  }
+
+  if (normalized.occurrenceSemantics.normalizedOperation !== undefined) {
+    throw new AgronomicRecordedOperationOccurrenceCompilationError(
+      'AGRONOMIC_RECORDED_OPERATION_OCCURRENCE_NORMALIZATION_AUTHORITY_REQUIRED',
+      'v1 publication does not accept normalizedOperation until a distinct governed normalization authority is bound'
+    );
+  }
+}
+
 function validateSourceWorld({ ledger, sourceRegistry, occurrence }) {
   const normalized = normalizeAgronomicRecordedOperationOccurrence(occurrence);
   const source = ledger.resolve(normalized.sourceRef);
@@ -255,6 +302,7 @@ function validateSourceWorld({ ledger, sourceRegistry, occurrence }) {
     );
   }
 
+  validateEvidenceSemanticClosure(normalized, replay.evidence);
   return { normalized, source, ...replay };
 }
 
