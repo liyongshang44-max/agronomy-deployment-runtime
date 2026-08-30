@@ -232,12 +232,15 @@ test('v1 semantic evidence must be valid UTF-8 text', () => {
   const item = value.semanticEvidence[0];
   const start = item.sourceLocator.start;
   bytes[start] = 0xff;
-  item.sourceArtifactContentHash = sourceContentHash(bytes);
+  const changedArtifactHash = sourceContentHash(bytes);
+  for (const evidenceItem of value.semanticEvidence) {
+    evidenceItem.sourceArtifactContentHash = changedArtifactHash;
+  }
   item.sourceLocator.evidenceHash = sourceContentHash(
     bytes.subarray(item.sourceLocator.start, item.sourceLocator.endExclusive)
   );
   const artifact = structuredClone(ARTIFACT);
-  artifact.semanticPayload.contentHash = sourceContentHash(bytes);
+  artifact.semanticPayload.contentHash = changedArtifactHash;
 
   expectCode(
     () =>
