@@ -221,3 +221,7 @@ export {
   normalizeAgronomicRecordedOperationSemanticNormalization,
   normalizeAgronomicRecordedOperationSemanticNormalizationCompilation
 } from './recorded-operation-semantic-normalization-contract.mjs';
+
+export {
+  replayAgronomicRecordedOperationSemanticNormalizationEvidence
+} from './recorded-operation-semantic-normalization-evidence.mjs';
