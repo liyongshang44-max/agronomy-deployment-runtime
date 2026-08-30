@@ -199,6 +199,7 @@ export {
   AgronomicRecordedOperationEvidenceError,
   agronomicRecordedOperationEvidenceHash,
   extractAgronomicRecordedOperationXlsxRowEvidence,
+  extractAgronomicRecordedOperationJupyterTableRowEvidence,
   replayAgronomicRecordedOperationEvidence
 } from './recorded-occurrence-evidence.mjs';
 
