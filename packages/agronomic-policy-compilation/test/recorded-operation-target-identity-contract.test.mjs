@@ -160,16 +160,36 @@ test('target id is deterministic and source namespace is material', () => {
   assert.notEqual(first, changedIdentifier);
 });
 
-test('v1 fails closed on FIELD, ZONE and PLOT granularity', () => {
+test('granularity is material to candidate target identity key', () => {
+  const farm = deriveAgronomicRecordedOperationSourceBackedTargetId({
+    namespaceRef,
+    identifierName: 'siteid',
+    identifierValue: 'SERF',
+    granularity: 'FARM'
+  });
+  const field = deriveAgronomicRecordedOperationSourceBackedTargetId({
+    namespaceRef,
+    identifierName: 'siteid',
+    identifierValue: 'SERF',
+    granularity: 'FIELD'
+  });
+  assert.notEqual(farm, field);
+});
+
+test('v1 publication fails closed on FIELD, ZONE and PLOT granularity', () => {
   for (const granularity of ['FIELD', 'ZONE', 'PLOT']) {
-    assert.throws(
-      () => deriveAgronomicRecordedOperationSourceBackedTargetId({
+    const value = binding();
+    value.sourceBackedTargetIdentity.granularity = granularity;
+    value.sourceBackedTargetIdentity.targetId =
+      deriveAgronomicRecordedOperationSourceBackedTargetId({
         namespaceRef,
         identifierName: 'siteid',
         identifierValue: 'SERF',
         granularity
-      }),
-      /target granularity/
+      });
+    assert.throws(
+      () => normalizeAgronomicRecordedOperationTargetIdentityBinding(value),
+      /granularity must be FARM/
     );
   }
 });
