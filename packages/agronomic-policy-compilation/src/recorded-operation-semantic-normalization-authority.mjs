@@ -1,4 +1,4 @@
-import { cloneCanonicalValue, deepFreeze } from '../../canonicalization/src/index.mjs';
+import { canonicalizeSemanticJson, cloneCanonicalValue, deepFreeze } from '../../canonicalization/src/index.mjs';
 import { sameAuthorityRef } from '../../contracts/src/authority.mjs';
 import {
   PERMISSIONS,
@@ -79,6 +79,10 @@ function refKey(ref) {
     ref.version,
     ref.semanticHash
   ]);
+}
+
+function sameSemanticValue(left, right) {
+  return canonicalizeSemanticJson(left) === canonicalizeSemanticJson(right);
 }
 
 function exactRefIn(refs, expected) {
@@ -494,8 +498,7 @@ function validateReview({
     locator: evidence.locator,
     evidenceHash: evidence.evidenceHash
   }));
-  if (JSON.stringify(payload.evidenceBindings)
-      !== JSON.stringify(expectedBindings)) {
+  if (!sameSemanticValue(payload.evidenceBindings, expectedBindings)) {
     throw new AgronomicRecordedOperationSemanticNormalizationCompilationError(
       'AGRONOMIC_RECORDED_OPERATION_SEMANTIC_NORMALIZATION_REVIEW_EVIDENCE_MISMATCH',
       'semantic review evidenceBindings must match exact replayed evidence'
@@ -531,8 +534,10 @@ function validateReview({
         )
         && event.details?.normalizationHash === normalizationHash
         && event.details?.disposition === payload.disposition
-        && JSON.stringify(event.details?.evidenceBindings)
-          === JSON.stringify(expectedBindings)
+        && sameSemanticValue(
+          event.details?.evidenceBindings,
+          expectedBindings
+        )
     );
 
   if (!directAudit) {
@@ -662,8 +667,10 @@ export function validateAgronomicRecordedOperationSemanticNormalizationCompilati
           event.details.parentOccurrenceCompilationRef,
           normalized.normalization.parentOccurrenceCompilationRef
         )
-        && JSON.stringify(event.details?.evidenceBindings)
-          === JSON.stringify(review.review.semanticPayload.evidenceBindings)
+        && sameSemanticValue(
+          event.details?.evidenceBindings,
+          review.review.semanticPayload.evidenceBindings
+        )
     );
 
   if (!directAudit) {
