@@ -71,7 +71,7 @@ const IDENTITY_RANGE = {
 };
 
 const EXPECTED_IDENTITY_TEXT =
-  'tr valign="top">\n'
+  '\t<tr valign="top">\n'
   + '\t\t<td>\n'
   + '\t\t\t<p>IA</p>\n'
   + '\t\t</td>\n'
@@ -86,8 +86,7 @@ const EXPECTED_IDENTITY_TEXT =
   + '\t\t<td>\n'
   + '\t\t\t<p>Iowa\n'
   + '\t\t\tState University</p>\n'
-  + '\t\t</td>\n'
-  + '\t';
+  + '\t\t</td>';
 
 function gitBlobSha(bytes) {
   return createHash('sha1')
