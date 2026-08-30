@@ -233,3 +233,29 @@ export {
   publishAgronomicRecordedOperationSemanticNormalizationCompilation,
   validateAgronomicRecordedOperationSemanticNormalizationCompilationAuthority
 } from './recorded-operation-semantic-normalization-authority.mjs';
+
+
+export {
+  AGRONOMIC_RECORDED_OPERATION_TARGET_IDENTITY_BINDING_COMPILATION_CONTRACT_VERSION,
+  AGRONOMIC_RECORDED_OPERATION_TARGET_IDENTITY_BINDING_CONTRACT_VERSION,
+  AGRONOMIC_RECORDED_OPERATION_TARGET_IDENTITY_GRANULARITIES,
+  AGRONOMIC_RECORDED_OPERATION_TARGET_IDENTITY_EVIDENCE_ROLES,
+  AgronomicRecordedOperationTargetIdentityBindingCompilationError,
+  agronomicRecordedOperationTargetIdentityBindingCompilationAuthorityRefs,
+  agronomicRecordedOperationTargetIdentityBindingHash,
+  deriveAgronomicRecordedOperationSourceBackedTargetId,
+  normalizeAgronomicRecordedOperationTargetIdentityBinding,
+  normalizeAgronomicRecordedOperationTargetIdentityBindingCompilation
+} from './recorded-operation-target-identity-contract.mjs';
+
+export {
+  replayAgronomicRecordedOperationTargetIdentityEvidence
+} from './recorded-operation-target-identity-evidence.mjs';
+
+export {
+  AGRONOMIC_RECORDED_OPERATION_TARGET_IDENTITY_REVIEW_DISPOSITIONS,
+  AGRONOMIC_RECORDED_OPERATION_TARGET_IDENTITY_REQUIRED_REVIEW_CHECKS,
+  publishAgronomicRecordedOperationTargetIdentityBindingReviewDecision,
+  publishAgronomicRecordedOperationTargetIdentityBindingCompilation,
+  validateAgronomicRecordedOperationTargetIdentityBindingCompilationAuthority
+} from './recorded-operation-target-identity-authority.mjs';
