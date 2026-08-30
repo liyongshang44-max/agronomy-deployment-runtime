@@ -1,6 +1,6 @@
 # DEC-0015 — Governed Recorded-Operation Source-Native Target Identity Binding
 
-Status: **PROPOSED**
+Status: **ACCEPTED**
 
 Date: 2026-08-31
 
@@ -1160,6 +1160,8 @@ Only after the accepted documentation PR is merged may implementation begin from
 
 ## Acceptance
 
-Not yet accepted.
+**ACCEPTED — 2026-08-31.**
 
-Explicit architecture approval is required before implementation.
+Explicit architecture approval was provided by the user for DEC-0015.
+
+The accepted boundary is the decision exactly as written above: source-backed target identity only, with first real-source granularity `FARM`; no `FIELD`, `PLOT`, `ZONE`, geometry, timezone, season, ContextDatum, DecisionProblem, cross-provider canonical identity, runtime, execution, Outcome, inverse/write-back, or completeness authority is accepted.
