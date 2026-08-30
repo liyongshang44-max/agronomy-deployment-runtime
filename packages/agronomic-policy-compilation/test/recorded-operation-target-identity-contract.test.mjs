@@ -248,6 +248,14 @@ test('compilation hash and COMPLETE local coverage are enforced', () => {
 
   const drift = structuredClone(value);
   drift.binding.sourceNativeSubject.value = 'NWREC';
+  drift.binding.applicability.appliesToSourceNativeIdentifier.value = 'NWREC';
+  drift.binding.sourceBackedTargetIdentity.targetId =
+    deriveAgronomicRecordedOperationSourceBackedTargetId({
+      namespaceRef: drift.binding.sourceBackedTargetIdentity.namespaceRef,
+      identifierName: 'siteid',
+      identifierValue: 'NWREC',
+      granularity: 'FARM'
+    });
   assert.throws(
     () => normalizeAgronomicRecordedOperationTargetIdentityBindingCompilation(drift),
     /bindingHash must exactly match/
