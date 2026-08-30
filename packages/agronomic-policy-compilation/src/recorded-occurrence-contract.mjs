@@ -22,7 +22,8 @@ export const AGRONOMIC_RECORDED_OPERATION_LOCATOR_KINDS = deepFreeze([
   'DOCUMENT_COORDINATE'
 ]);
 export const AGRONOMIC_RECORDED_OPERATION_LOCATOR_SCHEMES = deepFreeze([
-  'XLSX_WORKSHEET_ROW_V1'
+  'XLSX_WORKSHEET_ROW_V1',
+  'JUPYTER_OUTPUT_TABLE_ROW_V1'
 ]);
 export const AGRONOMIC_RECORDED_OPERATION_EVIDENCE_CELL_ROLES = deepFreeze([
   'SOURCE_RECORD_ID',
@@ -194,6 +195,21 @@ function calendarDate(value, name) {
   return normalized;
 }
 
+function assertRequiredEvidenceRoles(roles, label) {
+  for (const requiredRole of [
+    'SOURCE_OPERATION_CODE',
+    'SOURCE_NATIVE_SUBJECT',
+    'TEMPORAL_SUPPORT'
+  ]) {
+    if (!roles.includes(requiredRole)) {
+      throw new AgronomicRecordedOperationOccurrenceCompilationError(
+        'MISSING_AGRONOMIC_RECORDED_OPERATION_OCCURRENCE_EVIDENCE_ROLE',
+        `${label} must include ${requiredRole}`
+      );
+    }
+  }
+}
+
 function normalizeEvidenceCell(value, index, rowNumber) {
   const name = `sourceLocator.coordinates.cells[${index}]`;
   exactObject(value, name, new Set(['role', 'cellRef']));
@@ -220,6 +236,122 @@ function normalizeEvidenceCell(value, index, rowNumber) {
   return deepFreeze({ role, cellRef });
 }
 
+function normalizeXlsxCoordinates(value) {
+  exactObject(value, 'sourceLocator.coordinates', new Set([
+    'worksheetName', 'rowNumber', 'cells'
+  ]));
+  const worksheetName = requiredText(
+    value.worksheetName,
+    'sourceLocator.coordinates.worksheetName'
+  );
+  const rowNumber = positiveSafeInteger(
+    value.rowNumber,
+    'sourceLocator.coordinates.rowNumber'
+  );
+  if (!Array.isArray(value.cells) || value.cells.length < 3) {
+    throw new AgronomicRecordedOperationOccurrenceCompilationError(
+      'INVALID_AGRONOMIC_RECORDED_OPERATION_OCCURRENCE_COORDINATE',
+      'sourceLocator.coordinates.cells must include at least subject, operation and temporal evidence'
+    );
+  }
+  const cells = value.cells.map((cell, index) =>
+    normalizeEvidenceCell(cell, index, rowNumber)
+  );
+  const roles = cells.map((cell) => cell.role);
+  const refs = cells.map((cell) => cell.cellRef);
+  if (new Set(roles).size !== roles.length || new Set(refs).size !== refs.length) {
+    throw new AgronomicRecordedOperationOccurrenceCompilationError(
+      'DUPLICATE_AGRONOMIC_RECORDED_OPERATION_OCCURRENCE_COORDINATE',
+      'sourceLocator evidence cell roles and cell refs must be unique'
+    );
+  }
+  assertRequiredEvidenceRoles(
+    roles,
+    'sourceLocator.coordinates.cells'
+  );
+  return deepFreeze({
+    worksheetName,
+    rowNumber,
+    cells: deepFreeze([...cells].sort((a, b) => a.role.localeCompare(b.role)))
+  });
+}
+
+function normalizeNotebookColumn(value, index) {
+  const name = `sourceLocator.coordinates.columns[${index}]`;
+  exactObject(value, name, new Set(['role', 'name']));
+  return deepFreeze({
+    role: enumValue(
+      value.role,
+      `${name}.role`,
+      EVIDENCE_CELL_ROLES,
+      'INVALID_AGRONOMIC_RECORDED_OPERATION_OCCURRENCE_EVIDENCE_ROLE'
+    ),
+    name: requiredText(value.name, `${name}.name`)
+  });
+}
+
+function normalizeJupyterCoordinates(value) {
+  exactObject(value, 'sourceLocator.coordinates', new Set([
+    'cellIndex',
+    'outputIndex',
+    'mimeType',
+    'rowIndex',
+    'columns'
+  ]));
+  if (!Number.isSafeInteger(value.cellIndex) || value.cellIndex < 0) {
+    throw new AgronomicRecordedOperationOccurrenceCompilationError(
+      'INVALID_AGRONOMIC_RECORDED_OPERATION_OCCURRENCE_COORDINATE',
+      'sourceLocator.coordinates.cellIndex must be a non-negative safe integer'
+    );
+  }
+  if (!Number.isSafeInteger(value.outputIndex) || value.outputIndex < 0) {
+    throw new AgronomicRecordedOperationOccurrenceCompilationError(
+      'INVALID_AGRONOMIC_RECORDED_OPERATION_OCCURRENCE_COORDINATE',
+      'sourceLocator.coordinates.outputIndex must be a non-negative safe integer'
+    );
+  }
+  const mimeType = requiredText(
+    value.mimeType,
+    'sourceLocator.coordinates.mimeType'
+  );
+  if (mimeType !== 'text/plain') {
+    throw new AgronomicRecordedOperationOccurrenceCompilationError(
+      'INVALID_AGRONOMIC_RECORDED_OPERATION_OCCURRENCE_COORDINATE',
+      'JUPYTER_OUTPUT_TABLE_ROW_V1 v1 supports only text/plain persisted output'
+    );
+  }
+  const rowIndex = requiredText(
+    value.rowIndex,
+    'sourceLocator.coordinates.rowIndex'
+  );
+  if (!Array.isArray(value.columns) || value.columns.length < 3) {
+    throw new AgronomicRecordedOperationOccurrenceCompilationError(
+      'INVALID_AGRONOMIC_RECORDED_OPERATION_OCCURRENCE_COORDINATE',
+      'sourceLocator.coordinates.columns must include at least subject, operation and temporal evidence'
+    );
+  }
+  const columns = value.columns.map(normalizeNotebookColumn);
+  const roles = columns.map((column) => column.role);
+  const names = columns.map((column) => column.name);
+  if (new Set(roles).size !== roles.length || new Set(names).size !== names.length) {
+    throw new AgronomicRecordedOperationOccurrenceCompilationError(
+      'DUPLICATE_AGRONOMIC_RECORDED_OPERATION_OCCURRENCE_COORDINATE',
+      'notebook evidence roles and source column names must be unique'
+    );
+  }
+  assertRequiredEvidenceRoles(
+    roles,
+    'sourceLocator.coordinates.columns'
+  );
+  return deepFreeze({
+    cellIndex: value.cellIndex,
+    outputIndex: value.outputIndex,
+    mimeType,
+    rowIndex,
+    columns: deepFreeze([...columns].sort((a, b) => a.role.localeCompare(b.role)))
+  });
+}
+
 function normalizeSourceLocator(value) {
   exactObject(value, 'sourceLocator', new Set([
     'kind', 'scheme', 'coordinates', 'evidenceHash'
@@ -236,54 +368,16 @@ function normalizeSourceLocator(value) {
     LOCATOR_SCHEMES,
     'INVALID_AGRONOMIC_RECORDED_OPERATION_OCCURRENCE_LOCATOR'
   );
-  exactObject(value.coordinates, 'sourceLocator.coordinates', new Set([
-    'worksheetName', 'rowNumber', 'cells'
-  ]));
-  const worksheetName = requiredText(
-    value.coordinates.worksheetName,
-    'sourceLocator.coordinates.worksheetName'
-  );
-  const rowNumber = positiveSafeInteger(
-    value.coordinates.rowNumber,
-    'sourceLocator.coordinates.rowNumber'
-  );
-  if (!Array.isArray(value.coordinates.cells) || value.coordinates.cells.length < 3) {
-    throw new AgronomicRecordedOperationOccurrenceCompilationError(
-      'INVALID_AGRONOMIC_RECORDED_OPERATION_OCCURRENCE_COORDINATE',
-      'sourceLocator.coordinates.cells must include at least subject, operation and temporal evidence'
-    );
-  }
-  const cells = value.coordinates.cells.map((cell, index) =>
-    normalizeEvidenceCell(cell, index, rowNumber)
-  );
-  const roles = cells.map((cell) => cell.role);
-  const refs = cells.map((cell) => cell.cellRef);
-  if (new Set(roles).size !== roles.length || new Set(refs).size !== refs.length) {
-    throw new AgronomicRecordedOperationOccurrenceCompilationError(
-      'DUPLICATE_AGRONOMIC_RECORDED_OPERATION_OCCURRENCE_COORDINATE',
-      'sourceLocator evidence cell roles and cell refs must be unique'
-    );
-  }
-  for (const requiredRole of [
-    'SOURCE_OPERATION_CODE',
-    'SOURCE_NATIVE_SUBJECT',
-    'TEMPORAL_SUPPORT'
-  ]) {
-    if (!roles.includes(requiredRole)) {
-      throw new AgronomicRecordedOperationOccurrenceCompilationError(
-        'MISSING_AGRONOMIC_RECORDED_OPERATION_OCCURRENCE_EVIDENCE_ROLE',
-        `sourceLocator.coordinates.cells must include ${requiredRole}`
-      );
-    }
-  }
+
+  const coordinates =
+    scheme === 'XLSX_WORKSHEET_ROW_V1'
+      ? normalizeXlsxCoordinates(value.coordinates)
+      : normalizeJupyterCoordinates(value.coordinates);
+
   return deepFreeze({
     kind,
     scheme,
-    coordinates: deepFreeze({
-      worksheetName,
-      rowNumber,
-      cells: deepFreeze([...cells].sort((a, b) => a.role.localeCompare(b.role)))
-    }),
+    coordinates,
     evidenceHash: hashValue(value.evidenceHash, 'sourceLocator.evidenceHash')
   });
 }
