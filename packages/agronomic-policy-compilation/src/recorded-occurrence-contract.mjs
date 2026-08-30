@@ -295,6 +295,7 @@ function normalizeJupyterCoordinates(value) {
     'cellIndex',
     'outputIndex',
     'mimeType',
+    'headerLineIndex',
     'rowIndex',
     'columns'
   ]));
@@ -318,6 +319,12 @@ function normalizeJupyterCoordinates(value) {
     throw new AgronomicRecordedOperationOccurrenceCompilationError(
       'INVALID_AGRONOMIC_RECORDED_OPERATION_OCCURRENCE_COORDINATE',
       'JUPYTER_OUTPUT_TABLE_ROW_V1 v1 supports only text/plain persisted output'
+    );
+  }
+  if (!Number.isSafeInteger(value.headerLineIndex) || value.headerLineIndex < 0) {
+    throw new AgronomicRecordedOperationOccurrenceCompilationError(
+      'INVALID_AGRONOMIC_RECORDED_OPERATION_OCCURRENCE_COORDINATE',
+      'sourceLocator.coordinates.headerLineIndex must be a non-negative safe integer'
     );
   }
   const rowIndex = requiredText(
@@ -347,6 +354,7 @@ function normalizeJupyterCoordinates(value) {
     cellIndex: value.cellIndex,
     outputIndex: value.outputIndex,
     mimeType,
+    headerLineIndex: value.headerLineIndex,
     rowIndex,
     columns: deepFreeze([...columns].sort((a, b) => a.role.localeCompare(b.role)))
   });
