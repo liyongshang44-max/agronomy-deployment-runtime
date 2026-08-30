@@ -835,6 +835,123 @@ expectNormalizationError(
   'AGRONOMIC_RECORDED_OPERATION_SEMANTIC_NORMALIZATION_REVIEW_AUTHORIZATION_INVALID'
 );
 
+const unrelatedBytes = Buffer.from(
+  'This source documents unrelated irrigation equipment maintenance semantics.\n'
+  + 'No Sustainable Corn operation-code namespace is defined here.\n',
+  'utf8'
+);
+const unrelatedSource = env.sourceRegistry.registerSource({
+  logicalId: 'source.gold.semantic-normalization.unrelated',
+  version: '1',
+  sourceType: 'OTHER',
+  title: 'Unrelated semantic evidence negative control',
+  ownership: { organizationId: 'org-a', tenantId: 'tenant-a' },
+  originLocator: 'urn:adr:gold:semantic-normalization:unrelated-negative-control',
+  rights: {
+    artifactLicense: 'TEST_FIXTURE'
+  },
+  audit: audit('evt-gold-semantic-unrelated-source', 'source-admin')
+});
+const unrelatedArtifact = env.sourceRegistry.materializeArtifact({
+  logicalId: 'artifact.gold.semantic-normalization.unrelated',
+  version: '1',
+  sourceRef: unrelatedSource.ref,
+  bytes: unrelatedBytes,
+  mediaType: 'text/plain',
+  materializationIdentity: 'gold-negative-control:unrelated-semantic-source',
+  acquisition: {
+    method: 'REPOSITORY_RETAINED_TEST_FIXTURE',
+    acquiredAt: '2026-08-30T13:00:00.000Z'
+  },
+  rightsSnapshot: {
+    publicAccess: false,
+    artifactLicense: {
+      spdx: 'NONE',
+      redistributionAllowed: false
+    }
+  },
+  audit: audit('evt-gold-semantic-unrelated-artifact', 'source-admin')
+});
+const unrelatedAuthorization =
+  publishSourceInspectionAuthorization({
+    env,
+    reviewer: normalizationReviewer,
+    role: normalizationRole,
+    source: unrelatedSource,
+    label: 'normalization-unrelated-source'
+  });
+
+const unrelatedNormalization = structuredClone(normalization);
+unrelatedNormalization.semanticEvidence = [
+  {
+    evidenceRole: 'SOURCE_CODE_NAMESPACE_CONTEXT',
+    sourceRef: unrelatedSource.ref,
+    sourceArtifactRef: unrelatedArtifact.ref,
+    sourceArtifactContentHash: unrelatedArtifact.semanticPayload.contentHash,
+    sourceLocator: {
+      kind: 'BYTE_RANGE',
+      start: 0,
+      endExclusive: 64,
+      evidenceHash: sourceContentHash(unrelatedBytes.subarray(0, 64))
+    }
+  },
+  {
+    evidenceRole: 'NORMALIZED_OPERATION_MEANING',
+    sourceRef: unrelatedSource.ref,
+    sourceArtifactRef: unrelatedArtifact.ref,
+    sourceArtifactContentHash: unrelatedArtifact.semanticPayload.contentHash,
+    sourceLocator: {
+      kind: 'BYTE_RANGE',
+      start: 64,
+      endExclusive: unrelatedBytes.byteLength,
+      evidenceHash: sourceContentHash(
+        unrelatedBytes.subarray(64, unrelatedBytes.byteLength)
+      )
+    }
+  }
+];
+
+const unrelatedReview =
+  publishAgronomicRecordedOperationSemanticNormalizationReviewDecision({
+    ledger: env.ledger,
+    sourceRegistry: env.sourceRegistry,
+    logicalId: 'review.gold.semantic-normalization.unrelated-evidence',
+    version: '1',
+    normalization: unrelatedNormalization,
+    disposition: 'REJECT_RECORDED_OPERATION_SEMANTIC_NORMALIZATION',
+    reviewerPrincipal: normalizationReviewer,
+    authorizationDecisionAuditRefs: [
+      parentSourceAuthorization.auth.ref,
+      unrelatedAuthorization.auth.ref
+    ],
+    confirmedChecks: [],
+    rationale:
+      'The exact retained evidence belongs to an unrelated semantic source and does not establish the Sustainable Corn plant_corn code namespace or PLANT/CROP:CORN meaning.',
+    audit: audit(
+      'evt-gold-semantic-unrelated-review',
+      normalizationReviewer.principalId
+    )
+  });
+
+expectNormalizationError(
+  () =>
+    publishAgronomicRecordedOperationSemanticNormalizationCompilation({
+      ledger: env.ledger,
+      sourceRegistry: env.sourceRegistry,
+      logicalId: 'compilation.gold.semantic-normalization.unrelated-evidence',
+      version: '1',
+      compilation: buildCompilation(
+        unrelatedNormalization,
+        unrelatedReview.ref
+      ),
+      audit: audit(
+        'evt-gold-semantic-unrelated-publication',
+        normalizationReviewer.principalId
+      )
+    }),
+  'AGRONOMIC_RECORDED_OPERATION_SEMANTIC_NORMALIZATION_REVIEW_REJECTED'
+);
+
 const rejectedReview =
   publishAgronomicRecordedOperationSemanticNormalizationReviewDecision({
     ledger: env.ledger,
@@ -925,6 +1042,7 @@ console.log(JSON.stringify({
     'ARTIFACT_HASH_DRIFT_DENIED',
     'INCOMPLETE_REVIEW_DENIED',
     'UNAUTHORIZED_REVIEWER_DENIED',
+    'UNRELATED_SEMANTIC_EVIDENCE_REJECTED',
     'REJECTED_REVIEW_DENIED'
   ],
   forbiddenDownstreamAuthorityRecordsCreated:
