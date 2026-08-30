@@ -7,7 +7,7 @@ on:
       - 'acceptance/agronomic-policy-compilation/**'
       - 'acceptance/gold-protocol-kbs-2015/**'
       - 'acceptance/gold-recorded-operation-sustainable-corn/**'
-      - 'acceptance/gold-recorded-operation-semantic-normalization-sustainable-corn/**'
+      - 'acceptance/gold-recorded-operation-semantic-normalization-sustainable-corn/**'\n      - 'acceptance/gold-recorded-operation-target-identity-sustainable-corn/**'
       - 'docs/decisions/DEC-0002-AGRONOMIC-POLICY-COMPILATION.md'
       - 'docs/decisions/DEC-0003-AGRONOMIC-RULE-V2-TEMPORAL-COORDINATION.md'
       - 'docs/decisions/DEC-0004-AGRONOMIC-POLICY-CONSTRAINT-COMPILATION.md'
@@ -18,7 +18,7 @@ on:
       - 'docs/decisions/DEC-0010-AGRONOMIC-ACTION-REALIZATION-COMPILATION.md'
       - 'docs/decisions/DEC-0011-CONDITIONAL-AGRONOMIC-ACTION-REALIZATION-COMPILATION.md'
       - 'docs/decisions/DEC-0012-AGRONOMIC-SOURCE-AUTHORITY-ROUTING.md'
-      - 'docs/decisions/DEC-0013-AGRONOMIC-RECORDED-OPERATION-OCCURRENCE-COMPILATION.md'
+      - 'docs/decisions/DEC-0013-AGRONOMIC-RECORDED-OPERATION-OCCURRENCE-COMPILATION.md'\n      - 'docs/decisions/DEC-0015-AGRONOMIC-RECORDED-OPERATION-SOURCE-NATIVE-TARGET-IDENTITY.md'
       - '.github/workflows/agronomic-policy-compilation.yml'
 
 permissions:
@@ -62,6 +62,7 @@ jobs:
       - name: Sustainable Corn recorded-operation Gold acceptance
         run: npm run test:gold-recorded-operation-sustainable-corn
       - name: Sustainable Corn semantic-normalization Gold acceptance
-        run: npm run test:gold-recorded-operation-semantic-normalization-sustainable-corn
+        run: npm run test:gold-recorded-operation-semantic-normalization-sustainable-corn\n      - name: Sustainable Corn target-identity Gold acceptance
+        run: npm run test:gold-recorded-operation-target-identity-sustainable-corn
       - name: KBS 2015 gold protocol rule, constraint, obligation, modality, goal, regimen, realization, conditional realization and source routing acceptance
         run: npm run test:gold-protocol-kbs-2015
