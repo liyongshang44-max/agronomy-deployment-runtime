@@ -256,12 +256,6 @@ export function deriveAgronomicRecordedOperationSourceBackedTargetId({
     new Set(['Source'])
   );
   const normalizedGranularity = requiredText(granularity, 'granularity');
-  if (!GRANULARITIES.has(normalizedGranularity)) {
-    throw new AgronomicRecordedOperationTargetIdentityBindingCompilationError(
-      'UNSUPPORTED_AGRONOMIC_RECORDED_OPERATION_TARGET_IDENTITY_GRANULARITY',
-      `v1 target granularity must be one of: ${[...GRANULARITIES].join(', ')}`
-    );
-  }
   const digest = semanticHash(
     'AgronomicRecordedOperationSourceBackedTargetIdentityKey',
     {
