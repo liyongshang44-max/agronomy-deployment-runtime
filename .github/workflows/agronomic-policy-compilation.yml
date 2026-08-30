@@ -7,6 +7,7 @@ on:
       - 'acceptance/agronomic-policy-compilation/**'
       - 'acceptance/gold-protocol-kbs-2015/**'
       - 'acceptance/gold-recorded-operation-sustainable-corn/**'
+      - 'acceptance/gold-recorded-operation-semantic-normalization-sustainable-corn/**'
       - 'docs/decisions/DEC-0002-AGRONOMIC-POLICY-COMPILATION.md'
       - 'docs/decisions/DEC-0003-AGRONOMIC-RULE-V2-TEMPORAL-COORDINATION.md'
       - 'docs/decisions/DEC-0004-AGRONOMIC-POLICY-CONSTRAINT-COMPILATION.md'
@@ -60,5 +61,7 @@ jobs:
         run: node acceptance/agronomic-policy-compilation/recorded-occurrence.mjs
       - name: Sustainable Corn recorded-operation Gold acceptance
         run: npm run test:gold-recorded-operation-sustainable-corn
+      - name: Sustainable Corn semantic-normalization Gold acceptance
+        run: npm run test:gold-recorded-operation-semantic-normalization-sustainable-corn
       - name: KBS 2015 gold protocol rule, constraint, obligation, modality, goal, regimen, realization, conditional realization and source routing acceptance
         run: npm run test:gold-protocol-kbs-2015
