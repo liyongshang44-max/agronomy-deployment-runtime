@@ -210,3 +210,26 @@ export {
   publishAgronomicRecordedOperationOccurrenceCompilation,
   validateAgronomicRecordedOperationOccurrenceCompilationAuthority
 } from './recorded-occurrence-authority.mjs';
+
+export {
+  AGRONOMIC_RECORDED_OPERATION_SEMANTIC_NORMALIZATION_COMPILATION_CONTRACT_VERSION,
+  AGRONOMIC_RECORDED_OPERATION_SEMANTIC_NORMALIZATION_CONTRACT_VERSION,
+  AGRONOMIC_RECORDED_OPERATION_SEMANTIC_EVIDENCE_ROLES,
+  AgronomicRecordedOperationSemanticNormalizationCompilationError,
+  agronomicRecordedOperationSemanticNormalizationCompilationAuthorityRefs,
+  agronomicRecordedOperationSemanticNormalizationHash,
+  normalizeAgronomicRecordedOperationSemanticNormalization,
+  normalizeAgronomicRecordedOperationSemanticNormalizationCompilation
+} from './recorded-operation-semantic-normalization-contract.mjs';
+
+export {
+  replayAgronomicRecordedOperationSemanticNormalizationEvidence
+} from './recorded-operation-semantic-normalization-evidence.mjs';
+
+export {
+  AGRONOMIC_RECORDED_OPERATION_SEMANTIC_NORMALIZATION_REVIEW_DISPOSITIONS,
+  AGRONOMIC_RECORDED_OPERATION_SEMANTIC_NORMALIZATION_REQUIRED_REVIEW_CHECKS,
+  publishAgronomicRecordedOperationSemanticNormalizationReviewDecision,
+  publishAgronomicRecordedOperationSemanticNormalizationCompilation,
+  validateAgronomicRecordedOperationSemanticNormalizationCompilationAuthority
+} from './recorded-operation-semantic-normalization-authority.mjs';
