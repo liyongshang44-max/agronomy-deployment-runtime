@@ -478,6 +478,183 @@ function normalizeCoordinates(value) {
   });
 }
 
+
+function normalizeNotebookCoordinates(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new AgronomicRecordedOperationEvidenceError(
+      'INVALID_RECORDED_OPERATION_EVIDENCE_COORDINATES',
+      'notebook coordinates must be an object'
+    );
+  }
+  for (const name of ['cellIndex', 'outputIndex', 'headerLineIndex']) {
+    if (!Number.isSafeInteger(value[name]) || value[name] < 0) {
+      throw new AgronomicRecordedOperationEvidenceError(
+        'INVALID_RECORDED_OPERATION_EVIDENCE_COORDINATES',
+        `coordinates.${name} must be a non-negative safe integer`
+      );
+    }
+  }
+  const mimeType = requiredText(value.mimeType, 'coordinates.mimeType');
+  if (mimeType !== 'text/plain') {
+    throw new AgronomicRecordedOperationEvidenceError(
+      'INVALID_RECORDED_OPERATION_EVIDENCE_COORDINATES',
+      'JUPYTER_OUTPUT_TABLE_ROW_V1 supports only text/plain'
+    );
+  }
+  const rowIndex = requiredText(value.rowIndex, 'coordinates.rowIndex');
+  if (!Array.isArray(value.columns) || value.columns.length < 3) {
+    throw new AgronomicRecordedOperationEvidenceError(
+      'INVALID_RECORDED_OPERATION_EVIDENCE_COORDINATES',
+      'coordinates.columns must include at least subject, operation and temporal evidence'
+    );
+  }
+  const columns = value.columns.map((column, index) => {
+    const role = requiredText(column?.role, `coordinates.columns[${index}].role`);
+    const name = requiredText(column?.name, `coordinates.columns[${index}].name`);
+    return { role, name };
+  });
+  if (new Set(columns.map((column) => column.role)).size !== columns.length
+    || new Set(columns.map((column) => column.name)).size !== columns.length) {
+    throw new AgronomicRecordedOperationEvidenceError(
+      'INVALID_RECORDED_OPERATION_EVIDENCE_COORDINATES',
+      'notebook evidence roles and column names must be unique'
+    );
+  }
+  return deepFreeze({
+    cellIndex: value.cellIndex,
+    outputIndex: value.outputIndex,
+    mimeType,
+    headerLineIndex: value.headerLineIndex,
+    rowIndex,
+    columns: deepFreeze([...columns].sort((a, b) => a.role.localeCompare(b.role)))
+  });
+}
+
+function notebookOutputText(value, mimeType) {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value) && value.every((item) => typeof item === 'string')) {
+    return value.join('');
+  }
+  throw new AgronomicRecordedOperationEvidenceError(
+    'INVALID_JUPYTER_OUTPUT',
+    `notebook output ${mimeType} must be a string or string array`
+  );
+}
+
+function splitPandasTextTableLine(line) {
+  return line.trim().split(/\s{2,}/).filter((item) => item.length > 0);
+}
+
+export function extractAgronomicRecordedOperationJupyterTableRowEvidence({
+  bytes,
+  coordinates
+}) {
+  const normalizedCoordinates = normalizeNotebookCoordinates(coordinates);
+  const exact = exactBytes(bytes);
+  let notebook;
+  try {
+    notebook = JSON.parse(exact.toString('utf8'));
+  } catch (error) {
+    throw new AgronomicRecordedOperationEvidenceError(
+      'INVALID_JUPYTER_NOTEBOOK_JSON',
+      `notebook exact bytes are not valid JSON: ${error?.message ?? 'parse failure'}`
+    );
+  }
+  if (!Array.isArray(notebook?.cells)) {
+    throw new AgronomicRecordedOperationEvidenceError(
+      'INVALID_JUPYTER_NOTEBOOK',
+      'notebook must contain a cells array'
+    );
+  }
+  const cell = notebook.cells[normalizedCoordinates.cellIndex];
+  if (!cell || !Array.isArray(cell.outputs)) {
+    throw new AgronomicRecordedOperationEvidenceError(
+      'JUPYTER_CELL_NOT_FOUND',
+      `code cell ${normalizedCoordinates.cellIndex} with outputs was not found`
+    );
+  }
+  const output = cell.outputs[normalizedCoordinates.outputIndex];
+  const data = output?.data;
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    throw new AgronomicRecordedOperationEvidenceError(
+      'JUPYTER_OUTPUT_NOT_FOUND',
+      `output ${normalizedCoordinates.outputIndex} has no data object`
+    );
+  }
+  if (!(normalizedCoordinates.mimeType in data)) {
+    throw new AgronomicRecordedOperationEvidenceError(
+      'JUPYTER_MIME_NOT_FOUND',
+      `output does not contain ${normalizedCoordinates.mimeType}`
+    );
+  }
+
+  const textValue = notebookOutputText(
+    data[normalizedCoordinates.mimeType],
+    normalizedCoordinates.mimeType
+  );
+  const lines = textValue.split(/\r?\n/);
+  const headerLine = lines[normalizedCoordinates.headerLineIndex];
+  if (headerLine === undefined) {
+    throw new AgronomicRecordedOperationEvidenceError(
+      'JUPYTER_HEADER_NOT_FOUND',
+      `header line ${normalizedCoordinates.headerLineIndex} was not found`
+    );
+  }
+  const headers = splitPandasTextTableLine(headerLine);
+  if (headers.length === 0 || new Set(headers).size !== headers.length) {
+    throw new AgronomicRecordedOperationEvidenceError(
+      'INVALID_JUPYTER_TABLE_HEADER',
+      'persisted table header must contain unique non-empty columns'
+    );
+  }
+
+  const matches = [];
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    if (lineIndex === normalizedCoordinates.headerLineIndex) continue;
+    const parts = splitPandasTextTableLine(lines[lineIndex]);
+    if (parts.length !== headers.length + 1) continue;
+    if (parts[0] !== normalizedCoordinates.rowIndex) continue;
+    matches.push({ lineIndex, parts });
+  }
+  if (matches.length !== 1) {
+    throw new AgronomicRecordedOperationEvidenceError(
+      'JUPYTER_ROW_IDENTITY_INVALID',
+      `rowIndex ${normalizedCoordinates.rowIndex} must resolve to exactly one persisted table row`
+    );
+  }
+
+  const row = matches[0];
+  const rowValues = Object.fromEntries(
+    headers.map((header, index) => [header, row.parts[index + 1]])
+  );
+  const evidenceCells = normalizedCoordinates.columns.map(({ role, name }) => {
+    if (!(name in rowValues)) {
+      throw new AgronomicRecordedOperationEvidenceError(
+        'JUPYTER_SOURCE_COLUMN_NOT_FOUND',
+        `source column ${name} was not found in persisted table header`
+      );
+    }
+    return deepFreeze({
+      role,
+      sourceColumn: name,
+      rowIndex: normalizedCoordinates.rowIndex,
+      lineIndex: row.lineIndex,
+      resolvedText: rowValues[name]
+    });
+  });
+
+  return deepFreeze({
+    contractVersion: AGRONOMIC_RECORDED_OPERATION_EVIDENCE_CONTRACT_VERSION,
+    scheme: 'JUPYTER_OUTPUT_TABLE_ROW_V1',
+    cellIndex: normalizedCoordinates.cellIndex,
+    outputIndex: normalizedCoordinates.outputIndex,
+    mimeType: normalizedCoordinates.mimeType,
+    headerLineIndex: normalizedCoordinates.headerLineIndex,
+    rowIndex: normalizedCoordinates.rowIndex,
+    cells: deepFreeze(evidenceCells)
+  });
+}
+
 export function extractAgronomicRecordedOperationXlsxRowEvidence({
   bytes,
   coordinates
@@ -553,15 +730,28 @@ export function replayAgronomicRecordedOperationEvidence({
   }
 
   const bytes = sourceRegistry.readArtifactBytes(artifact.ref);
-  const evidence = extractAgronomicRecordedOperationXlsxRowEvidence({
-    bytes,
-    coordinates: normalized.sourceLocator.coordinates
-  });
+  let evidence;
+  if (normalized.sourceLocator.scheme === 'XLSX_WORKSHEET_ROW_V1') {
+    evidence = extractAgronomicRecordedOperationXlsxRowEvidence({
+      bytes,
+      coordinates: normalized.sourceLocator.coordinates
+    });
+  } else if (normalized.sourceLocator.scheme === 'JUPYTER_OUTPUT_TABLE_ROW_V1') {
+    evidence = extractAgronomicRecordedOperationJupyterTableRowEvidence({
+      bytes,
+      coordinates: normalized.sourceLocator.coordinates
+    });
+  } else {
+    throw new AgronomicRecordedOperationEvidenceError(
+      'UNSUPPORTED_RECORDED_OPERATION_EVIDENCE_SCHEME',
+      `unsupported source locator scheme ${normalized.sourceLocator.scheme}`
+    );
+  }
   const evidenceHash = agronomicRecordedOperationEvidenceHash(evidence);
   if (evidenceHash !== normalized.sourceLocator.evidenceHash) {
     throw new AgronomicRecordedOperationEvidenceError(
       'RECORDED_OPERATION_EVIDENCE_HASH_MISMATCH',
-      'replayed exact XLSX row evidence does not match sourceLocator.evidenceHash'
+      'replayed exact structured row evidence does not match sourceLocator.evidenceHash'
     );
   }
 
