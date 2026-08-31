@@ -1,6 +1,6 @@
 # DEC-0019 — Governed Agronomic Context Source Provider Identity Binding
 
-Status: **PROPOSED**
+Status: **ACCEPTED**
 
 Date: 2026-09-01
 
@@ -651,6 +651,8 @@ Only after accepted documentation merge and post-merge Constitution success may 
 
 ## Acceptance
 
-Not yet accepted.
+**ACCEPTED — 2026-09-01.**
 
-Explicit architecture approval is required before implementation.
+Explicit architecture approval was provided by the user by instructing continuation under the accepted project plan.
+
+The accepted boundary is the decision exactly as written above: the exact DEC-0018 Sustainable Corn value-source world may bind public ContextDatum `source.providerId` only to the reviewed repository-level provider namespace `github.com/isudatateam/datateam`. No institutional entity resolution, generic URL-to-provider normalization rule, ADR ownership/logicalId projection, public `sourceRef` projection, public `source.contentHash` projection, ContextDatum publication, temporal/spatial/unit/uncertainty projection, DecisionProblem, Policy, runtime, execution, Outcome, inverse mapping, or completeness authority is accepted.
