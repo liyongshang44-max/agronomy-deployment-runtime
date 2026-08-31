@@ -1,6 +1,6 @@
 # DEC-0016 — Governed Recorded-Operation Context Semantic Mapping
 
-Status: **PROPOSED**
+Status: **ACCEPTED**
 
 Date: 2026-08-31
 
@@ -1025,6 +1025,8 @@ Only after accepted documentation merge and post-merge Constitution success may 
 
 ## Acceptance
 
-Not yet accepted.
+**ACCEPTED — 2026-08-31.**
 
-Explicit architecture approval is required before implementation.
+Explicit architecture approval was provided by the user to proceed with the proposed plan.
+
+The accepted boundary is the decision exactly as written above: exact DEC-0013 occurrence plus exact DEC-0014 semantic normalization may map only to the first finite context semantic/value pair `crop.planting_date / DATE`, preserving the exact source date; no ContextDatum publication, effectiveInterval, availableAt, timezone, target/spatial projection, epistemic/provenance classification, unit/uncertainty mapping, DecisionProblem, Policy, runtime, execution, Outcome, inverse mapping, or completeness authority is accepted.
