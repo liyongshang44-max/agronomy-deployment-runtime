@@ -277,3 +277,21 @@ export {
   publishAgronomicRecordedOperationContextSemanticMappingCompilation,
   validateAgronomicRecordedOperationContextSemanticMappingCompilationAuthority
 } from './recorded-operation-context-semantic-mapping-authority.mjs';
+
+export {
+  AGRONOMIC_RECORDED_OPERATION_CONTEXT_EPISTEMIC_CLASSIFICATION_COMPILATION_CONTRACT_VERSION,
+  AGRONOMIC_RECORDED_OPERATION_CONTEXT_EPISTEMIC_CLASSIFICATION_CONTRACT_VERSION,
+  AgronomicRecordedOperationContextEpistemicClassificationCompilationError,
+  agronomicRecordedOperationContextEpistemicClassificationCompilationAuthorityRefs,
+  agronomicRecordedOperationContextEpistemicClassificationHash,
+  normalizeAgronomicRecordedOperationContextEpistemicClassification,
+  normalizeAgronomicRecordedOperationContextEpistemicClassificationCompilation
+} from './recorded-operation-context-epistemic-classification-contract.mjs';
+
+export {
+  AGRONOMIC_RECORDED_OPERATION_CONTEXT_EPISTEMIC_CLASSIFICATION_REVIEW_DISPOSITIONS,
+  AGRONOMIC_RECORDED_OPERATION_CONTEXT_EPISTEMIC_CLASSIFICATION_REQUIRED_REVIEW_CHECKS,
+  publishAgronomicRecordedOperationContextEpistemicClassificationReviewDecision,
+  publishAgronomicRecordedOperationContextEpistemicClassificationCompilation,
+  validateAgronomicRecordedOperationContextEpistemicClassificationCompilationAuthority
+} from './recorded-operation-context-epistemic-classification-authority.mjs';
