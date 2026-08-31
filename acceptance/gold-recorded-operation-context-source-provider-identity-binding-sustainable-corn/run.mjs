@@ -2364,11 +2364,15 @@ assert.equal(
   'EXTERNAL_PROVIDER'
 );
 assert.equal(
-  JSON.stringify(providerIdentityValidated.semanticPayload).includes('"sourceRef":"'),
+  Object.hasOwn(providerIdentityValidated.semanticPayload.binding, 'sourceRef'),
   false
 );
 assert.equal(
-  JSON.stringify(providerIdentityValidated.semanticPayload).includes('"contentHash":"'),
+  Object.hasOwn(providerIdentityValidated.semanticPayload.binding, 'contentHash'),
+  false
+);
+assert.equal(
+  Object.hasOwn(providerIdentityValidated.semanticPayload.binding, 'source'),
   false
 );
 
