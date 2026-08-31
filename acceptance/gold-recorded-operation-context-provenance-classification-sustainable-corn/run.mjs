@@ -2056,8 +2056,8 @@ for (const [label, mutate] of [
   );
 }
 
-const targetDrift = structuredClone(provenanceClassification);
-targetDrift.targetContextSemantic.value.date = '2011-05-04';
+const provenanceTargetDrift = structuredClone(provenanceClassification);
+provenanceTargetDrift.targetContextSemantic.value.date = '2011-05-04';
 expectProvenanceError(
   () =>
     publishAgronomicRecordedOperationContextProvenanceClassificationReviewDecision({
@@ -2065,7 +2065,7 @@ expectProvenanceError(
       sourceRegistry: env.sourceRegistry,
       logicalId: 'review.gold.context-provenance-classification.target-drift',
       version: '1',
-      classification: targetDrift,
+      classification: provenanceTargetDrift,
       disposition:
         'ACCEPT_RECORDED_OPERATION_CONTEXT_PROVENANCE_CLASSIFICATION',
       reviewerPrincipal: normalizationReviewer,
