@@ -1,6 +1,6 @@
 # DEC-0020 — Governed Agronomic Context Source Reference and Content Hash Projection
 
-Status: **PROPOSED**
+Status: **ACCEPTED**
 
 Date: 2026-09-01
 
@@ -796,6 +796,8 @@ Only after accepted documentation merge and post-merge Constitution success may 
 
 ## Acceptance
 
-Not yet accepted.
+**ACCEPTED — 2026-09-01.**
 
-Explicit architecture approval is required before implementation.
+Explicit architecture approval was provided by the user by instructing continuation under the accepted project plan.
+
+The accepted boundary is the decision exactly as written above: for the exact first DEC-0019 Sustainable Corn provider/value-source world, public `sourceRef` must identify the exact persisted notebook row at the accepted Git blob/path and JUPYTER_OUTPUT_TABLE_ROW_V1 coordinates, while public `contentHash` must equal the exact DEC-0013 row-level `sourceLocator.evidenceHash`. Whole-artifact `SourceArtifact.contentHash` remains mandatory predecessor closure evidence but is not the public value content hash. No generic locator formatter, generic evidence-hash rule, ADR authority-ref projection, ContextDatum publication, temporal/spatial/unit/uncertainty projection, DecisionProblem, Policy, runtime, execution, Outcome, inverse mapping, or completeness authority is accepted.
