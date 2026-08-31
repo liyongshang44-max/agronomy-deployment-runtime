@@ -1,6 +1,6 @@
 # DEC-0018 — Governed Recorded-Operation Context Provenance Classification
 
-Status: **PROPOSED**
+Status: **ACCEPTED**
 
 Date: 2026-09-01
 
@@ -921,6 +921,8 @@ Only after accepted documentation merge and post-merge Constitution success may 
 
 ## Acceptance
 
-Not yet accepted.
+**ACCEPTED — 2026-09-01.**
 
-Explicit architecture approval is required before implementation.
+Explicit architecture approval was provided by the user by instructing continuation under the accepted project plan.
+
+The accepted boundary is the decision exactly as written above: the exact DEC-0017 Sustainable Corn planting-date world must route value provenance to the exact DEC-0013 occurrence Source/SourceArtifact and may classify that exact ingress channel as `EXTERNAL_PROVIDER`. The DEC-0014 semantic-normalization source is interpretation evidence and cannot become value provenance. No ContextDatum source-wire projection, availableAt, effectiveInterval, timezone, target/spatial projection, unit, uncertainty, DecisionProblem, Policy, runtime, execution, Outcome, inverse mapping, or global SourceType/origin/acquisition-method provenance rule is accepted.
