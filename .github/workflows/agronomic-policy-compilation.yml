@@ -9,6 +9,7 @@ on:
       - 'acceptance/gold-recorded-operation-sustainable-corn/**'
       - 'acceptance/gold-recorded-operation-semantic-normalization-sustainable-corn/**'
       - 'acceptance/gold-recorded-operation-target-identity-sustainable-corn/**'
+      - 'acceptance/gold-recorded-operation-context-semantic-mapping-sustainable-corn/**'
       - 'docs/decisions/DEC-0002-AGRONOMIC-POLICY-COMPILATION.md'
       - 'docs/decisions/DEC-0003-AGRONOMIC-RULE-V2-TEMPORAL-COORDINATION.md'
       - 'docs/decisions/DEC-0004-AGRONOMIC-POLICY-CONSTRAINT-COMPILATION.md'
@@ -21,6 +22,7 @@ on:
       - 'docs/decisions/DEC-0012-AGRONOMIC-SOURCE-AUTHORITY-ROUTING.md'
       - 'docs/decisions/DEC-0013-AGRONOMIC-RECORDED-OPERATION-OCCURRENCE-COMPILATION.md'
       - 'docs/decisions/DEC-0015-AGRONOMIC-RECORDED-OPERATION-SOURCE-NATIVE-TARGET-IDENTITY.md'
+      - 'docs/decisions/DEC-0016-AGRONOMIC-RECORDED-OPERATION-CONTEXT-SEMANTIC-MAPPING.md'
       - '.github/workflows/agronomic-policy-compilation.yml'
 
 permissions:
@@ -67,5 +69,7 @@ jobs:
         run: npm run test:gold-recorded-operation-semantic-normalization-sustainable-corn
       - name: Sustainable Corn target-identity Gold acceptance
         run: npm run test:gold-recorded-operation-target-identity-sustainable-corn
+      - name: Sustainable Corn context-semantic-mapping Gold acceptance
+        run: npm run test:gold-recorded-operation-context-semantic-mapping-sustainable-corn
       - name: KBS 2015 gold protocol rule, constraint, obligation, modality, goal, regimen, realization, conditional realization and source routing acceptance
         run: npm run test:gold-protocol-kbs-2015
