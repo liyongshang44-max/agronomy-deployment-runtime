@@ -1,6 +1,6 @@
 # DEC-0017 — Governed Recorded-Operation Context Epistemic Classification
 
-Status: **PROPOSED**
+Status: **ACCEPTED**
 
 Date: 2026-08-31
 
@@ -722,6 +722,8 @@ Only after accepted documentation merge and post-merge Constitution success may 
 
 ## Acceptance
 
-Not yet accepted.
+**ACCEPTED — 2026-08-31.**
 
-Explicit architecture approval is required before implementation.
+Explicit architecture approval was provided by the user by instructing continuation under the proposed plan.
+
+The accepted boundary is the decision exactly as written above: the exact accepted DEC-0016 Sustainable Corn context semantic/value mapping, when closed to its exact source-recorded occurrence world and absent direct measurement/telemetry authority, may classify only as `ASSERTION`. No `OBSERVATION` upgrade, provenance class, ContextDatum publication, effectiveInterval, availableAt, timezone, spatial/target projection, unit, uncertainty, DecisionProblem, Policy, runtime, execution, Outcome, inverse classification, or completeness authority is accepted.
