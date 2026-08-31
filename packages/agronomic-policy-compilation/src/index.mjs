@@ -259,3 +259,21 @@ export {
   publishAgronomicRecordedOperationTargetIdentityBindingCompilation,
   validateAgronomicRecordedOperationTargetIdentityBindingCompilationAuthority
 } from './recorded-operation-target-identity-authority.mjs';
+
+export {
+  AGRONOMIC_RECORDED_OPERATION_CONTEXT_SEMANTIC_MAPPING_COMPILATION_CONTRACT_VERSION,
+  AGRONOMIC_RECORDED_OPERATION_CONTEXT_SEMANTIC_MAPPING_CONTRACT_VERSION,
+  AgronomicRecordedOperationContextSemanticMappingCompilationError,
+  agronomicRecordedOperationContextSemanticMappingCompilationAuthorityRefs,
+  agronomicRecordedOperationContextSemanticMappingHash,
+  normalizeAgronomicRecordedOperationContextSemanticMapping,
+  normalizeAgronomicRecordedOperationContextSemanticMappingCompilation
+} from './recorded-operation-context-semantic-mapping-contract.mjs';
+
+export {
+  AGRONOMIC_RECORDED_OPERATION_CONTEXT_SEMANTIC_MAPPING_REVIEW_DISPOSITIONS,
+  AGRONOMIC_RECORDED_OPERATION_CONTEXT_SEMANTIC_MAPPING_REQUIRED_REVIEW_CHECKS,
+  publishAgronomicRecordedOperationContextSemanticMappingReviewDecision,
+  publishAgronomicRecordedOperationContextSemanticMappingCompilation,
+  validateAgronomicRecordedOperationContextSemanticMappingCompilationAuthority
+} from './recorded-operation-context-semantic-mapping-authority.mjs';
