@@ -4045,11 +4045,17 @@ assert.deepEqual(
   targetIdentityValidated.parentOccurrence.record.ref
 );
 assert.equal(
-  JSON.stringify(spatialValidated.semanticPayload).includes('geometryRef'),
+  Object.hasOwn(
+    spatialValidated.semanticPayload.classification.spatialSupport,
+    'geometryRef'
+  ),
   false
 );
 assert.equal(
-  JSON.stringify(spatialValidated.semanticPayload).includes('geometry'),
+  Object.hasOwn(
+    spatialValidated.semanticPayload.classification,
+    'geometry'
+  ),
   false
 );
 
