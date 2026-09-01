@@ -4091,6 +4091,11 @@ expectTimezoneIdentityError(
   'SOURCE_NATIVE_TIMEZONE_IDENTITY_EVIDENCE_HASH_MISMATCH'
 );
 
+const originalParentReview = env.ledger.resolve(
+  parent.published.semanticPayload.semanticReviewRef
+);
+const originalParentReviewer =
+  originalParentReview.semanticPayload.reviewerPrincipal;
 const alternateParentPublished =
   publishAgronomicRecordedOperationOccurrenceCompilation({
     ledger: env.ledger,
@@ -4100,8 +4105,8 @@ const alternateParentPublished =
     compilation: parent.published.semanticPayload,
     audit: audit(
       'evt-gold-dec0022-alternate-parent-publication',
-      normalizationReviewer.principalId,
-      'USER'
+      originalParentReviewer.principalId,
+      originalParentReviewer.type
     )
   });
 const alternateTargetIdentityBinding = buildTargetIdentityBinding({
