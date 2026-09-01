@@ -1,6 +1,6 @@
 # DEC-0027 — Agronomic Context TargetRef FARM Instance Projection
 
-Status: **PROPOSED**
+Status: **ACCEPTED**
 
 Date: 2026-09-02
 
