@@ -133,14 +133,17 @@ const IDENTITY_LICENSE_URL = new URL(
   import.meta.url
 );
 const DECAGON_TIMEZONE_SOURCE_URL = new URL(
-  './upstream/plot_decagon.py',
+  '../gold-recorded-operation-context-source-native-timezone-identity-binding-sustainable-corn/upstream/plot_decagon.py',
   import.meta.url
 );
 const WATERTABLE_TIMEZONE_SOURCE_URL = new URL(
-  './upstream/plot_watertable.py',
+  '../gold-recorded-operation-context-source-native-timezone-identity-binding-sustainable-corn/upstream/plot_watertable.py',
   import.meta.url
 );
-const TIMEZONE_LICENSE_URL = new URL('./upstream/LICENSE', import.meta.url);
+const TIMEZONE_LICENSE_URL = new URL(
+  '../gold-recorded-operation-context-source-native-timezone-identity-binding-sustainable-corn/upstream/LICENSE',
+  import.meta.url
+);
 
 const EXPECTED_NOTEBOOK_GIT_BLOB_SHA =
   '4847e7b3b4aad42193de3f5f0da6f81f6b62dc50';
