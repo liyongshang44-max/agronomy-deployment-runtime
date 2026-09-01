@@ -449,3 +449,20 @@ export {
   publishAgronomicContextVerticalSupportNonApplicabilityCompilation,
   validateAgronomicContextVerticalSupportNonApplicabilityCompilationAuthority
 } from './context-vertical-support-non-applicability-authority.mjs';
+export {
+  AGRONOMIC_CONTEXT_UNCERTAINTY_UNKNOWN_REPRESENTATION_CONTRACT_VERSION,
+  AGRONOMIC_CONTEXT_UNCERTAINTY_UNKNOWN_REPRESENTATION_COMPILATION_CONTRACT_VERSION,
+  AgronomicContextUncertaintyUnknownRepresentationCompilationError,
+  agronomicContextUncertaintyUnknownRepresentationCompilationAuthorityRefs,
+  agronomicContextUncertaintyUnknownRepresentationHash,
+  normalizeAgronomicContextUncertaintyUnknownRepresentation,
+  normalizeAgronomicContextUncertaintyUnknownRepresentationCompilation
+} from './context-uncertainty-unknown-representation-contract.mjs';
+
+export {
+  AGRONOMIC_CONTEXT_UNCERTAINTY_UNKNOWN_REPRESENTATION_REVIEW_DISPOSITIONS,
+  AGRONOMIC_CONTEXT_UNCERTAINTY_UNKNOWN_REPRESENTATION_REQUIRED_REVIEW_CHECKS,
+  publishAgronomicContextUncertaintyUnknownRepresentationReviewDecision,
+  publishAgronomicContextUncertaintyUnknownRepresentationCompilation,
+  validateAgronomicContextUncertaintyUnknownRepresentationCompilationAuthority
+} from './context-uncertainty-unknown-representation-authority.mjs';
