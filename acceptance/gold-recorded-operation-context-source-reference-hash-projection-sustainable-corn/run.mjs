@@ -2891,7 +2891,7 @@ expectSourceProjectionError(
         normalizationReviewer.principalId
       )
     }),
-  'UNSUPPORTED_AGRONOMIC_RECORDED_OPERATION_CONTEXT_SOURCE_REFERENCE_HASH_LOCATOR'
+  'UNSUPPORTED_AGRONOMIC_RECORDED_OPERATION_CONTEXT_SOURCE_REFERENCE_HASH_PROJECTION_COORDINATES'
 );
 
 const providerDrift = structuredClone(sourceProjection);
