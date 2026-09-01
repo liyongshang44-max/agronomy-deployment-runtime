@@ -1,6 +1,6 @@
 # DEC-0022 — Governed Agronomic Source-Native Timezone Identity Binding
 
-Status: **PROPOSED**
+Status: **ACCEPTED**
 
 Date: 2026-09-01
 
@@ -805,3 +805,12 @@ Before accepted DEC-0022 documentation may merge:
 
 Only after accepted documentation merge and post-merge Constitution success may
 implementation begin.
+
+
+## Architecture acceptance
+
+**ACCEPTED — 2026-09-01.**
+
+Explicit architecture approval was provided by the user.
+
+The accepted boundary is the decision exactly as written above: for the exact first Sustainable Corn predecessor world, the source-native subject `SERF` may bind to source-native timezone identity `scheme = IANA / zoneId = America/Chicago` using the reviewed content-addressed Sustainable Corn timezone evidence. This acceptance does not authorize planting-date local-civil-frame interpretation, UTC offset, DST resolution, TZDB release/version, concrete effectiveInterval boundaries, availableAt, Frozen ContextDatum mutation, unit/uncertainty/spatial/vertical projection, generic site-to-timezone normalization, DecisionProblem, Policy, runtime, execution, Outcome, inverse mapping, or completeness claims.
