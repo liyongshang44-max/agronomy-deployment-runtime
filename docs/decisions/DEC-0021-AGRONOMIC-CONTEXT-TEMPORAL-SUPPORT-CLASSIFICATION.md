@@ -1,6 +1,6 @@
 # DEC-0021 — Governed Agronomic Context Temporal Support Classification
 
-Status: **PROPOSED**
+Status: **ACCEPTED**
 
 Date: 2026-09-01
 
@@ -339,3 +339,10 @@ future governed ContextDatum projection
 ```
 
 The ordering is intentional: support classification does not grant timestamp-boundary authority.
+
+
+## Architecture acceptance
+
+Explicit architecture approval was provided by the user on 2026-09-01.
+
+The accepted boundary is the decision exactly as written above: for the exact first Sustainable Corn predecessor world, source temporal support `CALENDAR_DATE / 2011-05-03 / precision = DAY` may be classified as Context `temporalSupport.type = INTERVAL`. This acceptance does not authorize concrete `effectiveInterval` timestamp bounds, timezone/UTC-offset/DST inference, `availableAt`, DATE-to-TIMESTAMP conversion, unit or uncertainty projection, target/spatial/vertical projection, ContextDatum/ContextManifest publication, generic DAY-to-INTERVAL normalization, DecisionProblem, Policy, runtime, execution, Outcome, inverse mapping, or completeness claims.
