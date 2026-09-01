@@ -213,13 +213,20 @@ It does not mean:
 
 > the UTC offset on 2011-05-03 is already known or authorized.
 
-## Exact predecessor closure
+## Exact co-predecessor closure
 
-The first DEC-0022 authority must require the exact accepted DEC-0021 compilation.
+The first DEC-0022 authority must require **two exact accepted co-predecessors**:
 
-That predecessor must be fully revalidated through its own validator.
+1. the exact DEC-0021 temporal-support classification compilation;
+2. the exact DEC-0015 source-backed target-identity binding compilation.
 
-The validator must recover at least:
+This is mandatory because DEC-0016 explicitly does not project target identity.
+Therefore DEC-0015 is not transitively contained in the DEC-0016 → DEC-0021
+authority chain and must not be fabricated as if it were.
+
+Both co-predecessors must be fully revalidated through their own validators.
+
+The DEC-0021 branch must recover at least:
 
 ```text
 DEC-0021
@@ -240,9 +247,6 @@ DEC-0017
 DEC-0016
   crop.planting_date = DATE 2011-05-03
 
-DEC-0015
-  exact source-native target identity = SERF / FARM
-
 DEC-0013
   exact occurrence:
     siteid = SERF
@@ -252,8 +256,38 @@ DEC-0013
     precision = DAY
 ```
 
-The timezone authority must not trust a copied `SERF` field without predecessor
-revalidation.
+The DEC-0015 branch must independently recover:
+
+```text
+DEC-0015
+  sourceNativeSubject = siteid / SERF
+  target granularity = FARM
+
+        ↓
+
+same exact DEC-0013 parent occurrence
+```
+
+DEC-0022 must then prove **cross-predecessor convergence**:
+
+```text
+DEC-0021.parentOccurrenceCompilationRef
+==
+DEC-0015.parentOccurrenceCompilationRef
+```
+
+and the exact source-native subject recovered from DEC-0015 must equal the exact
+DEC-0013 occurrence subject recovered through DEC-0021:
+
+```text
+siteid = SERF
+```
+
+Semantic equality must be canonical/value equality plus exact authority-ref equality
+where refs are available; copied labels alone are not authority.
+
+The timezone authority must not trust a copied `SERF` field from either branch
+without this two-branch replay and convergence check.
 
 ## Exact timezone-evidence closure
 
@@ -499,6 +533,7 @@ AgronomicRecordedOperationContextSourceNativeTimezoneIdentityBinding {
   bindingId
 
   temporalSupportClassificationCompilationRef
+  targetIdentityBindingCompilationRef
 
   sourceNativeSubject {
     code
@@ -542,7 +577,9 @@ or equivalent governed review authority.
 
 The review must bind the exact:
 
-- DEC-0021 predecessor ref;
+- DEC-0021 temporal-support predecessor ref;
+- DEC-0015 target-identity co-predecessor ref;
+- exact cross-predecessor parent-occurrence convergence;
 - DEC-0013 source-native subject `SERF`;
 - exact retained timezone-evidence source refs;
 - exact retained SourceArtifact refs;
@@ -557,28 +594,31 @@ The review must bind the exact:
 An accepted review should confirm at least:
 
 1. `TEMPORAL_SUPPORT_CLASSIFICATION_AUTHORITY_VERIFIED`;
-2. `EXACT_PARENT_OCCURRENCE_VERIFIED`;
-3. `EXACT_SOURCE_NATIVE_SUBJECT_SERF`;
-4. `EXACT_DECAGON_TIMEZONE_EVIDENCE_ARTIFACT_VERIFIED`;
-5. `EXACT_DECAGON_TIMEZONE_EVIDENCE_BLOB_VERIFIED`;
-6. `EXACT_WATERTABLE_TIMEZONE_EVIDENCE_ARTIFACT_VERIFIED`;
-7. `EXACT_WATERTABLE_TIMEZONE_EVIDENCE_BLOB_VERIFIED`;
-8. `SOURCE_NATIVE_SERF_TIMEZONE_IDENTITY_VERIFIED`;
-9. `TIMEZONE_SCHEME_IANA_VERIFIED`;
-10. `TIMEZONE_ZONE_ID_AMERICA_CHICAGO_VERIFIED`;
-11. `NO_OFFSET_INFERENCE`;
-12. `NO_DST_RESOLUTION`;
-13. `NO_TZDB_VERSION_AUTHORITY`;
-14. `NO_CALENDAR_DATE_LOCAL_FRAME_BINDING`;
-15. `NO_EFFECTIVE_INTERVAL_CONSTRUCTION`;
-16. `NO_AVAILABLE_AT_CONSTRUCTION`;
-17. `NO_GEOGRAPHIC_TIMEZONE_INFERENCE`;
-18. `NO_GENERIC_SITE_TIMEZONE_RULE`;
-19. `NO_UPSTREAM_CODE_EXECUTION_AS_AUTHORITY`;
-20. `NO_CONTEXT_DATUM_PUBLICATION`;
-21. `NO_UNIT_UNCERTAINTY_SPATIAL_VERTICAL_PROJECTION`;
-22. `NO_DECISION_PROBLEM_POLICY_RUNTIME_EXECUTION_OUTCOME`;
-23. `NO_INVERSE_OR_COMPLETENESS_INFERENCE`.
+2. `TARGET_IDENTITY_BINDING_AUTHORITY_VERIFIED`;
+3. `CO_PREDECESSOR_PARENT_OCCURRENCE_REF_EQUAL`;
+4. `CO_PREDECESSOR_SOURCE_NATIVE_SUBJECT_EQUAL`;
+5. `EXACT_PARENT_OCCURRENCE_VERIFIED`;
+6. `EXACT_SOURCE_NATIVE_SUBJECT_SERF`;
+7. `EXACT_DECAGON_TIMEZONE_EVIDENCE_ARTIFACT_VERIFIED`;
+8. `EXACT_DECAGON_TIMEZONE_EVIDENCE_BLOB_VERIFIED`;
+9. `EXACT_WATERTABLE_TIMEZONE_EVIDENCE_ARTIFACT_VERIFIED`;
+10. `EXACT_WATERTABLE_TIMEZONE_EVIDENCE_BLOB_VERIFIED`;
+11. `SOURCE_NATIVE_SERF_TIMEZONE_IDENTITY_VERIFIED`;
+12. `TIMEZONE_SCHEME_IANA_VERIFIED`;
+13. `TIMEZONE_ZONE_ID_AMERICA_CHICAGO_VERIFIED`;
+14. `NO_OFFSET_INFERENCE`;
+15. `NO_DST_RESOLUTION`;
+16. `NO_TZDB_VERSION_AUTHORITY`;
+17. `NO_CALENDAR_DATE_LOCAL_FRAME_BINDING`;
+18. `NO_EFFECTIVE_INTERVAL_CONSTRUCTION`;
+19. `NO_AVAILABLE_AT_CONSTRUCTION`;
+20. `NO_GEOGRAPHIC_TIMEZONE_INFERENCE`;
+21. `NO_GENERIC_SITE_TIMEZONE_RULE`;
+22. `NO_UPSTREAM_CODE_EXECUTION_AS_AUTHORITY`;
+23. `NO_CONTEXT_DATUM_PUBLICATION`;
+24. `NO_UNIT_UNCERTAINTY_SPATIAL_VERTICAL_PROJECTION`;
+25. `NO_DECISION_PROBLEM_POLICY_RUNTIME_EXECUTION_OUTCOME`;
+26. `NO_INVERSE_OR_COMPLETENESS_INFERENCE`.
 
 All mandatory checks are required for accepted publication.
 
@@ -596,6 +636,8 @@ Rejected review cannot authorize publication.
 Changing any material element must change semantic identity or fail closure, including:
 
 - DEC-0021 predecessor ref;
+- DEC-0015 co-predecessor ref;
+- exact shared DEC-0013 parent occurrence ref;
 - source-native subject code;
 - evidence Source refs;
 - evidence SourceArtifact refs;
@@ -644,8 +686,11 @@ publish for the same first predecessor world.
 If DEC-0022 is accepted, implementation must prove at least:
 
 1. exact DEC-0021 authority is mandatory;
-2. exact DEC-0013 parent occurrence closure is mandatory;
-3. exact source-native subject `SERF` is mandatory;
+2. exact DEC-0015 target-identity authority is independently mandatory;
+3. DEC-0021 and DEC-0015 must converge on the same exact DEC-0013 parent occurrence ref;
+4. source-native subject recovered from both branches must match exactly;
+5. exact DEC-0013 parent occurrence closure is mandatory;
+6. exact source-native subject `SERF` is mandatory;
 4. exact first timezone-evidence source artifact is mandatory;
 5. exact Decagon source blob is mandatory;
 6. exact second corroborating timezone-evidence source artifact is mandatory;
@@ -690,8 +735,10 @@ The first implementation slice should contain only:
 
 1. source-native timezone identity binding contract;
 2. exact DEC-0021 predecessor closure;
-3. exact DEC-0013 source-native subject closure;
-4. retained exact Decagon timezone-evidence artifact;
+3. exact DEC-0015 target-identity co-predecessor closure;
+4. exact co-predecessor convergence on one DEC-0013 occurrence;
+5. exact DEC-0013 source-native subject closure;
+6. retained exact Decagon timezone-evidence artifact;
 5. retained exact water-table timezone-evidence artifact;
 6. source-evidence replay/verification;
 7. review authority;
@@ -777,7 +824,9 @@ Even if DEC-0022 is accepted and implemented, at least the following remain unre
 Before this architecture may be accepted, review must confirm:
 
 1. direct source-native timezone evidence exists for `SERF`;
-2. the exact first identity is IANA `America/Chicago`;
+2. DEC-0021 and DEC-0015 are explicit co-predecessors rather than falsely treating DEC-0015 as transitively contained by DEC-0021;
+3. both co-predecessors must converge on the same exact DEC-0013 parent occurrence and `SERF` subject;
+4. the exact first identity is IANA `America/Chicago`;
 3. source-native code evidence is used instead of Iowa/geographic inference;
 4. evidence A and B are exact content-addressed source artifacts;
 5. the decision binds timezone identity only;
