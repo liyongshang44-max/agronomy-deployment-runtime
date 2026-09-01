@@ -432,3 +432,20 @@ export {
   publishAgronomicContextNonQuantitativeUnitRepresentationCompilation,
   validateAgronomicContextNonQuantitativeUnitRepresentationCompilationAuthority
 } from './context-non-quantitative-unit-representation-authority.mjs';
+export {
+  AGRONOMIC_CONTEXT_VERTICAL_SUPPORT_NON_APPLICABILITY_CONTRACT_VERSION,
+  AGRONOMIC_CONTEXT_VERTICAL_SUPPORT_NON_APPLICABILITY_COMPILATION_CONTRACT_VERSION,
+  AgronomicContextVerticalSupportNonApplicabilityCompilationError,
+  agronomicContextVerticalSupportNonApplicabilityCompilationAuthorityRefs,
+  agronomicContextVerticalSupportNonApplicabilityHash,
+  normalizeAgronomicContextVerticalSupportNonApplicability,
+  normalizeAgronomicContextVerticalSupportNonApplicabilityCompilation
+} from './context-vertical-support-non-applicability-contract.mjs';
+
+export {
+  AGRONOMIC_CONTEXT_VERTICAL_SUPPORT_NON_APPLICABILITY_REVIEW_DISPOSITIONS,
+  AGRONOMIC_CONTEXT_VERTICAL_SUPPORT_NON_APPLICABILITY_REQUIRED_REVIEW_CHECKS,
+  publishAgronomicContextVerticalSupportNonApplicabilityReviewDecision,
+  publishAgronomicContextVerticalSupportNonApplicabilityCompilation,
+  validateAgronomicContextVerticalSupportNonApplicabilityCompilationAuthority
+} from './context-vertical-support-non-applicability-authority.mjs';
