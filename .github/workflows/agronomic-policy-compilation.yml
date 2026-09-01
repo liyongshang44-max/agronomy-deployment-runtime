@@ -20,6 +20,7 @@ on:
       - 'acceptance/gold-recorded-operation-context-non-quantitative-unit-representation-sustainable-corn/**'
       - 'acceptance/gold-recorded-operation-context-vertical-support-non-applicability-sustainable-corn/**'
       - 'acceptance/gold-recorded-operation-context-uncertainty-unknown-representation-sustainable-corn/**'
+      - 'acceptance/gold-recorded-operation-context-target-ref-farm-instance-projection-sustainable-corn/**'
       - 'docs/decisions/DEC-0002-AGRONOMIC-POLICY-COMPILATION.md'
       - 'docs/decisions/DEC-0003-AGRONOMIC-RULE-V2-TEMPORAL-COORDINATION.md'
       - 'docs/decisions/DEC-0004-AGRONOMIC-POLICY-CONSTRAINT-COMPILATION.md'
@@ -43,6 +44,7 @@ on:
       - 'docs/decisions/DEC-0024-AGRONOMIC-CONTEXT-NON-QUANTITATIVE-UNIT-REPRESENTATION.md'
       - 'docs/decisions/DEC-0025-AGRONOMIC-CONTEXT-VERTICAL-SUPPORT-NON-APPLICABILITY.md'
       - 'docs/decisions/DEC-0026-AGRONOMIC-CONTEXT-UNCERTAINTY-UNKNOWN-REPRESENTATION.md'
+      - 'docs/decisions/DEC-0027-AGRONOMIC-CONTEXT-TARGET-REF-FARM-INSTANCE-PROJECTION.md'
       - '.github/workflows/agronomic-policy-compilation.yml'
 
 permissions:
@@ -111,5 +113,7 @@ jobs:
         run: npm run test:gold-recorded-operation-context-vertical-support-non-applicability-sustainable-corn
       - name: Sustainable Corn context-uncertainty-unknown-representation Gold acceptance
         run: npm run test:gold-recorded-operation-context-uncertainty-unknown-representation-sustainable-corn
+      - name: Sustainable Corn context-target-ref-farm-instance-projection Gold acceptance
+        run: npm run test:gold-recorded-operation-context-target-ref-farm-instance-projection-sustainable-corn
       - name: KBS 2015 gold protocol rule, constraint, obligation, modality, goal, regimen, realization, conditional realization and source routing acceptance
         run: npm run test:gold-protocol-kbs-2015

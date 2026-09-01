@@ -466,3 +466,20 @@ export {
   publishAgronomicContextUncertaintyUnknownRepresentationCompilation,
   validateAgronomicContextUncertaintyUnknownRepresentationCompilationAuthority
 } from './context-uncertainty-unknown-representation-authority.mjs';
+export {
+  AGRONOMIC_CONTEXT_TARGET_REF_FARM_INSTANCE_PROJECTION_CONTRACT_VERSION,
+  AGRONOMIC_CONTEXT_TARGET_REF_FARM_INSTANCE_PROJECTION_COMPILATION_CONTRACT_VERSION,
+  AgronomicContextTargetRefFarmInstanceProjectionCompilationError,
+  agronomicContextTargetRefFarmInstanceProjectionCompilationAuthorityRefs,
+  agronomicContextTargetRefFarmInstanceProjectionHash,
+  normalizeAgronomicContextTargetRefFarmInstanceProjection,
+  normalizeAgronomicContextTargetRefFarmInstanceProjectionCompilation
+} from './context-target-ref-farm-instance-projection-contract.mjs';
+
+export {
+  AGRONOMIC_CONTEXT_TARGET_REF_FARM_INSTANCE_PROJECTION_REVIEW_DISPOSITIONS,
+  AGRONOMIC_CONTEXT_TARGET_REF_FARM_INSTANCE_PROJECTION_REQUIRED_REVIEW_CHECKS,
+  publishAgronomicContextTargetRefFarmInstanceProjectionReviewDecision,
+  publishAgronomicContextTargetRefFarmInstanceProjectionCompilation,
+  validateAgronomicContextTargetRefFarmInstanceProjectionCompilationAuthority
+} from './context-target-ref-farm-instance-projection-authority.mjs';
