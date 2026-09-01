@@ -1,6 +1,6 @@
 # DEC-0023 — Governed Agronomic Context Spatial-Support Classification
 
-Status: **PROPOSED**
+Status: **ACCEPTED**
 
 Date: 2026-09-01
 
@@ -842,3 +842,14 @@ Before accepted DEC-0023 documentation may merge:
 
 Only after accepted documentation merge and post-merge Constitution success may
 implementation begin.
+
+
+## Architecture acceptance
+
+**ACCEPTED — 2026-09-01.**
+
+Explicit architecture approval was provided by the user.
+
+The accepted boundary is the decision exactly as written above: for the exact first Sustainable Corn predecessor world, the exact DEC-0016 context semantic/value branch and exact DEC-0015 source-backed target-identity branch may jointly establish `spatialSupport.type = FARM` only after exact co-predecessor convergence on the same DEC-0013 occurrence and `siteid = SERF` subject.
+
+This acceptance does not authorize `geometryRef`, geometry, FIELD/PLOT/ZONE refinement, target-instance identity in the public spatial-support field, within-farm uniformity, DecisionProblem target projection, local-civil-time interpretation, UTC offset, DST, TZDB version, effectiveInterval, availableAt, unit, uncertainty, verticalSupport, ContextDatum, ContextManifest, Policy, runtime, execution, Outcome, inverse mapping, or completeness claims. The exact DEC-0015 target identity remains material lineage and must not be erased by the support classification.
