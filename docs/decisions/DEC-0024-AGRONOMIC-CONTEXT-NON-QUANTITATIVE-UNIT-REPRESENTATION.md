@@ -1,6 +1,6 @@
 # DEC-0024 — Agronomic Context Non-Quantitative Unit Representation
 
-Status: **PROPOSED**
+Status: **ACCEPTED**
 
 Date: 2026-09-01
 
