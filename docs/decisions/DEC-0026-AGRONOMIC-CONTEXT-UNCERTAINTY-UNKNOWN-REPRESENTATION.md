@@ -1,6 +1,6 @@
 # DEC-0026 — Agronomic Context Uncertainty Unknown Representation
 
-Status: **PROPOSED**
+Status: **ACCEPTED**
 
 Date: 2026-09-01
 
