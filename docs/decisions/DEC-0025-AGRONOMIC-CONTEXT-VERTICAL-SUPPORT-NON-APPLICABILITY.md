@@ -1,6 +1,6 @@
 # DEC-0025 — Agronomic Context Vertical-Support Non-Applicability
 
-Status: **PROPOSED**
+Status: **ACCEPTED**
 
 Date: 2026-09-01
 
