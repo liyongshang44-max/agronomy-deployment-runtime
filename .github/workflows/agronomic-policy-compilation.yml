@@ -13,6 +13,7 @@ on:
       - 'acceptance/gold-recorded-operation-context-epistemic-classification-sustainable-corn/**'
       - 'acceptance/gold-recorded-operation-context-provenance-classification-sustainable-corn/**'
       - 'acceptance/gold-recorded-operation-context-source-provider-identity-binding-sustainable-corn/**'
+      - 'acceptance/gold-recorded-operation-context-source-reference-hash-projection-sustainable-corn/**'
       - 'docs/decisions/DEC-0002-AGRONOMIC-POLICY-COMPILATION.md'
       - 'docs/decisions/DEC-0003-AGRONOMIC-RULE-V2-TEMPORAL-COORDINATION.md'
       - 'docs/decisions/DEC-0004-AGRONOMIC-POLICY-CONSTRAINT-COMPILATION.md'
@@ -29,6 +30,7 @@ on:
       - 'docs/decisions/DEC-0017-AGRONOMIC-RECORDED-OPERATION-CONTEXT-EPISTEMIC-CLASSIFICATION.md'
       - 'docs/decisions/DEC-0018-AGRONOMIC-RECORDED-OPERATION-CONTEXT-PROVENANCE-CLASSIFICATION.md'
       - 'docs/decisions/DEC-0019-AGRONOMIC-CONTEXT-SOURCE-PROVIDER-IDENTITY-BINDING.md'
+      - 'docs/decisions/DEC-0020-AGRONOMIC-CONTEXT-SOURCE-REFERENCE-AND-CONTENT-HASH-PROJECTION.md'
       - '.github/workflows/agronomic-policy-compilation.yml'
 
 permissions:
@@ -83,5 +85,7 @@ jobs:
         run: npm run test:gold-recorded-operation-context-provenance-classification-sustainable-corn
       - name: Sustainable Corn context-source-provider-identity-binding Gold acceptance
         run: npm run test:gold-recorded-operation-context-source-provider-identity-binding-sustainable-corn
+      - name: Sustainable Corn context-source-reference-hash-projection Gold acceptance
+        run: npm run test:gold-recorded-operation-context-source-reference-hash-projection-sustainable-corn
       - name: KBS 2015 gold protocol rule, constraint, obligation, modality, goal, regimen, realization, conditional realization and source routing acceptance
         run: npm run test:gold-protocol-kbs-2015
