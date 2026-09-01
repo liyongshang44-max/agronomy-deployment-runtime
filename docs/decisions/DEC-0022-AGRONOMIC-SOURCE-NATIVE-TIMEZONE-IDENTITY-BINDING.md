@@ -333,16 +333,21 @@ The source also contains historical ingestion code that sometimes uses fixed
 standard-time offsets for particular sensor files. DEC-0022 does not generalize those
 ingestion details into the recorded-operation calendar-date world.
 
-## No DST-resolution authority
+## No DST-resolution or TZDB-version authority
 
 DEC-0022 does not decide:
 
 - whether DST was active on 2011-05-03;
 - which UTC offset applies at either boundary of a future interval;
 - transition rules;
-- ambiguous/nonexistent local clock times.
+- ambiguous/nonexistent local clock times;
+- which IANA Time Zone Database / TZDB release is authoritative for replay.
 
-A later authority may resolve IANA zone rules for a concrete temporal projection.
+The retained upstream source uses the zone identifier `America/Chicago`, but the
+evidence does not freeze a particular timezone-database release.
+
+A later concrete temporal projection must independently bind the timezone-rule basis
+needed for reproducible historical offset resolution.
 
 ## No calendar-date temporal-frame binding
 
@@ -563,16 +568,17 @@ An accepted review should confirm at least:
 10. `TIMEZONE_ZONE_ID_AMERICA_CHICAGO_VERIFIED`;
 11. `NO_OFFSET_INFERENCE`;
 12. `NO_DST_RESOLUTION`;
-13. `NO_CALENDAR_DATE_LOCAL_FRAME_BINDING`;
-14. `NO_EFFECTIVE_INTERVAL_CONSTRUCTION`;
-15. `NO_AVAILABLE_AT_CONSTRUCTION`;
-16. `NO_GEOGRAPHIC_TIMEZONE_INFERENCE`;
-17. `NO_GENERIC_SITE_TIMEZONE_RULE`;
-18. `NO_UPSTREAM_CODE_EXECUTION_AS_AUTHORITY`;
-19. `NO_CONTEXT_DATUM_PUBLICATION`;
-20. `NO_UNIT_UNCERTAINTY_SPATIAL_VERTICAL_PROJECTION`;
-21. `NO_DECISION_PROBLEM_POLICY_RUNTIME_EXECUTION_OUTCOME`;
-22. `NO_INVERSE_OR_COMPLETENESS_INFERENCE`.
+13. `NO_TZDB_VERSION_AUTHORITY`;
+14. `NO_CALENDAR_DATE_LOCAL_FRAME_BINDING`;
+15. `NO_EFFECTIVE_INTERVAL_CONSTRUCTION`;
+16. `NO_AVAILABLE_AT_CONSTRUCTION`;
+17. `NO_GEOGRAPHIC_TIMEZONE_INFERENCE`;
+18. `NO_GENERIC_SITE_TIMEZONE_RULE`;
+19. `NO_UPSTREAM_CODE_EXECUTION_AS_AUTHORITY`;
+20. `NO_CONTEXT_DATUM_PUBLICATION`;
+21. `NO_UNIT_UNCERTAINTY_SPATIAL_VERTICAL_PROJECTION`;
+22. `NO_DECISION_PROBLEM_POLICY_RUNTIME_EXECUTION_OUTCOME`;
+23. `NO_INVERSE_OR_COMPLETENESS_INFERENCE`.
 
 All mandatory checks are required for accepted publication.
 
@@ -661,15 +667,16 @@ If DEC-0022 is accepted, implementation must prove at least:
 22. rejected review cannot publish;
 23. no UTC offset authority is created;
 24. no DST-resolution authority is created;
-25. no planting-date local-civil-frame binding is created;
-26. no effectiveInterval authority is created;
-27. no availableAt authority is created;
-28. no geographic timezone lookup authority is created;
-29. no generic site-to-timezone rule is created;
-30. no ContextDatum/ContextManifest authority is created;
-31. no unit/uncertainty/spatial/vertical authority is created;
-32. no DecisionProblem/Policy/runtime/execution/Outcome authority is created;
-33. no inverse/global completeness rule is created.
+25. no TZDB release/version authority is created;
+26. no planting-date local-civil-frame binding is created;
+27. no effectiveInterval authority is created;
+28. no availableAt authority is created;
+29. no geographic timezone lookup authority is created;
+30. no generic site-to-timezone rule is created;
+31. no ContextDatum/ContextManifest authority is created;
+32. no unit/uncertainty/spatial/vertical authority is created;
+33. no DecisionProblem/Policy/runtime/execution/Outcome authority is created;
+34. no inverse/global completeness rule is created.
 
 At least one positive case must use the exact accepted Sustainable Corn predecessor
 world.
@@ -699,6 +706,7 @@ It must not contain:
 - planting-date local-civil-frame interpretation;
 - UTC offset resolution;
 - DST resolution;
+- TZDB release/version binding;
 - effectiveInterval;
 - availableAt;
 - unit;
@@ -749,7 +757,7 @@ encoded.
 Even if DEC-0022 is accepted and implemented, at least the following remain unresolved:
 
 1. whether `2011-05-03` consumes the SERF source-native timezone as a local civil day;
-2. UTC offset / DST resolution for concrete boundaries;
+2. UTC offset / DST resolution and TZDB-version binding for concrete boundaries;
 3. DAY -> RFC3339 effectiveInterval bounds;
 4. availableAt;
 5. DATE semantic unit representation;
@@ -773,7 +781,7 @@ Before this architecture may be accepted, review must confirm:
 3. source-native code evidence is used instead of Iowa/geographic inference;
 4. evidence A and B are exact content-addressed source artifacts;
 5. the decision binds timezone identity only;
-6. no offset or DST result is accepted;
+6. no offset, DST result, or TZDB release/version is accepted;
 7. no claim is made that planting-date `2011-05-03` is already a local civil day;
 8. no effectiveInterval is accepted;
 9. no availableAt is accepted;
