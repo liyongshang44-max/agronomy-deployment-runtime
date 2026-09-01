@@ -390,6 +390,62 @@ It may be retained internally in the DEC-0023 binding/review lineage.
 It must not be copied into `geometryRef` or otherwise represented as geometric
 content.
 
+## Support classification does not identify the target instance
+
+This is a mandatory architectural limitation.
+
+The public Frozen ContextDatum shape contains:
+
+```text
+spatialSupport.type
+spatialSupport.geometryRef?
+```
+
+but no non-geometric target-identity ref.
+
+Therefore:
+
+```text
+spatialSupport.type = FARM
+```
+
+answers only:
+
+> what reviewed target granularity is associated with this datum?
+
+It does **not** answer:
+
+> which exact FARM instance is the datum bound to?
+
+DEC-0023 must preserve the exact DEC-0015 source-backed target identity in its
+internal predecessor lineage and review bindings, but that identity is not silently
+encoded into the public `spatialSupport` object.
+
+A later authority is still required to bind the exact source-backed FARM identity
+into the target-instance layer used by ContextManifest / TargetContext / decision
+scope.
+
+Therefore DEC-0023 must not be used as evidence that the public ContextDatum is
+already spatially self-identifying or independently portable without its governed
+target lineage.
+
+## No lineage erasure at later publication
+
+A future ContextDatum publication authority must not discard the exact DEC-0015
+target-identity lineage merely because the public materialization contains only:
+
+```text
+spatial_support:
+  type: FARM
+```
+
+The public field is a classification surface, not the complete target-identity
+authority.
+
+If a later ContextManifest or target-binding authority associates this datum with a
+specific FARM target, that association must be content-addressed and independently
+reviewable.
+
 ## No DecisionProblem targetRef projection
 
 DEC-0023 creates no:
@@ -565,12 +621,14 @@ An accepted review should confirm at least:
 14. `NO_UNIFORM_WITHIN_FARM_COVERAGE_INFERENCE`;
 15. `NO_TARGET_ID_AS_GEOMETRY_SUBSTITUTION`;
 16. `NO_GENERIC_FARM_SPATIAL_SUPPORT_RULE`;
-17. `NO_CONTEXT_DATUM_PUBLICATION`;
-18. `NO_DECISION_PROBLEM_TARGET_REF_PROJECTION`;
-19. `NO_TEMPORAL_FRAME_OFFSET_DST_TZDB_EFFECTIVE_TIME_INFERENCE`;
-20. `NO_UNIT_UNCERTAINTY_VERTICAL_SUPPORT_INFERENCE`;
-21. `NO_POLICY_RUNTIME_EXECUTION_OUTCOME_INFERENCE`;
-22. `NO_INVERSE_OR_COMPLETENESS_INFERENCE`.
+17. `SUPPORT_TYPE_NOT_TARGET_INSTANCE_IDENTITY`;
+18. `EXACT_TARGET_IDENTITY_LINEAGE_PRESERVED`;
+19. `NO_CONTEXT_DATUM_PUBLICATION`;
+20. `NO_DECISION_PROBLEM_TARGET_REF_PROJECTION`;
+21. `NO_TEMPORAL_FRAME_OFFSET_DST_TZDB_EFFECTIVE_TIME_INFERENCE`;
+22. `NO_UNIT_UNCERTAINTY_VERTICAL_SUPPORT_INFERENCE`;
+23. `NO_POLICY_RUNTIME_EXECUTION_OUTCOME_INFERENCE`;
+24. `NO_INVERSE_OR_COMPLETENESS_INFERENCE`.
 
 All checks are required for accepted publication.
 
@@ -675,12 +733,14 @@ If DEC-0023 is accepted, implementation must prove at least:
 21. rejected review cannot publish;
 22. no geometry authority is created;
 23. no uniform-within-farm coverage authority is created;
-24. no DecisionProblem targetRef authority is created;
-25. no temporal-frame/offset/DST/TZDB/effective-time authority is created;
-26. no unit/uncertainty/vertical-support authority is created;
-27. no ContextDatum/ContextManifest authority is created;
-28. no Policy/runtime/execution/Outcome authority is created;
-29. no inverse/global completeness rule is created.
+24. `spatialSupport.type = FARM` does not identify the exact FARM instance;
+25. exact DEC-0015 target-identity lineage remains material;
+26. no DecisionProblem targetRef authority is created;
+27. no temporal-frame/offset/DST/TZDB/effective-time authority is created;
+28. no unit/uncertainty/vertical-support authority is created;
+29. no ContextDatum/ContextManifest authority is created;
+30. no Policy/runtime/execution/Outcome authority is created;
+31. no inverse/global completeness rule is created.
 
 ## Proposed first implementation slice
 
@@ -737,13 +797,14 @@ Even if accepted and implemented, at least the following remain unresolved:
 7. verticalSupport null/applicability;
 8. datum_id;
 9. ContextDatum publication authority;
-10. ContextManifest inclusion;
-11. geometry / geometryRef;
-12. field/plot/zone/season identity;
-13. DecisionProblem target projection;
-14. planned-versus-actual reconciliation;
-15. execution reconciliation;
-16. Outcome linkage.
+10. exact target-instance binding for ContextManifest / TargetContext;
+11. ContextManifest inclusion;
+12. geometry / geometryRef;
+13. field/plot/zone/season identity;
+14. DecisionProblem target projection;
+15. planned-versus-actual reconciliation;
+16. execution reconciliation;
+17. Outcome linkage.
 
 ## Acceptance targets
 
@@ -760,10 +821,12 @@ Before this architecture may be accepted, review must confirm:
 8. no geometry or within-farm uniformity is inferred;
 9. no FIELD/PLOT/ZONE refinement is inferred;
 10. no generic FARM-to-support rule is created;
-11. no temporal blocker is bypassed;
-12. no ContextDatum/ContextManifest publication is created;
-13. no DecisionProblem/Policy/runtime/execution/Outcome authority is created;
-14. implementation remains additive and does not weaken accepted DEC-0013 through
+11. `spatialSupport.type = FARM` is not treated as exact target-instance identity;
+12. exact DEC-0015 target lineage remains mandatory for later publication;
+13. no temporal blocker is bypassed;
+14. no ContextDatum/ContextManifest publication is created;
+15. no DecisionProblem/Policy/runtime/execution/Outcome authority is created;
+16. implementation remains additive and does not weaken accepted DEC-0013 through
     DEC-0022 boundaries.
 
 ## Post-acceptance gate
