@@ -691,37 +691,37 @@ If DEC-0022 is accepted, implementation must prove at least:
 4. source-native subject recovered from both branches must match exactly;
 5. exact DEC-0013 parent occurrence closure is mandatory;
 6. exact source-native subject `SERF` is mandatory;
-4. exact first timezone-evidence source artifact is mandatory;
-5. exact Decagon source blob is mandatory;
-6. exact second corroborating timezone-evidence source artifact is mandatory;
-7. exact water-table source blob is mandatory;
-8. exact `SERF -> America/Chicago` evidence is mandatory;
-9. first timezone scheme can publish only as `IANA`;
-10. first zoneId can publish only as `America/Chicago`;
-11. `America/New_York` fails closed;
-12. `US/Central` fails closed;
-13. `Central Time` fails closed;
-14. `CST` fails closed;
-15. `CDT` fails closed;
-16. fixed UTC-offset substitution fails closed;
-17. source-native subject drift fails closed;
-18. source evidence path drift fails closed;
-19. source evidence blob/content drift fails closed;
-20. incomplete review cannot publish;
-21. unauthorized reviewer cannot publish;
-22. rejected review cannot publish;
-23. no UTC offset authority is created;
-24. no DST-resolution authority is created;
-25. no TZDB release/version authority is created;
-26. no planting-date local-civil-frame binding is created;
-27. no effectiveInterval authority is created;
-28. no availableAt authority is created;
-29. no geographic timezone lookup authority is created;
-30. no generic site-to-timezone rule is created;
-31. no ContextDatum/ContextManifest authority is created;
-32. no unit/uncertainty/spatial/vertical authority is created;
-33. no DecisionProblem/Policy/runtime/execution/Outcome authority is created;
-34. no inverse/global completeness rule is created.
+7. exact first timezone-evidence source artifact is mandatory;
+8. exact Decagon source blob is mandatory;
+9. exact second corroborating timezone-evidence source artifact is mandatory;
+10. exact water-table source blob is mandatory;
+11. exact `SERF -> America/Chicago` evidence is mandatory;
+12. first timezone scheme can publish only as `IANA`;
+13. first zoneId can publish only as `America/Chicago`;
+14. `America/New_York` fails closed;
+15. `US/Central` fails closed;
+16. `Central Time` fails closed;
+17. `CST` fails closed;
+18. `CDT` fails closed;
+19. fixed UTC-offset substitution fails closed;
+20. source-native subject drift fails closed;
+21. source evidence path drift fails closed;
+22. source evidence blob/content drift fails closed;
+23. incomplete review cannot publish;
+24. unauthorized reviewer cannot publish;
+25. rejected review cannot publish;
+26. no UTC offset authority is created;
+27. no DST-resolution authority is created;
+28. no TZDB release/version authority is created;
+29. no planting-date local-civil-frame binding is created;
+30. no effectiveInterval authority is created;
+31. no availableAt authority is created;
+32. no geographic timezone lookup authority is created;
+33. no generic site-to-timezone rule is created;
+34. no ContextDatum/ContextManifest authority is created;
+35. no unit/uncertainty/spatial/vertical authority is created;
+36. no DecisionProblem/Policy/runtime/execution/Outcome authority is created;
+37. no inverse/global completeness rule is created.
 
 At least one positive case must use the exact accepted Sustainable Corn predecessor
 world.
@@ -739,14 +739,14 @@ The first implementation slice should contain only:
 4. exact co-predecessor convergence on one DEC-0013 occurrence;
 5. exact DEC-0013 source-native subject closure;
 6. retained exact Decagon timezone-evidence artifact;
-5. retained exact water-table timezone-evidence artifact;
-6. source-evidence replay/verification;
-7. review authority;
-8. content-addressed publication/validation;
-9. exact `SERF -> IANA America/Chicago` first binding;
-10. real Sustainable Corn Gold;
-11. mandatory fail-closed cases;
-12. focused workflow wiring if required.
+7. retained exact water-table timezone-evidence artifact;
+8. source-evidence replay/verification;
+9. review authority;
+10. content-addressed publication/validation;
+11. exact `SERF -> IANA America/Chicago` first binding;
+12. real Sustainable Corn Gold;
+13. mandatory fail-closed cases;
+14. focused workflow wiring if required.
 
 It must not contain:
 
@@ -827,19 +827,19 @@ Before this architecture may be accepted, review must confirm:
 2. DEC-0021 and DEC-0015 are explicit co-predecessors rather than falsely treating DEC-0015 as transitively contained by DEC-0021;
 3. both co-predecessors must converge on the same exact DEC-0013 parent occurrence and `SERF` subject;
 4. the exact first identity is IANA `America/Chicago`;
-3. source-native code evidence is used instead of Iowa/geographic inference;
-4. evidence A and B are exact content-addressed source artifacts;
-5. the decision binds timezone identity only;
-6. no offset, DST result, or TZDB release/version is accepted;
-7. no claim is made that planting-date `2011-05-03` is already a local civil day;
-8. no effectiveInterval is accepted;
-9. no availableAt is accepted;
-10. no Frozen ContextDatum contract mutation is accepted;
-11. no generic provider/site timezone mapping rule is accepted;
-12. no ContextDatum/ContextManifest publication is accepted;
-13. no unit/uncertainty/spatial/vertical authority is accepted;
-14. no DecisionProblem/Policy/runtime/execution/Outcome authority is accepted;
-15. implementation remains additive and does not weaken DEC-0013 through DEC-0021.
+5. source-native code evidence is used instead of Iowa/geographic inference;
+6. evidence A and B are exact content-addressed source artifacts;
+7. the decision binds timezone identity only;
+8. no offset, DST result, or TZDB release/version is accepted;
+9. no claim is made that planting-date `2011-05-03` is already a local civil day;
+10. no effectiveInterval is accepted;
+11. no availableAt is accepted;
+12. no Frozen ContextDatum contract mutation is accepted;
+13. no generic provider/site timezone mapping rule is accepted;
+14. no ContextDatum/ContextManifest publication is accepted;
+15. no unit/uncertainty/spatial/vertical authority is accepted;
+16. no DecisionProblem/Policy/runtime/execution/Outcome authority is accepted;
+17. implementation remains additive and does not weaken DEC-0013 through DEC-0021.
 
 ## Post-acceptance gate
 
