@@ -415,3 +415,20 @@ export {
   publishAgronomicRecordedOperationContextSpatialSupportClassificationCompilation,
   validateAgronomicRecordedOperationContextSpatialSupportClassificationCompilationAuthority
 } from './recorded-operation-context-spatial-support-classification-authority.mjs';
+export {
+  AGRONOMIC_CONTEXT_NON_QUANTITATIVE_UNIT_REPRESENTATION_CONTRACT_VERSION,
+  AGRONOMIC_CONTEXT_NON_QUANTITATIVE_UNIT_REPRESENTATION_COMPILATION_CONTRACT_VERSION,
+  AgronomicContextNonQuantitativeUnitRepresentationCompilationError,
+  agronomicContextNonQuantitativeUnitRepresentationCompilationAuthorityRefs,
+  agronomicContextNonQuantitativeUnitRepresentationHash,
+  normalizeAgronomicContextNonQuantitativeUnitRepresentation,
+  normalizeAgronomicContextNonQuantitativeUnitRepresentationCompilation
+} from './context-non-quantitative-unit-representation-contract.mjs';
+
+export {
+  AGRONOMIC_CONTEXT_NON_QUANTITATIVE_UNIT_REPRESENTATION_REVIEW_DISPOSITIONS,
+  AGRONOMIC_CONTEXT_NON_QUANTITATIVE_UNIT_REPRESENTATION_REQUIRED_REVIEW_CHECKS,
+  publishAgronomicContextNonQuantitativeUnitRepresentationReviewDecision,
+  publishAgronomicContextNonQuantitativeUnitRepresentationCompilation,
+  validateAgronomicContextNonQuantitativeUnitRepresentationCompilationAuthority
+} from './context-non-quantitative-unit-representation-authority.mjs';
