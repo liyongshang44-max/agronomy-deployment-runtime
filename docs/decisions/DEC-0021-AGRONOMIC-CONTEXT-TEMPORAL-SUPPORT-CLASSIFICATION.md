@@ -76,9 +76,9 @@ precision = DAY
 
 Therefore classifying the support as `INSTANT` would invent precision that the source does not provide.
 
-The existing Frozen Context contract and A02 implementation already use `INTERVAL` as a valid temporal-support representation.
+The Frozen Context contract illustrates `temporal_support.type = INTERVAL`, while the A02 implementation preserves `temporalSupport.type` as semantic payload. Neither the illustrative contract example nor the non-architecture A02 implementation independently grants this Sustainable Corn mapping authority.
 
-This decision creates an explicit reviewed bridge from the exact source precision to that target support class rather than allowing an adapter to infer it silently.
+DEC-0021 itself establishes, for this exact first finite predecessor world only, that `CALENDAR_DATE / precision = DAY` may be classified as Context `temporalSupport.type = INTERVAL`. This decision therefore creates the reviewed bridge rather than deriving authority from implementation behavior or allowing an adapter to infer it silently.
 
 ## Exact predecessor closure
 
