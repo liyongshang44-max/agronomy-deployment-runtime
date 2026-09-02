@@ -23,7 +23,7 @@ on:
       - 'acceptance/gold-recorded-operation-context-target-ref-farm-instance-projection-sustainable-corn/**'
       - 'acceptance/gold-recorded-operation-context-source-acquisition-availability-projection-sustainable-corn/**'
       - 'acceptance/gold-recorded-operation-context-calendar-date-local-civil-frame-binding-sustainable-corn/**'
-      - 'acceptance/gold-recorded-operation-context-historical-timezone-boundary-resolution-sustainable-corn/**'
+      - 'acceptance/gold-recorded-operation-context-historical-timezone-boundary-resolution-sustainable-corn/**'\n      - 'acceptance/gold-recorded-operation-context-datum-assembly-publication-sustainable-corn/**'
       - 'docs/decisions/DEC-0002-AGRONOMIC-POLICY-COMPILATION.md'
       - 'docs/decisions/DEC-0003-AGRONOMIC-RULE-V2-TEMPORAL-COORDINATION.md'
       - 'docs/decisions/DEC-0004-AGRONOMIC-POLICY-CONSTRAINT-COMPILATION.md'
@@ -50,7 +50,7 @@ on:
       - 'docs/decisions/DEC-0027-AGRONOMIC-CONTEXT-TARGET-REF-FARM-INSTANCE-PROJECTION.md'
       - 'docs/decisions/DEC-0028-AGRONOMIC-CONTEXT-SOURCE-ACQUISITION-AVAILABILITY-PROJECTION.md'
       - 'docs/decisions/DEC-0029-AGRONOMIC-CONTEXT-CALENDAR-DATE-LOCAL-CIVIL-FRAME-BINDING.md'
-      - 'docs/decisions/DEC-0030-AGRONOMIC-CONTEXT-HISTORICAL-TIMEZONE-BOUNDARY-RESOLUTION.md'
+      - 'docs/decisions/DEC-0030-AGRONOMIC-CONTEXT-HISTORICAL-TIMEZONE-BOUNDARY-RESOLUTION.md'\n      - 'docs/decisions/DEC-0031-AGRONOMIC-CONTEXT-DATUM-ASSEMBLY-AND-PUBLICATION-BINDING.md'
       - '.github/workflows/agronomic-policy-compilation.yml'
 
 permissions:
@@ -126,6 +126,7 @@ jobs:
       - name: Sustainable Corn context-calendar-date-local-civil-frame-binding Gold acceptance
         run: npm run test:gold-recorded-operation-context-calendar-date-local-civil-frame-binding-sustainable-corn
       - name: Sustainable Corn context-historical-timezone-boundary-resolution Gold acceptance
-        run: npm run test:gold-recorded-operation-context-historical-timezone-boundary-resolution-sustainable-corn
+        run: npm run test:gold-recorded-operation-context-historical-timezone-boundary-resolution-sustainable-corn\n      - name: Sustainable Corn context-datum-assembly-publication Gold acceptance
+        run: npm run test:gold-recorded-operation-context-datum-assembly-publication-sustainable-corn
       - name: KBS 2015 gold protocol rule, constraint, obligation, modality, goal, regimen, realization, conditional realization and source routing acceptance
         run: npm run test:gold-protocol-kbs-2015
