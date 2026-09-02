@@ -5878,7 +5878,7 @@ const dec0031WriterRole =
       tenantId: 'tenant-a',
       resourceType: 'CONTEXT_DATUM'
     },
-    audit: audit('evt-gold-dec0031-writer-role', dec0031Writer.principalId)
+    audit: audit('evt-gold-dec0031-writer-role', dec0031Writer.principalId, dec0031Writer.type)
   });
 
 function createDec0031WriteAuthorization(logicalId, actor = dec0031Writer) {
@@ -5895,7 +5895,7 @@ function createDec0031WriteAuthorization(logicalId, actor = dec0031Writer) {
   return recordAuthorizationDecision({
     ledger: env.ledger,
     decision,
-    audit: audit('evt-gold-dec0031-write-auth-' + logicalId, actor.principalId)
+    audit: audit('evt-gold-dec0031-write-auth-' + logicalId, actor.principalId, actor.type)
   });
 }
 
@@ -5914,7 +5914,7 @@ const dec0031ContextDatum =
     target: { organizationId: 'org-a', tenantId: 'tenant-a' },
     principal: dec0031Writer,
     authorizationDecisionAuditRef: dec0031WriteAuthorization.ref,
-    audit: audit('evt-gold-dec0031-context-datum-publication', dec0031Writer.principalId)
+    audit: audit('evt-gold-dec0031-context-datum-publication', dec0031Writer.principalId, dec0031Writer.type)
   });
 const dec0031ContextDatumValidated =
   validateAgronomicContextDatumAssemblyPublicationAuthority({
@@ -6027,7 +6027,7 @@ expectAssemblyError(
     principal: dec0031Writer,
     authorizationDecisionAuditRef: dec0031WriteAuthorization.ref,
     datum: { unit: 'day' },
-    audit: audit('evt-gold-dec0031-caller-override', dec0031Writer.principalId)
+    audit: audit('evt-gold-dec0031-caller-override', dec0031Writer.principalId, dec0031Writer.type)
   }),
   'AGRONOMIC_CONTEXT_DATUM_ASSEMBLY_CALLER_FIELD_OVERRIDE_FORBIDDEN'
 );
@@ -6045,7 +6045,7 @@ assert.throws(() =>
     target: { organizationId: 'org-a', tenantId: 'tenant-a' },
     principal: dec0031Writer,
     authorizationDecisionAuditRef: dec0031WrongIdAuthorization.ref,
-    audit: audit('evt-gold-dec0031-wrong-auth-id', dec0031Writer.principalId)
+    audit: audit('evt-gold-dec0031-wrong-auth-id', dec0031Writer.principalId, dec0031Writer.type)
   })
 );
 
@@ -6142,7 +6142,7 @@ const genericMatchingDatum = publishContextDatum({
   datum: structuredClone(AGRONOMIC_CONTEXT_DATUM_ASSEMBLY_FIRST_DATUM_TEMPLATE),
   principal: dec0031Writer,
   authorizationDecisionAuditRef: genericAuth.ref,
-  audit: audit('evt-gold-dec0031-generic-matching', dec0031Writer.principalId)
+  audit: audit('evt-gold-dec0031-generic-matching', dec0031Writer.principalId, dec0031Writer.type)
 });
 expectAssemblyError(
   () => validateAgronomicContextDatumAssemblyPublicationAuthority({
