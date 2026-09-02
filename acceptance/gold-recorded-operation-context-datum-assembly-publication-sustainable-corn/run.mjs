@@ -6154,8 +6154,21 @@ expectAssemblyError(
   'AGRONOMIC_CONTEXT_DATUM_ASSEMBLY_PUBLICATION_PROOF_REQUIRED'
 );
 
+const contextDatumRecords = env.ledger.exportSnapshot().records
+  .filter((record) => record.ref.kind === 'ContextDatum');
+assert.equal(contextDatumRecords.length, 2);
+assert.ok(
+  contextDatumRecords.some((record) =>
+    record.ref.semanticHash === dec0031ContextDatum.ref.semanticHash
+  )
+);
+assert.ok(
+  contextDatumRecords.some((record) =>
+    record.ref.semanticHash === genericMatchingDatum.ref.semanticHash
+  )
+);
+
 const forbiddenKinds = new Set([
-  'ContextDatum',
   'ContextManifest',
   'AuthorizedContextReference',
   'ResolvedContextDatumReceipt',
