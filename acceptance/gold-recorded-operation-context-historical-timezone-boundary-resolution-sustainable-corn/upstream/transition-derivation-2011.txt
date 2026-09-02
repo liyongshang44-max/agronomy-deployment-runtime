@@ -1,0 +1,18 @@
+DEC-0030 reviewed Gregorian transition derivation for 2011
+US spring rule: Mar Sun>=8 at 02:00 local, SAVE 1:00
+March 2011 Sundays: 6, 13, 20, 27
+First Sunday >= 8: 13
+Spring transition date: 2011-03-13
+US fall rule: Nov Sun>=1 at 02:00 local, SAVE 0
+November 2011 Sundays: 6, 13, 20, 27
+First Sunday >= 1: 6
+Fall transition date: 2011-11-06
+2011-05-03 is after 2011-03-13 and before 2011-11-06.
+Base offset: -06:00
+Daylight save: +01:00
+Effective offset: -05:00
+DST state: DAYLIGHT
+Local start: 2011-05-03T00:00:00-05:00
+Local end: 2011-05-04T00:00:00-05:00
+UTC start: 2011-05-03T05:00:00.000Z
+UTC end: 2011-05-04T05:00:00.000Z

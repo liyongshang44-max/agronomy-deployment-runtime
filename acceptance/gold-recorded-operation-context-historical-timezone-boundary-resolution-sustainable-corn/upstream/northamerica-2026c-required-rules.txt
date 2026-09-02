@@ -1,0 +1,12 @@
+# Rule	NAME	FROM	TO	-	IN	ON	AT	SAVE	LETTER/S
+Rule	US	2007	max	-	Mar	Sun>=8	2:00	1:00	D
+Rule	US	2007	max	-	Nov	Sun>=1	2:00	0	S
+# Zone	NAME		STDOFF	RULES	FORMAT	[UNTIL]
+Zone America/Chicago	-5:50:36 -	LMT	1883 Nov 18 18:00u
+			-6:00	US	C%sT	1920
+			-6:00	Chicago	C%sT	1936 Mar  1  2:00
+			-5:00	-	EST	1936 Nov 15  2:00
+			-6:00	Chicago	C%sT	1942
+			-6:00	US	C%sT	1946
+			-6:00	Chicago	C%sT	1967
+			-6:00	US	C%sT
