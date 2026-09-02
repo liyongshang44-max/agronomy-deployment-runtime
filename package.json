@@ -80,4 +80,4 @@
     "test:gold-recorded-operation-context-historical-timezone-boundary-resolution-sustainable-corn": "node acceptance/gold-recorded-operation-context-historical-timezone-boundary-resolution-sustainable-corn/run.mjs",
     "test:gold-recorded-operation-context-datum-assembly-publication-sustainable-corn": "node acceptance/gold-recorded-operation-context-datum-assembly-publication-sustainable-corn/run.mjs"
   }
-}\n
+}
