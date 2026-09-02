@@ -3355,8 +3355,8 @@ expectAvailabilityProjectionError(
   'AGRONOMIC_CONTEXT_SOURCE_ACQUISITION_AVAILABILITY_PROJECTION_VALUE_SOURCE_MISMATCH'
 );
 
-const artifactHashDrift = structuredClone(availabilityProjection.valueSource);
-artifactHashDrift.sourceArtifactContentHash = `sha256:${'f'.repeat(64)}`;
+const availabilityArtifactHashDrift = structuredClone(availabilityProjection.valueSource);
+availabilityArtifactHashDrift.sourceArtifactContentHash = `sha256:${'f'.repeat(64)}`;
 expectAvailabilityProjectionError(
   () =>
     publishAgronomicContextSourceAcquisitionAvailabilityProjectionReviewDecision({
@@ -3364,7 +3364,7 @@ expectAvailabilityProjectionError(
       sourceRegistry: env.sourceRegistry,
       logicalId: 'review.gold.dec0028-artifact-hash-drift',
       version: '1',
-      projection: buildAvailabilityProjection({ valueSource: artifactHashDrift }),
+      projection: buildAvailabilityProjection({ valueSource: availabilityArtifactHashDrift }),
       disposition:
         'ACCEPT_CONTEXT_SOURCE_ACQUISITION_AVAILABILITY_PROJECTION',
       reviewerPrincipal: normalizationReviewer,
