@@ -1,6 +1,6 @@
 # DEC-0028 — Agronomic Context Source-Acquisition Availability Projection
 
-Status: **PROPOSED**
+Status: **ACCEPTED**
 
 Date: 2026-09-02
 
