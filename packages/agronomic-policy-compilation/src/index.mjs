@@ -540,3 +540,27 @@ export {
   publishAgronomicContextHistoricalTimezoneBoundaryResolutionCompilation,
   validateAgronomicContextHistoricalTimezoneBoundaryResolutionCompilationAuthority
 } from './context-historical-timezone-boundary-resolution-authority.mjs';
+
+export {
+  AGRONOMIC_CONTEXT_DATUM_ASSEMBLY_CONTRACT_VERSION,
+  AGRONOMIC_CONTEXT_DATUM_ASSEMBLY_COMPILATION_CONTRACT_VERSION,
+  AGRONOMIC_CONTEXT_DATUM_ASSEMBLY_FIRST_SOURCE_REF,
+  AGRONOMIC_CONTEXT_DATUM_ASSEMBLY_FIRST_CONTENT_HASH,
+  AGRONOMIC_CONTEXT_DATUM_ASSEMBLY_FIRST_DATUM_TEMPLATE,
+  AGRONOMIC_CONTEXT_DATUM_ASSEMBLY_PREDECESSOR_KEYS,
+  AgronomicContextDatumAssemblyCompilationError,
+  agronomicContextDatumAssemblyCompilationAuthorityRefs,
+  agronomicContextDatumAssemblyHash,
+  normalizeAgronomicContextDatumAssembly,
+  normalizeAgronomicContextDatumAssemblyCompilation
+} from './context-datum-assembly-contract.mjs';
+
+export {
+  AGRONOMIC_CONTEXT_DATUM_ASSEMBLY_REVIEW_DISPOSITIONS,
+  AGRONOMIC_CONTEXT_DATUM_ASSEMBLY_REQUIRED_REVIEW_CHECKS,
+  publishAgronomicContextDatumAssemblyReviewDecision,
+  publishAgronomicContextDatumAssemblyCompilation,
+  validateAgronomicContextDatumAssemblyCompilationAuthority,
+  publishAgronomicContextDatumFromAssembly,
+  validateAgronomicContextDatumAssemblyPublicationAuthority
+} from './context-datum-assembly-authority.mjs';
