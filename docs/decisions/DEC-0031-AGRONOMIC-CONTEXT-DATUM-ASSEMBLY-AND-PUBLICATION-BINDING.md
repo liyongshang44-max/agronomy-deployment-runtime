@@ -1,6 +1,6 @@
 # DEC-0031 — Agronomic ContextDatum Assembly and Publication Binding
 
-Status: **PROPOSED**
+Status: **ACCEPTED**
 
 Date: 2026-09-02
 
