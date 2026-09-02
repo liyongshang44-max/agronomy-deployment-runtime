@@ -1,6 +1,6 @@
 # DEC-0030 — Agronomic Context Historical Timezone Boundary Resolution
 
-Status: **PROPOSED**
+Status: **ACCEPTED**
 
 Date: 2026-09-02
 
