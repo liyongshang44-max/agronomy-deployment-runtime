@@ -1,6 +1,6 @@
 # DEC-0029 — Agronomic Context Calendar-Date Local-Civil Frame Binding
 
-Status: **PROPOSED**
+Status: **ACCEPTED**
 
 Date: 2026-09-02
 
