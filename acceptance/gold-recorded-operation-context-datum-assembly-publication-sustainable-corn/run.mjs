@@ -161,13 +161,13 @@ import {
   publishContextDatum
 } from '../../packages/context-contract/src/index.mjs';
 import {
-  authorizeContextWrite,
   authorizeKnowledgeInspection,
   createPrincipal,
   publishBuiltinRoleAssignment,
   publishKnowledgeGovernancePolicy,
   recordAuthorizationDecision
 } from '../../packages/authorization/src/index.mjs';
+import { authorizeContextWrite } from '../../packages/authorization/src/context-write.mjs';
 import { sourceReviewResourceId } from '../../packages/knowledge-registry/src/source-faithful.mjs';
 import { sourceContentHash } from '../../packages/source-registry/src/index.mjs';
 import { audit, createEnvironment } from '../derived-knowledge/fixture.mjs';
