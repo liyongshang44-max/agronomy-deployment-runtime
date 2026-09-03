@@ -564,3 +564,23 @@ export {
   publishAgronomicContextDatumFromAssembly,
   validateAgronomicContextDatumAssemblyPublicationAuthority
 } from './context-datum-assembly-authority.mjs';
+
+export {
+  AGRONOMIC_DECISION_PROBLEM_FARM_TARGET_BINDING_CONTRACT_VERSION,
+  AGRONOMIC_DECISION_PROBLEM_FARM_TARGET_BINDING_COMPILATION_CONTRACT_VERSION,
+  AgronomicDecisionProblemFarmTargetBindingCompilationError,
+  agronomicDecisionProblemFarmTargetBindingCompilationAuthorityRefs,
+  agronomicDecisionProblemFarmTargetBindingHash,
+  normalizeAgronomicDecisionProblemFarmTargetBinding,
+  normalizeAgronomicDecisionProblemFarmTargetBindingCompilation
+} from './decision-problem-farm-target-binding-contract.mjs';
+
+export {
+  AGRONOMIC_DECISION_PROBLEM_FARM_TARGET_BINDING_REVIEW_DISPOSITIONS,
+  AGRONOMIC_DECISION_PROBLEM_FARM_TARGET_BINDING_REQUIRED_REVIEW_CHECKS,
+  publishAgronomicDecisionProblemFarmTargetBindingReviewDecision,
+  publishAgronomicDecisionProblemFarmTargetBindingCompilation,
+  validateAgronomicDecisionProblemFarmTargetBindingCompilationAuthority,
+  publishAgronomicDecisionProblemWithFarmTargetBinding,
+  validateAgronomicDecisionProblemFarmTargetPublicationAuthority
+} from './decision-problem-farm-target-binding-authority.mjs';

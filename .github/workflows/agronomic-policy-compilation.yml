@@ -25,6 +25,7 @@ on:
       - 'acceptance/gold-recorded-operation-context-calendar-date-local-civil-frame-binding-sustainable-corn/**'
       - 'acceptance/gold-recorded-operation-context-historical-timezone-boundary-resolution-sustainable-corn/**'
       - 'acceptance/gold-recorded-operation-context-datum-assembly-publication-sustainable-corn/**'
+      - 'acceptance/gold-recorded-operation-decision-problem-farm-target-binding-sustainable-corn/**'
       - 'docs/decisions/DEC-0002-AGRONOMIC-POLICY-COMPILATION.md'
       - 'docs/decisions/DEC-0003-AGRONOMIC-RULE-V2-TEMPORAL-COORDINATION.md'
       - 'docs/decisions/DEC-0004-AGRONOMIC-POLICY-CONSTRAINT-COMPILATION.md'
@@ -53,6 +54,7 @@ on:
       - 'docs/decisions/DEC-0029-AGRONOMIC-CONTEXT-CALENDAR-DATE-LOCAL-CIVIL-FRAME-BINDING.md'
       - 'docs/decisions/DEC-0030-AGRONOMIC-CONTEXT-HISTORICAL-TIMEZONE-BOUNDARY-RESOLUTION.md'
       - 'docs/decisions/DEC-0031-AGRONOMIC-CONTEXT-DATUM-ASSEMBLY-AND-PUBLICATION-BINDING.md'
+      - 'docs/decisions/DEC-0032-AGRONOMIC-DECISION-PROBLEM-FARM-TARGET-BINDING-AND-DEPLOYMENT-INTENT-SEPARATION.md'
       - '.github/workflows/agronomic-policy-compilation.yml'
 
 permissions:
@@ -131,5 +133,7 @@ jobs:
         run: npm run test:gold-recorded-operation-context-historical-timezone-boundary-resolution-sustainable-corn
       - name: Sustainable Corn context-datum-assembly-publication Gold acceptance
         run: npm run test:gold-recorded-operation-context-datum-assembly-publication-sustainable-corn
+      - name: Sustainable Corn decision-problem-farm-target-binding Gold acceptance
+        run: npm run test:gold-recorded-operation-decision-problem-farm-target-binding-sustainable-corn
       - name: KBS 2015 gold protocol rule, constraint, obligation, modality, goal, regimen, realization, conditional realization and source routing acceptance
         run: npm run test:gold-protocol-kbs-2015
