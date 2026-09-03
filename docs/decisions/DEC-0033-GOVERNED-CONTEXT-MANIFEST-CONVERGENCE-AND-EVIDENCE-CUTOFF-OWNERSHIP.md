@@ -1,6 +1,6 @@
 # DEC-0033 — Governed ContextManifest Convergence and Evidence-Cutoff Ownership
 
-Status: **PROPOSED**
+Status: **ACCEPTED**
 
 Date: 2026-09-03
 
