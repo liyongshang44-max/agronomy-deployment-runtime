@@ -27,6 +27,7 @@ on:
       - 'acceptance/gold-recorded-operation-context-datum-assembly-publication-sustainable-corn/**'
       - 'acceptance/gold-recorded-operation-decision-problem-farm-target-binding-sustainable-corn/**'
       - 'acceptance/gold-recorded-operation-context-manifest-governed-world-sustainable-corn/**'
+      - 'acceptance/real-source-runtime-composition-sustainable-corn/**'
       - 'docs/decisions/DEC-0002-AGRONOMIC-POLICY-COMPILATION.md'
       - 'docs/decisions/DEC-0003-AGRONOMIC-RULE-V2-TEMPORAL-COORDINATION.md'
       - 'docs/decisions/DEC-0004-AGRONOMIC-POLICY-CONSTRAINT-COMPILATION.md'
@@ -138,5 +139,7 @@ jobs:
         run: npm run test:gold-recorded-operation-decision-problem-farm-target-binding-sustainable-corn
       - name: Sustainable Corn governed ContextManifest Gold acceptance
         run: npm run test:gold-recorded-operation-context-manifest-governed-world-sustainable-corn
+      - name: Sustainable Corn real-source A05-D01 runtime composition proof
+        run: npm run test:real-source-runtime-composition-sustainable-corn
       - name: KBS 2015 gold protocol rule, constraint, obligation, modality, goal, regimen, realization, conditional realization and source routing acceptance
         run: npm run test:gold-protocol-kbs-2015
