@@ -6217,3 +6217,21 @@ console.log(JSON.stringify({
   ],
   forbiddenDownstreamAuthorityRecordsCreated: forbiddenRecords.length
 }, null, 2));
+
+export {
+  env,
+  historicalTimezoneRuleEvidence,
+  normalizationReviewer,
+  parentSourceAuthorization,
+  semanticSourceAuthorization,
+  targetIdentityAuthorization,
+  dec0031SpatialPublished,
+  dec0031SpatialValidated,
+  dec0031SpatialClassification,
+  dec0031SpatialReview,
+  buildDec0031SpatialCompilation,
+  dec0031AssemblyPublished,
+  dec0031ContextDatum,
+  dec0031ContextDatumValidated,
+  genericMatchingDatum
+};
