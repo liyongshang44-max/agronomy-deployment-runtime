@@ -584,3 +584,9 @@ export {
   publishAgronomicDecisionProblemWithFarmTargetBinding,
   validateAgronomicDecisionProblemFarmTargetPublicationAuthority
 } from './decision-problem-farm-target-binding-authority.mjs';
+
+export {
+  AgronomicContextManifestGovernedWorldError,
+  publishAgronomicContextManifestFromGovernedWorld,
+  validateAgronomicContextManifestGovernedWorldAuthority
+} from './context-manifest-governed-world-authority.mjs';
