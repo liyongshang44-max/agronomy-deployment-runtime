@@ -479,7 +479,7 @@ const plan = compileRuntimePlan({
 });
 assert.equal(plan.openRequirements.length, 0);
 assert.equal(plan.alternativePaths.length, 1);
-assert.equal(plan.alternativePaths[0].compilerState, 'READY');
+assert.equal(plan.alternativePaths[0].compilerState, 'STRUCTURALLY_COMPLETE');
 
 const eligibility = publishRuntimeEligibility({
   ledger: env.ledger,
