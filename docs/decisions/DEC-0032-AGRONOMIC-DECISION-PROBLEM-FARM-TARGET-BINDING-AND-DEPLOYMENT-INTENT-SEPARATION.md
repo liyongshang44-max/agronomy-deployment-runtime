@@ -1,6 +1,6 @@
 # DEC-0032 — Agronomic DecisionProblem FARM Target Binding and Deployment-Intent Separation
 
-Status: **PROPOSED**
+Status: **ACCEPTED**
 
 Date: 2026-09-03
 
