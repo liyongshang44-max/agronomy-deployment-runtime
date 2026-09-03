@@ -544,7 +544,7 @@ assert.deepEqual(
 );
 assert.equal(
   bindingValidated.semanticPayload.correctnessClaim,
-  'NONE_RUNTIME_BINDING_IS_COMPOSITION_NOT_CORRECTNESS'
+  'NONE_BINDING_PROVES_WHAT_WAS_USED_NOT_SCIENTIFIC_CORRECTNESS'
 );
 
 const forbiddenKinds = new Set([
