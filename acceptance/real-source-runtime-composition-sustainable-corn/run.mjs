@@ -63,6 +63,8 @@ const RELEASE_TARGET = Object.freeze({
   programId: 'pilot-a'
 });
 const FIXTURE_USE = Object.freeze({ use: 'MACHINE_ACCEPTANCE_FIXTURE' });
+const NORMALIZED_DECISION_LOGICAL_TIME =
+  new Date(deterministicDecisionIntent.logicalTime).toISOString();
 
 let seq = 0;
 function runtimeAudit(principal, suffix, occurredAt = '2026-08-31T01:00:00.000Z') {
@@ -106,7 +108,7 @@ assert.equal(
 );
 assert.equal(
   validatedManifest.manifest.semanticPayload.logicalTime,
-  deterministicDecisionIntent.logicalTime
+  NORMALIZED_DECISION_LOGICAL_TIME
 );
 assert.deepEqual(
   validatedManifest.manifest.semanticPayload.datumRefs,
@@ -527,7 +529,7 @@ assert.equal(
 );
 assert.equal(
   bindingValidated.semanticPayload.logicalTime,
-  deterministicDecisionIntent.logicalTime
+  NORMALIZED_DECISION_LOGICAL_TIME
 );
 assert.equal(
   bindingValidated.semanticPayload.evidenceCutoff,
@@ -567,7 +569,7 @@ console.log(JSON.stringify({
     decisionProblemRef: decisionWorld.published.ref,
     contextManifestRef: manifest.ref,
     sourceBackedFarmId: exactTargetId,
-    logicalTime: deterministicDecisionIntent.logicalTime,
+    logicalTime: NORMALIZED_DECISION_LOGICAL_TIME,
     evidenceCutoff,
     replayClass: validatedManifest.manifest.semanticPayload.replayClass
   },
