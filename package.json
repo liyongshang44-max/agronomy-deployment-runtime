@@ -80,6 +80,7 @@
     "test:gold-recorded-operation-context-historical-timezone-boundary-resolution-sustainable-corn": "node acceptance/gold-recorded-operation-context-historical-timezone-boundary-resolution-sustainable-corn/run.mjs",
     "test:gold-recorded-operation-context-datum-assembly-publication-sustainable-corn": "node acceptance/gold-recorded-operation-context-datum-assembly-publication-sustainable-corn/run.mjs",
     "test:gold-recorded-operation-decision-problem-farm-target-binding-sustainable-corn": "node acceptance/gold-recorded-operation-decision-problem-farm-target-binding-sustainable-corn/run.mjs",
-    "test:gold-recorded-operation-context-manifest-governed-world-sustainable-corn": "node acceptance/gold-recorded-operation-context-manifest-governed-world-sustainable-corn/run.mjs"
+    "test:gold-recorded-operation-context-manifest-governed-world-sustainable-corn": "node acceptance/gold-recorded-operation-context-manifest-governed-world-sustainable-corn/run.mjs",
+    "test:real-source-runtime-composition-sustainable-corn": "node acceptance/real-source-runtime-composition-sustainable-corn/run.mjs"
   }
 }
