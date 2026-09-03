@@ -911,3 +911,14 @@ console.log(JSON.stringify({
   ],
   forbiddenDownstreamAuthorityRecordsCreated: forbiddenRecords.length
 }, null, 2));
+
+export {
+  env,
+  historicalTimezoneRuleEvidence,
+  decisionWorld,
+  manifest,
+  validatedManifest,
+  deterministicDecisionIntent,
+  evidenceCutoff,
+  exactTargetId
+};
