@@ -1,0 +1,51 @@
+{
+  "adapter_contract": "adr.acceptance.kbs-public-context-adapter.v1",
+  "world": "KBS_SOYBEAN_15IN_2015_RETROSPECTIVE_PLANTING_TARGET",
+  "retained_at": "2026-09-04T10:30:00.000Z",
+  "evaluation_slice": {
+    "kind": "RETROSPECTIVE_OPERATION_DATE_SLICE",
+    "start": "2015-05-21T00:00:00.000Z",
+    "end": "2015-05-22T00:00:00.000Z",
+    "representative_effective_at": "2015-05-21T12:00:00.000Z"
+  },
+  "normalized_context": {
+    "crop.code": {
+      "type": "CATEGORY",
+      "category": "soybean"
+    },
+    "jurisdiction.region": {
+      "type": "CATEGORY",
+      "category": "michigan"
+    },
+    "planting.row_spacing_in": {
+      "type": "DECIMAL",
+      "decimal": "15"
+    }
+  },
+  "source_evidence": [
+    {
+      "locator": "https://aglog.kbs.msu.edu/observations/3187",
+      "observation_date": "2015-05-21",
+      "crop_label": "soybeans",
+      "row_spacing_in": "15",
+      "historical_operation_planting_population_seeds_per_acre": "180000",
+      "areas": [
+        "Resource_Gradient-Irrigated",
+        "Resource_Gradient_Non-Irrigated"
+      ],
+      "authority_use": "TARGET_IDENTITY_AND_ROW_SPACING_ONLY"
+    },
+    {
+      "locator": "https://lter.kbs.msu.edu/research/site-description-and-maps/general-description/",
+      "site_name": "Kellogg Biological Station",
+      "region_label": "southwest Michigan",
+      "authority_use": "JURISDICTION_REGION_ONLY"
+    }
+  ],
+  "nonclaims": [
+    "NO_TARGET_AUTHORITY_FOR_RECOMMENDED_PLANTING_POPULATION",
+    "HISTORICAL_OPERATION_180000_IS_NOT_RECOMMENDATION_AUTHORITY",
+    "NO_FIELD_EXECUTION_AUTHORITY",
+    "NO_OUTCOME_AUTHORITY"
+  ]
+}
