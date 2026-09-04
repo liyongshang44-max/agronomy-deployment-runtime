@@ -6,6 +6,7 @@ import {
   GEOX_TARGET_AUTHORITY_RESOLUTION_CLASS,
   GEOX_TARGET_AUTHORITY_RESOLUTION_RECEIPT_VERSION,
   GeoxTargetAuthoritySnapshotStore,
+  createGitHubPublicAuthorityTransport,
   replayGeoxTargetAuthorityResolution,
   resolveGeoxTargetAuthority
 } from '../../adapters/geox/src/target-authority-resolver.mjs';
@@ -26,10 +27,20 @@ function toWireRef(ref) {
   });
 }
 
+const token = process.env.GITHUB_TOKEN;
+const authenticatedFetch = async (url, init = {}) => globalThis.fetch(url, {
+  ...init,
+  headers: {
+    ...(init.headers ?? {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {})
+  }
+});
+const transport = createGitHubPublicAuthorityTransport({ fetchImpl: authenticatedFetch });
 const snapshotStore = new GeoxTargetAuthoritySnapshotStore();
 const live = await resolveGeoxTargetAuthority({
   ref: 'main',
   resolvedAt: '2026-09-04T17:20:00.000Z',
+  transport,
   snapshotStore
 });
 
