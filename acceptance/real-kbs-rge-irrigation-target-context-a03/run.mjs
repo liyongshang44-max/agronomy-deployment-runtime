@@ -47,3 +47,5 @@ console.log(JSON.stringify({
   decisionResultCreated: false,
   outcomeCreated: false
 }, null, 2));
+
+await import('./run-runtime-composition-v1.mjs');
