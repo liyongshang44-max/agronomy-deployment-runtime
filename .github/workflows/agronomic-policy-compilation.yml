@@ -29,6 +29,7 @@ on:
       - 'acceptance/gold-recorded-operation-context-manifest-governed-world-sustainable-corn/**'
       - 'acceptance/real-source-runtime-composition-sustainable-corn/**'
       - 'acceptance/real-kbs-target-incompatibility-sustainable-corn/**'
+      - 'acceptance/real-kbs-t6-target-context-a03/**'
       - 'docs/decisions/DEC-0002-AGRONOMIC-POLICY-COMPILATION.md'
       - 'docs/decisions/DEC-0003-AGRONOMIC-RULE-V2-TEMPORAL-COORDINATION.md'
       - 'docs/decisions/DEC-0004-AGRONOMIC-POLICY-CONSTRAINT-COMPILATION.md'
@@ -144,5 +145,7 @@ jobs:
         run: npm run test:real-source-runtime-composition-sustainable-corn
       - name: Real KBS QualifiedKnowledge vs Sustainable Corn target incompatibility proof
         run: node acceptance/real-kbs-target-incompatibility-sustainable-corn/run.mjs
+      - name: Real KBS T6 target context via A03/A04 proof
+        run: node acceptance/real-kbs-t6-target-context-a03/run.mjs
       - name: KBS 2015 gold protocol rule, constraint, obligation, modality, goal, regimen, realization, conditional realization and source routing acceptance
         run: npm run test:gold-protocol-kbs-2015
