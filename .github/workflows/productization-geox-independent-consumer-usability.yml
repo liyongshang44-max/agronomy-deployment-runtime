@@ -54,7 +54,9 @@ jobs:
       - name: Independent consumer integrity invariants
         run: node acceptance/geox-independent-consumer-usability/integrity.mjs
       - name: Clean consumer bundle verify install and governed message projection
-        run: node acceptance/geox-independent-consumer-usability/run.mjs | tee "$RUNNER_TEMP/geox-independent-consumer-usability.json"
+        run: |
+          set -o pipefail
+          node acceptance/geox-independent-consumer-usability/run.mjs | tee "$RUNNER_TEMP/geox-independent-consumer-usability.json"
       - name: Upload consumer usability evidence only
         uses: actions/upload-artifact@v4
         with:

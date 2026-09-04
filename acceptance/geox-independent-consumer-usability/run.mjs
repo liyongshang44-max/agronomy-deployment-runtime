@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import {
   copyFileSync,
-  cpSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -11,7 +10,7 @@ import {
   writeFileSync
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, join } from 'node:path';
+import { join } from 'node:path';
 
 import { createResultSinkEvent } from '../../sdks/typescript/src/index.mjs';
 import { buildGeoxConsumerReleaseBundle } from '../../adapters/geox/scripts/build-consumer-release-bundle.mjs';
@@ -146,8 +145,9 @@ try {
 
   const tarballName = readdirSync(consumerBundleDir).find((name) => name.endsWith('.tgz'));
   assert.ok(tarballName);
+  const absoluteTarballPath = join(consumerBundleDir, tarballName);
   const install = run('npm', [
-    'install', '--ignore-scripts', '--no-audit', '--no-fund', '--offline', join('bundle', tarballName)
+    'install', '--ignore-scripts', '--no-audit', '--no-fund', '--offline', absoluteTarballPath
   ], {
     cwd: consumerDir,
     env: {
