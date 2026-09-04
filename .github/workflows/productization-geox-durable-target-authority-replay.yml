@@ -1,0 +1,39 @@
+name: ADR Productization — GEOX Durable Target Authority Replay
+
+on:
+  push:
+    branches:
+      - 'feat/geox-durable-target-authority-replay-*'
+    paths:
+      - 'adapters/geox/src/durable-target-authority-store.mjs'
+      - 'acceptance/real-kbs-t4r1-durable-authority-replay/**'
+      - '.github/workflows/productization-geox-durable-target-authority-replay.yml'
+  pull_request:
+    paths:
+      - 'adapters/geox/src/durable-target-authority-store.mjs'
+      - 'acceptance/real-kbs-t4r1-durable-authority-replay/**'
+      - '.github/workflows/productization-geox-durable-target-authority-replay.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  geox_durable_target_authority_replay:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Report runtime
+        run: node --version
+      - name: Existing replayable GEOX authority resolver integrity
+        run: node acceptance/real-kbs-t4r1-live-authority-resolution/integrity.mjs
+      - name: Durable store fail-closed integrity
+        run: node acceptance/real-kbs-t4r1-durable-authority-replay/integrity.mjs
+      - name: Live process A to offline process B exact durable replay
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node acceptance/real-kbs-t4r1-durable-authority-replay/run.mjs
