@@ -20,6 +20,7 @@ console.log(JSON.stringify({
     cropCode: adapterResponse.normalized_context['crop.code'].category,
     siteName: adapterResponse.normalized_context['site.name'].string,
     spatialSupportType: 'EXPERIMENTAL_TREATMENT',
+    geometryRefCreated: validatedDatums.some((item) => 'geometryRef' in item.semanticPayload.spatialSupport),
     evaluationSlice: adapterResponse.evaluation_slice,
     targetRefIntentionallyNotPromotedToFarmOrField: true
   },
@@ -38,4 +39,5 @@ console.log(JSON.stringify({
 }, null, 2));
 
 await import('./run-positive-applicability-v2.mjs');
+await import('./run-applicability-mutations-v1.mjs');
 await import('./run-runtime-composition-v1.mjs');
