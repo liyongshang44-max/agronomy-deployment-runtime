@@ -1,0 +1,24 @@
+{
+  "contract_version": "adr.geox-consumer-release-bundle-build.v1",
+  "bundle_name": "adr-geox-consumer-release-bundle",
+  "package_name": "@adr/geox-adapter",
+  "package_version": "0.1.0-development",
+  "source_repository": "liyongshang44-max/agronomy-deployment-runtime",
+  "consumer_artifact_manifest": "adapters/geox/consumer-artifact.manifest.json",
+  "release_status": "QUALIFIED_BUNDLE_CANDIDATE_NOT_PUBLISHED",
+  "authority_ceiling": {
+    "architecture_authority": "NONE_RELEASE_BUNDLE_IS_NOT_ARCHITECTURE_AUTHORITY",
+    "domain_authority": "NONE_RELEASE_BUNDLE_IS_NOT_DOMAIN_AUTHORITY",
+    "publication_authority": "NONE_NO_GITHUB_RELEASE_TAG_OR_REGISTRY_PUBLICATION",
+    "commercial_validation": "NOT_ESTABLISHED",
+    "human_approval_authority": "NONE",
+    "dispatch_authority": "NONE",
+    "machine_execution_authority": "NONE"
+  },
+  "prohibited_publication_actions": [
+    "GITHUB_RELEASE",
+    "GIT_TAG",
+    "NPM_PUBLISH"
+  ],
+  "authority_claim": "NONE_RELEASE_BUNDLE_PROVENANCE_ONLY"
+}
