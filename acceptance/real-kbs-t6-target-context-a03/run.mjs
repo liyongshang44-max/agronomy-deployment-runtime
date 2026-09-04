@@ -37,8 +37,8 @@ import { AGRONOMIC_POLICY_REQUIRED_KNOWLEDGE_USE } from '../../packages/agronomi
 
 const OWNERSHIP = Object.freeze({ organizationId: 'org-a', tenantId: 'tenant-a' });
 const PROVIDER_ID = 'kbs-public-context-adapter-v1';
-const ADAPTER_LOCATOR = 'urn:adr:acceptance:kbs-public-context-adapter:v1:mcse-t6-2015';
 const EXPECTED_PROVIDER_HASH = 'sha256:3821a5620b99d0892995fa3ab67241515bba776d80f188641f79ea83e634bc2d';
+const ADAPTER_LOCATOR = `urn:adr:acceptance:kbs-public-context-adapter:v1:mcse-t6-2015:${EXPECTED_PROVIDER_HASH}`;
 const AVAILABLE_AT = '2026-09-04T07:00:00.000Z';
 const RESOLVED_AT = '2026-09-04T07:10:00.000Z';
 const EVIDENCE_CUTOFF = '2026-09-04T07:20:00.000Z';
@@ -189,8 +189,9 @@ for (const [semanticId, value] of semanticEntries) {
         connectionId: PROVIDER_ID,
         principalScope: {
           ...OWNERSHIP,
-          contextWorld: 'KBS_MCSE_T6_2015',
-          sourceClass: 'PUBLIC_KBS_CONTEXT_ADAPTER'
+          subjectId: 'KBS_MCSE_T6_2015',
+          resourceIds: ['kbs:mcse:t6'],
+          semanticIds: [semanticId]
         }
       }
     },
@@ -387,6 +388,7 @@ console.log(JSON.stringify({
     adapterContract: adapterResponse.adapter_contract,
     providerId: PROVIDER_ID,
     providerResponseHash: providerHash,
+    contentAddressedLocator: ADAPTER_LOCATOR,
     retainedSnapshotCount: snapshotStore.count(),
     sourceEvidenceLocators: adapterResponse.source_evidence.map((item) => item.locator)
   },
