@@ -1,0 +1,47 @@
+name: ADR Productization — GEOX Consumer Artifact
+
+on:
+  push:
+    branches:
+      - 'feat/geox-consumer-artifact-package-*'
+    paths:
+      - 'adapters/geox/consumer-artifact.manifest.json'
+      - 'adapters/geox/scripts/build-consumer-artifact.mjs'
+      - 'adapters/geox/src/**'
+      - 'sdks/typescript/src/integration-contracts.mjs'
+      - 'acceptance/geox-consumer-artifact/**'
+      - '.github/workflows/productization-geox-consumer-artifact.yml'
+  pull_request:
+    paths:
+      - 'adapters/geox/consumer-artifact.manifest.json'
+      - 'adapters/geox/scripts/build-consumer-artifact.mjs'
+      - 'adapters/geox/src/**'
+      - 'sdks/typescript/src/integration-contracts.mjs'
+      - 'acceptance/geox-consumer-artifact/**'
+      - '.github/workflows/productization-geox-consumer-artifact.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  geox_consumer_artifact:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Report runtime
+        run: |
+          node --version
+          npm --version
+      - name: Existing GEOX adapter acceptance
+        run: npm run test:geox-adapter
+      - name: Existing replayable authority resolver integrity
+        run: node acceptance/real-kbs-t4r1-live-authority-resolution/integrity.mjs
+      - name: Existing durable authority store integrity
+        run: node acceptance/real-kbs-t4r1-durable-authority-replay/integrity.mjs
+      - name: Build install and consume standalone GEOX artifact
+        run: node acceptance/geox-consumer-artifact/run.mjs

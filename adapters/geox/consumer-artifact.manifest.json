@@ -1,0 +1,30 @@
+{
+  "contract_version": "adr.geox-consumer-artifact-build.v1",
+  "package_name": "@adr/geox-adapter",
+  "package_version": "0.1.0-development",
+  "private": true,
+  "node_engine": ">=24 <25",
+  "source_files": [
+    "decision-result-sink.mjs",
+    "durable-target-authority-store.mjs",
+    "index.mjs",
+    "target-authority-resolver.mjs",
+    "target-correspondence.mjs",
+    "target-identity-token.mjs"
+  ],
+  "exports": {
+    ".": "./src/index.mjs",
+    "./decision-result-sink": "./src/decision-result-sink.mjs",
+    "./durable-target-authority-store": "./src/durable-target-authority-store.mjs",
+    "./target-authority-resolver": "./src/target-authority-resolver.mjs",
+    "./target-correspondence": "./src/target-correspondence.mjs",
+    "./target-identity-token": "./src/target-identity-token.mjs"
+  },
+  "bundled_dependency": {
+    "source": "sdks/typescript/src/integration-contracts.mjs",
+    "artifact_path": "src/integration-contracts.mjs",
+    "rewrite_from": "../../../sdks/typescript/src/index.mjs",
+    "rewrite_to": "./integration-contracts.mjs"
+  },
+  "authority_claim": "NONE_PACKAGING_ONLY_NO_NEW_ADR_OR_GEOX_AUTHORITY"
+}
