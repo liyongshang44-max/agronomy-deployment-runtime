@@ -1,0 +1,41 @@
+name: ADR Productization — GEOX Target Identity Token
+
+on:
+  push:
+    branches:
+      - 'test/productization-geox-target-identity-token-*'
+    paths:
+      - 'adapters/geox/src/target-identity-token.mjs'
+      - 'acceptance/geox-target-identity-token/**'
+      - 'acceptance/gold-recorded-operation-decision-problem-farm-target-binding-sustainable-corn/**'
+      - 'sdks/typescript/src/**'
+      - '.github/workflows/productization-geox-target-identity-token.yml'
+  pull_request:
+    paths:
+      - 'adapters/geox/src/target-identity-token.mjs'
+      - 'acceptance/geox-target-identity-token/**'
+      - 'acceptance/gold-recorded-operation-decision-problem-farm-target-binding-sustainable-corn/**'
+      - 'sdks/typescript/src/**'
+      - '.github/workflows/productization-geox-target-identity-token.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  geox_target_identity_token:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Report runtime
+        run: node --version
+      - name: Existing GEOX DecisionResult sink regression proof
+        run: node acceptance/geox-decision-result-sink/integrity.mjs
+      - name: Real Sustainable Corn DEC-0032 farm target to GEOX opaque token
+        run: node acceptance/geox-target-identity-token/run.mjs
+      - name: GEOX target identity namespace fail-closed integrity
+        run: node acceptance/geox-target-identity-token/integrity.mjs
