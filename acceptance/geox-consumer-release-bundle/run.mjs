@@ -23,9 +23,14 @@ function run(command, args, options = {}) {
   return result;
 }
 
-const sourceCommit = run('git', ['rev-parse', 'HEAD']).stdout.trim();
-assert.match(sourceCommit, /^[0-9a-f]{40}$/);
+function qualifiedSourceCommit() {
+  const explicit = process.env.ADR_RELEASE_SOURCE_COMMIT?.trim();
+  const value = explicit || run('git', ['rev-parse', 'HEAD']).stdout.trim();
+  assert.match(value, /^[0-9a-f]{40}$/, 'release source commit must be exact lowercase 40-hex');
+  return value;
+}
 
+const sourceCommit = qualifiedSourceCommit();
 const root = mkdtempSync(join(tmpdir(), 'adr-geox-consumer-release-bundle-'));
 try {
   const buildA = buildGeoxConsumerReleaseBundle({ outputDir: join(root, 'bundle-a'), sourceCommit });

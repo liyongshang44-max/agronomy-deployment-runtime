@@ -25,6 +25,8 @@ A qualified bundle contains exactly:
 
 No wall-clock build timestamp is emitted. Two builds from the same exact source commit must produce identical package tarball, provenance bytes, checksum manifest and verification evidence hash.
 
+For pull-request qualification, GitHub checks out a synthetic merge commit. That merge ref is deliberately excluded from release provenance. The workflow passes `github.event.pull_request.head.sha` as `ADR_RELEASE_SOURCE_COMMIT`; push qualification uses `github.sha`. Therefore the recorded source commit is always the actual candidate source head being qualified, not GitHub's temporary PR merge object.
+
 ## Verification
 
 The verifier rejects:

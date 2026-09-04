@@ -41,9 +41,16 @@ function expectCode(fn, code) {
   assert.throws(fn, (error) => error?.code === code, `expected ${code}`);
 }
 
-const git = spawnSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' });
-assert.equal(git.status, 0);
-const sourceCommit = git.stdout.trim();
+function qualifiedSourceCommit() {
+  const explicit = process.env.ADR_RELEASE_SOURCE_COMMIT?.trim();
+  if (explicit) return explicit;
+  const git = spawnSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' });
+  assert.equal(git.status, 0);
+  return git.stdout.trim();
+}
+
+const sourceCommit = qualifiedSourceCommit();
+assert.match(sourceCommit, /^[0-9a-f]{40}$/);
 const root = mkdtempSync(join(tmpdir(), 'adr-geox-release-bundle-integrity-'));
 
 try {
@@ -60,7 +67,7 @@ try {
   cpSync(valid.bundleDir, sourceDrift, { recursive: true });
   const sourceProvenancePath = join(sourceDrift, 'RELEASE-PROVENANCE.json');
   const sourceProvenance = JSON.parse(readFileSync(sourceProvenancePath, 'utf8'));
-  sourceProvenance.source.commit_sha = 'a'.repeat(40);
+  sourceProvenance.source.commit_sha = sourceCommit === 'a'.repeat(40) ? 'b'.repeat(40) : 'a'.repeat(40);
   writeCanonical(sourceProvenancePath, sourceProvenance);
   rewriteChecksums(sourceDrift);
   expectCode(() => verifyGeoxConsumerReleaseBundle({ bundleDir: sourceDrift, expectedSourceCommit: sourceCommit }), 'SOURCE_COMMIT_MISMATCH');
@@ -93,16 +100,18 @@ try {
     assert.equal(workflow.includes(forbidden), false, `qualification workflow must not contain publication side effect: ${forbidden}`);
   }
   assert.match(workflow, /permissions:\s*\n\s*contents: read/);
+  assert.match(workflow, /ADR_RELEASE_SOURCE_COMMIT: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/);
 
   console.log(JSON.stringify({
     ok: true,
-    integrityCases: 6,
+    integrityCases: 7,
     checksumTamperRejected: true,
     sourceCommitDriftRejected: true,
     authorityPromotionRejected: true,
     packageMetadataDriftRejected: true,
     unexpectedFileRejected: true,
-    publicationSideEffectsAbsent: true
+    publicationSideEffectsAbsent: true,
+    pullRequestSyntheticMergeRefExcludedFromSourceProvenance: true
   }, null, 2));
 } finally {
   rmSync(root, { recursive: true, force: true });
