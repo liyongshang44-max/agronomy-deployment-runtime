@@ -114,10 +114,11 @@ try {
   }
   assert.match(workflow, /permissions:\s*\n\s*contents: read/);
   assert.match(workflow, /ADR_RELEASE_SOURCE_COMMIT: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/);
+  assert.match(workflow, /push:\s*\n\s*branches:\s*\n\s*- 'main'/, 'authoritative main must trigger exact-SHA release-bundle qualification');
 
   console.log(JSON.stringify({
     ok: true,
-    integrityCases: 9,
+    integrityCases: 10,
     checksumTamperRejected: true,
     sourceCommitDriftRejected: true,
     sourceContentHashDriftRejected: true,
@@ -126,7 +127,8 @@ try {
     packageMetadataDriftRejected: true,
     unexpectedFileRejected: true,
     publicationSideEffectsAbsent: true,
-    pullRequestSyntheticMergeRefExcludedFromSourceProvenance: true
+    pullRequestSyntheticMergeRefExcludedFromSourceProvenance: true,
+    authoritativeMainPushQualificationEnabled: true
   }, null, 2));
 } finally {
   rmSync(root, { recursive: true, force: true });
