@@ -604,11 +604,13 @@ const eligibility = publishRuntimeEligibility({
   logicalId: 'runtime-eligibility.real-kbs-t6-runtime-v1',
   version: '1',
   runtimePlan: plan,
+  snapshotStore,
   audit: audit(runtimePrincipal, 'runtime-eligibility-publish', '2026-09-04T07:22:00.000Z')
 });
 const validatedEligibility = validateRuntimeEligibility({
   ledger,
-  runtimeEligibilityRef: eligibility.ref
+  runtimeEligibilityRef: eligibility.ref,
+  snapshotStore
 });
 assert.equal(validatedEligibility.semanticPayload.runtimeEligibility, 'RUNTIME_ELIGIBLE');
 const legalPath = validatedEligibility.semanticPayload.alternativeEvaluations.find(
@@ -622,6 +624,7 @@ const binding = publishRuntimeBinding({
   version: '1',
   runtimeEligibilityRef: eligibility.ref,
   selectedAlternativePathId: legalPath.pathId,
+  snapshotStore,
   audit: audit(runtimePrincipal, 'runtime-binding-publish', '2026-09-04T07:23:00.000Z')
 });
 const validatedBinding = validateRuntimeBinding({
