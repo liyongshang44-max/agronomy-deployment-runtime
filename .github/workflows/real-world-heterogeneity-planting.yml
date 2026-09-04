@@ -1,0 +1,31 @@
+name: ADR Real-World Heterogeneity — Planting
+
+on:
+  push:
+    branches:
+      - 'test/real-world-heterogeneity-planting-*'
+    paths:
+      - 'acceptance/real-kbs-soybean-planting-population-target/**'
+      - '.github/workflows/real-world-heterogeneity-planting.yml'
+  pull_request:
+    paths:
+      - 'acceptance/real-kbs-soybean-planting-population-target/**'
+      - '.github/workflows/real-world-heterogeneity-planting.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  planting_target_ingestion:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Report runtime
+        run: node --version
+      - name: Real KBS soybean planting target A03-A04 exact replay proof
+        run: node acceptance/real-kbs-soybean-planting-population-target/run.mjs
