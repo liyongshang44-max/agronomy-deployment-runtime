@@ -17,7 +17,7 @@ permissions:
   contents: read
 
 jobs:
-  irrigation_target_ingestion:
+  irrigation_runtime_composition:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
@@ -27,5 +27,5 @@ jobs:
           package-manager-cache: false
       - name: Report runtime
         run: node --version
-      - name: Real KBS RGE irrigation target A03-A04 ingestion proof
+      - name: Real KBS RGE irrigation A03-A08-R01-R03-D01 strict positive proof
         run: node acceptance/real-kbs-rge-irrigation-target-context-a03/run.mjs
