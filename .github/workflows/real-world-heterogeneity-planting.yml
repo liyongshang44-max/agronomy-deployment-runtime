@@ -17,7 +17,7 @@ permissions:
   contents: read
 
 jobs:
-  planting_target_ingestion:
+  planting_runtime_composition:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
@@ -29,3 +29,5 @@ jobs:
         run: node --version
       - name: Real KBS soybean planting target A03-A04 exact replay proof
         run: node acceptance/real-kbs-soybean-planting-population-target/run.mjs
+      - name: Real MSU planting A08-R01-R03-D01 strict positive proof
+        run: node acceptance/real-kbs-soybean-planting-population-target/run-runtime-composition-v1.mjs
