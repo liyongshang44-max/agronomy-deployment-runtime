@@ -49,6 +49,15 @@ function qualifiedSourceCommit() {
   return git.stdout.trim();
 }
 
+function mutateProvenance(validBundleDir, targetDir, mutate) {
+  cpSync(validBundleDir, targetDir, { recursive: true });
+  const path = join(targetDir, 'RELEASE-PROVENANCE.json');
+  const provenance = JSON.parse(readFileSync(path, 'utf8'));
+  mutate(provenance);
+  writeCanonical(path, provenance);
+  rewriteChecksums(targetDir);
+}
+
 const sourceCommit = qualifiedSourceCommit();
 assert.match(sourceCommit, /^[0-9a-f]{40}$/);
 const root = mkdtempSync(join(tmpdir(), 'adr-geox-release-bundle-integrity-'));
@@ -64,30 +73,34 @@ try {
   expectCode(() => verifyGeoxConsumerReleaseBundle({ bundleDir: tamperedTarball, expectedSourceCommit: sourceCommit }), 'CHECKSUM_MISMATCH');
 
   const sourceDrift = join(root, 'source-drift');
-  cpSync(valid.bundleDir, sourceDrift, { recursive: true });
-  const sourceProvenancePath = join(sourceDrift, 'RELEASE-PROVENANCE.json');
-  const sourceProvenance = JSON.parse(readFileSync(sourceProvenancePath, 'utf8'));
-  sourceProvenance.source.commit_sha = sourceCommit === 'a'.repeat(40) ? 'b'.repeat(40) : 'a'.repeat(40);
-  writeCanonical(sourceProvenancePath, sourceProvenance);
-  rewriteChecksums(sourceDrift);
+  mutateProvenance(valid.bundleDir, sourceDrift, (provenance) => {
+    provenance.source.commit_sha = sourceCommit === 'a'.repeat(40) ? 'b'.repeat(40) : 'a'.repeat(40);
+  });
   expectCode(() => verifyGeoxConsumerReleaseBundle({ bundleDir: sourceDrift, expectedSourceCommit: sourceCommit }), 'SOURCE_COMMIT_MISMATCH');
 
+  const sourceHashDrift = join(root, 'source-hash-drift');
+  mutateProvenance(valid.bundleDir, sourceHashDrift, (provenance) => {
+    const first = Object.keys(provenance.consumer_artifact.source_hashes)[0];
+    provenance.consumer_artifact.source_hashes[first] = `sha256:${'0'.repeat(64)}`;
+  });
+  expectCode(() => verifyGeoxConsumerReleaseBundle({ bundleDir: sourceHashDrift, expectedSourceCommit: sourceCommit }), 'SOURCE_CONTENT_HASH_MISMATCH');
+
+  const builderDrift = join(root, 'builder-drift');
+  mutateProvenance(valid.bundleDir, builderDrift, (provenance) => {
+    provenance.bundle_builder_version = 'adr.geox-consumer-release-bundle-builder.v999';
+  });
+  expectCode(() => verifyGeoxConsumerReleaseBundle({ bundleDir: builderDrift, expectedSourceCommit: sourceCommit }), 'BUILDER_VERSION_MISMATCH');
+
   const authorityPromotion = join(root, 'authority-promotion');
-  cpSync(valid.bundleDir, authorityPromotion, { recursive: true });
-  const authorityPath = join(authorityPromotion, 'RELEASE-PROVENANCE.json');
-  const authorityProvenance = JSON.parse(readFileSync(authorityPath, 'utf8'));
-  authorityProvenance.authority_ceiling.publication_authority = 'AUTHORIZED';
-  writeCanonical(authorityPath, authorityProvenance);
-  rewriteChecksums(authorityPromotion);
+  mutateProvenance(valid.bundleDir, authorityPromotion, (provenance) => {
+    provenance.authority_ceiling.publication_authority = 'AUTHORIZED';
+  });
   expectCode(() => verifyGeoxConsumerReleaseBundle({ bundleDir: authorityPromotion, expectedSourceCommit: sourceCommit }), 'AUTHORITY_CEILING_MISMATCH');
 
   const packageDrift = join(root, 'package-drift');
-  cpSync(valid.bundleDir, packageDrift, { recursive: true });
-  const packagePath = join(packageDrift, 'RELEASE-PROVENANCE.json');
-  const packageProvenance = JSON.parse(readFileSync(packagePath, 'utf8'));
-  packageProvenance.package.version = '9.9.9';
-  writeCanonical(packagePath, packageProvenance);
-  rewriteChecksums(packageDrift);
+  mutateProvenance(valid.bundleDir, packageDrift, (provenance) => {
+    provenance.package.version = '9.9.9';
+  });
   expectCode(() => verifyGeoxConsumerReleaseBundle({ bundleDir: packageDrift, expectedSourceCommit: sourceCommit }), 'PACKAGE_METADATA_MISMATCH');
 
   const extraFile = join(root, 'extra-file');
@@ -104,9 +117,11 @@ try {
 
   console.log(JSON.stringify({
     ok: true,
-    integrityCases: 7,
+    integrityCases: 9,
     checksumTamperRejected: true,
     sourceCommitDriftRejected: true,
+    sourceContentHashDriftRejected: true,
+    builderVersionDriftRejected: true,
     authorityPromotionRejected: true,
     packageMetadataDriftRejected: true,
     unexpectedFileRejected: true,

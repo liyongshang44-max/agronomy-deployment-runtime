@@ -16,12 +16,13 @@ A qualified bundle contains exactly:
 
 - exact Git source repository;
 - exact 40-hex source commit;
-- exact consumer-artifact and release-bundle manifest hashes;
-- package name and version;
-- package tarball SHA-256 and package metadata;
+- exact consumer-artifact and release-bundle manifest paths and hashes;
+- package name, version, private boundary, byte size and tarball SHA-256;
 - exact adapter source hashes and bundled integration-contract dependency hash;
 - consumer-artifact and release-bundle builder versions;
 - the frozen authority ceiling and explicit publication non-actions.
+
+The verifier independently recalculates the manifest hashes, all six adapter source hashes, the bundled integration-contract dependency hash, the tarball byte size, package metadata and package authority claim from the checked-out exact source. Provenance fields cannot be changed merely by recomputing `SHA256SUMS`.
 
 No wall-clock build timestamp is emitted. Two builds from the same exact source commit must produce identical package tarball, provenance bytes, checksum manifest and verification evidence hash.
 
@@ -33,12 +34,14 @@ The verifier rejects:
 
 - any tarball or provenance checksum mismatch;
 - source-commit drift;
-- source-manifest hash drift;
-- package name/version/private-boundary drift;
+- source-manifest path/hash drift;
+- adapter source or bundled-dependency hash drift;
+- builder-version drift;
+- package name/version/private/size drift;
 - packed package metadata that differs from the frozen release metadata;
 - authority-ceiling promotion;
 - publication-boundary drift;
-- extra or missing bundle files.
+- extra, missing, or hidden provenance fields.
 
 The acceptance also installs the tarball directly from the qualified bundle into an empty npm-offline consumer project and imports the first-party GEOX adapter by package name.
 

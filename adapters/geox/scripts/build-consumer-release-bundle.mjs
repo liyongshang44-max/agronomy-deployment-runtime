@@ -123,9 +123,7 @@ export function buildGeoxConsumerReleaseBundle({ outputDir, sourceCommit }) {
       private: true,
       tarball_filename: packageFilename,
       tarball_sha256: artifact.tarballHash,
-      package_size: artifact.packageSize,
-      unpacked_size: artifact.unpackedSize,
-      file_count: artifact.fileCount
+      package_size: artifact.packageSize
     },
     consumer_artifact: {
       builder_version: artifact.builderVersion,
