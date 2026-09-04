@@ -38,3 +38,4 @@ console.log(JSON.stringify({
 }, null, 2));
 
 await import('./run-positive-applicability-v2.mjs');
+await import('./run-runtime-composition-v1.mjs');
