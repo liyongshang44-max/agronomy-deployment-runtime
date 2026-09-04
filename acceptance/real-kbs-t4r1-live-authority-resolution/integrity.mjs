@@ -316,4 +316,4 @@ assert.equal(safe.human_approval_authority, 'NONE');
 assert.equal(safe.machine_execution_authority, 'NONE');
 console.log('PASS replayable consumer authority remains non-actionable and non-dispatchable');
 
-console.log('GEOX live authority resolver integrity: 8/8 passed');
+console.log('GEOX live authority resolver integrity: 9/9 passed');
