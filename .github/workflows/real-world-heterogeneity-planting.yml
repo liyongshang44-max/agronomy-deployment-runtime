@@ -31,3 +31,5 @@ jobs:
         run: node acceptance/real-kbs-soybean-planting-population-target/run.mjs
       - name: Real MSU planting A08-R01-R03-D01 strict positive proof
         run: node acceptance/real-kbs-soybean-planting-population-target/run-runtime-composition-v1.mjs
+      - name: Real MSU planting D02-D04-D05-D06 strict decision proof
+        run: node acceptance/real-kbs-soybean-planting-population-target/run-decision-result-v1.mjs
