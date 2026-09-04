@@ -1,0 +1,57 @@
+{
+  "contract_version": "adr.acceptance.geox-target-authority-export.v1",
+  "source_repository": "liyongshang44-max/GEOX",
+  "source_main_sha": "d67a2b3cce037c1eaad4d7d051d1f6a11eb09fc3",
+  "authority_sources": [
+    {
+      "path": "docs/digital_twin/mcft/cap_09/GEOX-MCFT-CAP-09-S6-FORMAL-SITE-AUTHORITY-V3.json",
+      "blob_sha": "0c0e43123dbc27a89a5e781807be38dddaeeabd2"
+    },
+    {
+      "path": "docs/digital_twin/mcft/cap_09/GEOX-MCFT-CAP-09-AMENDMENT-20-T4R1-FORMAL-SUCCESSOR-SCOPE-AUTHORITY.md",
+      "blob_sha": "e9e9d7d1d4efb09e91ed4a847d3cce83a67f3a86"
+    },
+    {
+      "path": "docs/digital_twin/mcft/cap_09/GEOX-MCFT-CAP-09-T4R1-CROP-ONLY-GEOMETRY-AUTHORITY-V1.json",
+      "blob_sha": "3f8bfab5569af02fc69b1fe59d80085a38bee05c"
+    },
+    {
+      "path": "apps/server/src/domain/twin_runtime/external_formal_runtime_config_v1.ts",
+      "blob_sha": "698f1db26b0e00c05ec3f39c8e9770f62abbe06f"
+    }
+  ],
+  "provider_target": {
+    "experiment_locator": "https://lter.kbs.msu.edu/research/long-term-experiments/main-cropping-system-experiment/",
+    "provider_site": "KBS_LTER_MAIN_CROPPING_SYSTEM_EXPERIMENT",
+    "treatment_code": "T4",
+    "replicate_code": "R1",
+    "crop_code": "corn",
+    "hybrid_code": "43-96P",
+    "planting_observation_id": "6974"
+  },
+  "geox_target": {
+    "field_id": "field_kbs_mcse_t4r1",
+    "season_id": "season_2026_corn",
+    "zone_id": "zone_kbs_mcse_t4r1_crop_formal_v1",
+    "authority_scope_class": "EXTERNAL_PUBLIC_RESEARCH_SCOPE",
+    "field_validity_proven": false,
+    "production_site_claimed": false
+  },
+  "geometry_boundary": {
+    "provider_selector": {
+      "treatment": "T4",
+      "replicate": "R1",
+      "subplot": "main"
+    },
+    "whole_plot_assumed_crop_only": false,
+    "prairie_strip_excluded": true,
+    "raw_provider_geometry_republished": false,
+    "geox_zone_geometry_equal_to_provider_plot_claimed": false
+  },
+  "authority_boundary": {
+    "adr_geox_identity_equality_claimed": false,
+    "field_actionability_authorized": false,
+    "dispatch_authorized": false,
+    "production_correspondence_claimed": false
+  }
+}
