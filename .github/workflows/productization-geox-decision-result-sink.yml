@@ -1,0 +1,41 @@
+name: ADR Productization — GEOX DecisionResult Sink
+
+on:
+  push:
+    branches:
+      - 'test/productization-geox-decision-result-sink-*'
+    paths:
+      - 'adapters/geox/src/decision-result-sink.mjs'
+      - 'acceptance/geox-decision-result-sink/**'
+      - 'acceptance/real-kbs-soybean-planting-population-target/**'
+      - 'sdks/typescript/src/**'
+      - '.github/workflows/productization-geox-decision-result-sink.yml'
+  pull_request:
+    paths:
+      - 'adapters/geox/src/decision-result-sink.mjs'
+      - 'acceptance/geox-decision-result-sink/**'
+      - 'acceptance/real-kbs-soybean-planting-population-target/**'
+      - 'sdks/typescript/src/**'
+      - '.github/workflows/productization-geox-decision-result-sink.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  geox_decision_result_sink:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Report runtime
+        run: node --version
+      - name: Existing GEOX adapter regression proof
+        run: npm run test:geox-adapter
+      - name: Real Planting D06 to GEOX display-only projection
+        run: node acceptance/geox-decision-result-sink/run.mjs
+      - name: GEOX DecisionResult sink fail-closed integrity
+        run: node acceptance/geox-decision-result-sink/integrity.mjs
