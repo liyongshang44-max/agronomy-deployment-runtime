@@ -79,6 +79,7 @@ const EXPECTED_SOURCE_HASH = 'sha256:fd9d35b3d3dadc5ca1829e792689bb19690ed420efe
 const SOURCE_LOCATOR = 'https://www.canr.msu.edu/news/soybean_planting_populations_affect_soybean_yields_and_profitability_in_mic';
 const SOURCE_ASSERTION = 'For soybeans in 15-inch rows in Michigan, Michigan State University recommends a planting population of 150,000 seeds per acre.';
 const SOURCE_EVIDENCE = '15 inches | 150,000';
+const EXPECTED_LIMITATION_CODE = 'RECOMMENDATION_NOT_HISTORICAL_OPERATION_TRUTH';
 const EXPECTED_PRECONDITIONS = Object.freeze([
   { semanticId: 'crop.code', operator: 'EQUALS', value: 'soybean' },
   { semanticId: 'jurisdiction.region', operator: 'EQUALS', value: 'michigan' },
@@ -325,7 +326,7 @@ const qualificationDecision = qualificationService.recordQualificationDecision({
   qualificationTarget: AGRONOMIC_POLICY_REQUIRED_KNOWLEDGE_USE,
   semanticPreconditions: EXPECTED_PRECONDITIONS,
   limitations: [{
-    code: 'RECOMMENDATION_NOT_HISTORICAL_OPERATION_TRUTH',
+    code: EXPECTED_LIMITATION_CODE,
     statement: 'The recommendation does not assert that a target field actually planted 150000 seeds per acre.'
   }],
   approverPrincipal: approver,
@@ -344,6 +345,7 @@ const frozenPreconditions = knowledge.semanticPayload.semanticPreconditions
 assert.deepEqual(frozenPreconditions, [...EXPECTED_PRECONDITIONS].sort((a, b) => a.semanticId.localeCompare(b.semanticId)));
 assert.deepEqual(knowledge.semanticPayload.allowedUses, [AGRONOMIC_POLICY_REQUIRED_KNOWLEDGE_USE]);
 assert.equal(knowledge.semanticPayload.limitations.length, 1);
+assert.equal(knowledge.semanticPayload.limitations[0].code, EXPECTED_LIMITATION_CODE);
 
 const releaseManager = createPrincipal({
   principalId: 'planting-runtime-v1-release-manager', type: 'USER', ...OWNERSHIP, programIds: ['pilot-a']
@@ -569,6 +571,8 @@ assert.deepEqual(validatedApplicability.semanticPayload.missingContextSemanticId
 assert.deepEqual(validatedApplicability.semanticPayload.conflicts, []);
 assert.deepEqual(validatedApplicability.semanticPayload.unsupportedConstraintCodes, []);
 assert.equal(validatedApplicability.semanticPayload.conditionResults.length, 3);
+assert.equal(validatedApplicability.semanticPayload.limitations.length, 1);
+assert.equal(validatedApplicability.semanticPayload.limitations[0].code, EXPECTED_LIMITATION_CODE);
 for (const expected of EXPECTED_PRECONDITIONS) {
   const condition = validatedApplicability.semanticPayload.conditionResults.find(
     (item) => item.source === 'SEMANTIC_PRECONDITION' && item.semanticId === expected.semanticId
@@ -612,17 +616,30 @@ const validatedEligibility = validateRuntimeEligibility({
   snapshotStore
 });
 assert.equal(plan.openRequirements.length, 0, 'positive planting world must have no R01 open requirements');
-assert.equal(validatedEligibility.semanticPayload.runtimeEligibility, 'RUNTIME_ELIGIBLE');
+assert.equal(
+  validatedEligibility.semanticPayload.runtimeEligibility,
+  'RUNTIME_ELIGIBLE_WITH_LIMITATIONS',
+  'source-faithful recommendation limitation must remain visible at R03'
+);
 assert.deepEqual(validatedEligibility.semanticPayload.informationRequirements, []);
-const legalPaths = validatedEligibility.semanticPayload.alternativeEvaluations.filter((item) => item.disposition === 'LEGAL');
-assert.equal(legalPaths.length, 1, 'positive planting world must have exactly one legal runtime alternative');
+assert.deepEqual(validatedEligibility.semanticPayload.reasonCodes, ['LEGAL_RUNTIME_ONLY_WITH_LIMITATIONS']);
+assert.equal(validatedEligibility.semanticPayload.limitations.length, 1);
+assert.equal(validatedEligibility.semanticPayload.limitations[0].detail.code, EXPECTED_LIMITATION_CODE);
+const limitedLegalPaths = validatedEligibility.semanticPayload.alternativeEvaluations.filter(
+  (item) => item.disposition === 'LEGAL_WITH_LIMITATIONS'
+);
+assert.equal(limitedLegalPaths.length, 1, 'positive planting world must have exactly one legal-with-limitations runtime alternative');
+assert.equal(limitedLegalPaths[0].limitations.length, 1);
+assert.equal(limitedLegalPaths[0].limitations[0].detail.code, EXPECTED_LIMITATION_CODE);
+assert.deepEqual(limitedLegalPaths[0].informationRequirements, []);
+assert.deepEqual(limitedLegalPaths[0].reasonCodes, []);
 
 const binding = publishRuntimeBinding({
   ledger,
   logicalId: 'runtime-binding.real-msu-soybean-planting-population-v1',
   version: '1',
   runtimeEligibilityRef: eligibility.ref,
-  selectedAlternativePathId: legalPaths[0].pathId,
+  selectedAlternativePathId: limitedLegalPaths[0].pathId,
   snapshotStore,
   audit: audit(runtimePrincipal, 'runtime-binding-publish', '2026-09-04T10:09:00.000Z')
 });
@@ -635,6 +652,8 @@ assert.deepEqual(validatedBinding.semanticPayload.knowledgeBindings, [{
   knowledgeRef: knowledge.ref,
   applicabilityAssessmentRef: applicability.ref
 }]);
+assert.equal(validatedBinding.semanticPayload.limitations.length, 1);
+assert.equal(validatedBinding.semanticPayload.limitations[0].detail.code, EXPECTED_LIMITATION_CODE);
 
 const records = ledger.exportSnapshot().records;
 const forbiddenKinds = new Set([
@@ -666,14 +685,16 @@ console.log(JSON.stringify({
     recommendationPopulationSeedsPerAcre: '150000',
     qualifiedKnowledgeRef: knowledge.ref,
     knowledgeReleaseRef: release.ref,
-    semanticPreconditions: frozenPreconditions
+    semanticPreconditions: frozenPreconditions,
+    limitationCode: EXPECTED_LIMITATION_CODE
   },
   applicability: {
     assessmentRef: applicability.ref,
     scientificUseStatus: validatedApplicability.semanticPayload.scientificUseStatus,
     transportStatus: validatedApplicability.semanticPayload.transportStatus,
     runtimeUse: validatedApplicability.semanticPayload.runtimeUse,
-    missingContextSemanticIds: validatedApplicability.semanticPayload.missingContextSemanticIds
+    missingContextSemanticIds: validatedApplicability.semanticPayload.missingContextSemanticIds,
+    limitationCodes: validatedApplicability.semanticPayload.limitations.map((item) => item.code)
   },
   runtimePlan: {
     runtimePlanId: plan.runtimePlanId ?? plan.planId,
@@ -687,12 +708,14 @@ console.log(JSON.stringify({
     disposition: validatedEligibility.semanticPayload.runtimeEligibility,
     reasonCodes: validatedEligibility.semanticPayload.reasonCodes,
     informationRequirements: validatedEligibility.semanticPayload.informationRequirements,
-    legalAlternativeCount: legalPaths.length
+    limitationCodes: validatedEligibility.semanticPayload.limitations.map((item) => item.detail.code),
+    legalWithLimitationsAlternativeCount: limitedLegalPaths.length
   },
   runtimeBinding: {
     runtimeBindingRef: binding.ref,
     selectedAlternativePathId: validatedBinding.semanticPayload.selectedAlternativePathId,
     knowledgeBindings: validatedBinding.semanticPayload.knowledgeBindings,
+    limitationCodes: validatedBinding.semanticPayload.limitations.map((item) => item.detail.code),
     correctnessClaim: validatedBinding.semanticPayload.correctnessClaim
   },
   genericCoreContractsModified: false,
