@@ -145,7 +145,18 @@ jobs:
         run: npm run test:real-source-runtime-composition-sustainable-corn
       - name: Real KBS QualifiedKnowledge vs Sustainable Corn target incompatibility proof
         run: node acceptance/real-kbs-target-incompatibility-sustainable-corn/run.mjs
-      - name: Real KBS T6 target context via A03/A04 proof
-        run: node acceptance/real-kbs-t6-target-context-a03/run.mjs
       - name: KBS 2015 gold protocol rule, constraint, obligation, modality, goal, regimen, realization, conditional realization and source routing acceptance
         run: npm run test:gold-protocol-kbs-2015
+
+  real_world_heterogeneity_nitrogen:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Report runtime
+        run: node --version
+      - name: Real KBS T6 target context and positive applicability proof
+        run: node acceptance/real-kbs-t6-target-context-a03/run.mjs
