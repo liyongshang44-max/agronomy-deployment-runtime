@@ -1,0 +1,45 @@
+name: ADR Productization — GEOX Replayable Target Authority Resolver
+
+on:
+  push:
+    branches:
+      - 'feat/productization-geox-authority-resolver-*'
+    paths:
+      - 'adapters/geox/src/target-authority-resolver.mjs'
+      - 'adapters/geox/src/target-correspondence.mjs'
+      - 'acceptance/real-kbs-t4r1-live-authority-resolution/**'
+      - 'acceptance/real-kbs-t4r1-target-correspondence/**'
+      - '.github/workflows/productization-geox-target-authority-resolver.yml'
+  pull_request:
+    paths:
+      - 'adapters/geox/src/target-authority-resolver.mjs'
+      - 'adapters/geox/src/target-correspondence.mjs'
+      - 'acceptance/real-kbs-t4r1-live-authority-resolution/**'
+      - 'acceptance/real-kbs-t4r1-target-correspondence/**'
+      - '.github/workflows/productization-geox-target-authority-resolver.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  geox_replayable_target_authority_resolver:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Report runtime
+        run: node --version
+      - name: Existing pinned KBS T4R1 correspondence regression
+        run: node acceptance/real-kbs-t4r1-target-correspondence/run.mjs
+      - name: Existing KBS T4R1 correspondence fail-closed regression
+        run: node acceptance/real-kbs-t4r1-target-correspondence/integrity.mjs
+      - name: Replayable GEOX authority resolver offline integrity
+        run: node acceptance/real-kbs-t4r1-live-authority-resolution/integrity.mjs
+      - name: Live GEOX main authority resolution and exact replay
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node acceptance/real-kbs-t4r1-live-authority-resolution/run.mjs
