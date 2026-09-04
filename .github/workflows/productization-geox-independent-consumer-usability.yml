@@ -1,0 +1,67 @@
+name: ADR Productization — GEOX Independent Consumer Usability
+
+on:
+  push:
+    branches:
+      - 'main'
+      - 'test/productization-geox-independent-consumer-usability-*'
+    paths:
+      - 'adapters/geox/src/**'
+      - 'adapters/geox/consumer-artifact.manifest.json'
+      - 'adapters/geox/release-bundle.manifest.json'
+      - 'adapters/geox/scripts/build-consumer-artifact.mjs'
+      - 'adapters/geox/scripts/build-consumer-release-bundle.mjs'
+      - 'adapters/geox/scripts/verify-consumer-release-bundle.mjs'
+      - 'sdks/typescript/src/integration-contracts.mjs'
+      - 'acceptance/real-kbs-soybean-planting-population-target/**'
+      - 'acceptance/geox-independent-consumer-usability/**'
+      - '.github/workflows/productization-geox-independent-consumer-usability.yml'
+  pull_request:
+    paths:
+      - 'adapters/geox/src/**'
+      - 'adapters/geox/consumer-artifact.manifest.json'
+      - 'adapters/geox/release-bundle.manifest.json'
+      - 'adapters/geox/scripts/build-consumer-artifact.mjs'
+      - 'adapters/geox/scripts/build-consumer-release-bundle.mjs'
+      - 'adapters/geox/scripts/verify-consumer-release-bundle.mjs'
+      - 'sdks/typescript/src/integration-contracts.mjs'
+      - 'acceptance/real-kbs-soybean-planting-population-target/**'
+      - 'acceptance/geox-independent-consumer-usability/**'
+      - '.github/workflows/productization-geox-independent-consumer-usability.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  geox_independent_consumer_usability:
+    runs-on: ubuntu-24.04
+    env:
+      ADR_USABILITY_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.ADR_USABILITY_SOURCE_COMMIT }}
+          fetch-depth: 1
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Prove exact candidate checkout
+        run: |
+          test "$(git rev-parse HEAD)" = "$ADR_USABILITY_SOURCE_COMMIT"
+          echo "qualified source commit: $ADR_USABILITY_SOURCE_COMMIT"
+      - name: Independent consumer integrity invariants
+        run: node acceptance/geox-independent-consumer-usability/integrity.mjs
+      - name: Clean consumer bundle verify install and governed message projection
+        run: |
+          set -o pipefail
+          node acceptance/geox-independent-consumer-usability/run.mjs | tee "$RUNNER_TEMP/geox-independent-consumer-usability.json"
+      - name: Upload consumer usability evidence only
+        uses: actions/upload-artifact@v4
+        with:
+          name: geox-independent-consumer-usability-${{ env.ADR_USABILITY_SOURCE_COMMIT }}
+          path: ${{ runner.temp }}/geox-independent-consumer-usability.json
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
