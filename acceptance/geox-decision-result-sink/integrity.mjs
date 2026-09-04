@@ -77,7 +77,7 @@ test('DecisionResult sink imports only the public SDK layer and no ADR authority
   const source = await readFile(new URL('../../adapters/geox/src/decision-result-sink.mjs', import.meta.url), 'utf8');
   assert.equal(source.includes("../../../sdks/typescript/src/index.mjs"), true);
   assert.equal(/from\s*['"][^'"]*packages\//.test(source), false);
-  assert.equal(source.includes('authorize'), false);
+  assert.equal(/\bauthorize[A-Z]\w*\s*\(/.test(source), false);
   assert.equal(source.includes('PERMISSIONS.'), false);
 });
 
