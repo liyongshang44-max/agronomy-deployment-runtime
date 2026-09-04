@@ -345,7 +345,7 @@ const frozenPreconditions = knowledge.semanticPayload.semanticPreconditions
 assert.deepEqual(frozenPreconditions, [...EXPECTED_PRECONDITIONS].sort((a, b) => a.semanticId.localeCompare(b.semanticId)));
 assert.deepEqual(knowledge.semanticPayload.allowedUses, [AGRONOMIC_POLICY_REQUIRED_KNOWLEDGE_USE]);
 assert.equal(knowledge.semanticPayload.limitations.length, 1);
-assert.equal(knowledge.semanticPayload.limitations[0].code, EXPECTED_LIMITATION_CODE);
+assert.equal(knowledge.semanticPayload.limitations[0].value.code, EXPECTED_LIMITATION_CODE);
 
 const releaseManager = createPrincipal({
   principalId: 'planting-runtime-v1-release-manager', type: 'USER', ...OWNERSHIP, programIds: ['pilot-a']
