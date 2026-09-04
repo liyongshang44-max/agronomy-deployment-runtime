@@ -158,5 +158,5 @@ jobs:
           package-manager-cache: false
       - name: Report runtime
         run: node --version
-      - name: Real KBS T6 target context and positive applicability proof
+      - name: Real KBS T6 target context and A08-R01-R03-D01 runtime-composition proof
         run: node acceptance/real-kbs-t6-target-context-a03/run.mjs
