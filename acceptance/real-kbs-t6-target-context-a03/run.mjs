@@ -36,3 +36,5 @@ console.log(JSON.stringify({
   decisionResultCreated: false,
   outcomeCreated: false
 }, null, 2));
+
+await import('./run-positive-applicability.mjs');
