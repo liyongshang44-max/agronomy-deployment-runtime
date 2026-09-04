@@ -1,0 +1,112 @@
+{
+  "adapter_contract": "adr.acceptance.kbs-public-context-adapter.v1",
+  "world": "KBS_MCSE_T4R1_2026_TARGET_CORRESPONDENCE",
+  "retained_at": "2026-09-05T00:00:00.000Z",
+  "source_evidence": [
+    {
+      "locator": "https://lter.kbs.msu.edu/research/long-term-experiments/main-cropping-system-experiment/",
+      "experiment": "Main Cropping System Experiment (MCSE)",
+      "treatment_code": "T4",
+      "treatment_label": "Biologically Based",
+      "replicate_structure": "SIX_REPLICATE_BLOCKS",
+      "plot_size_ha": "1",
+      "prairie_strip_since": "2019"
+    },
+    {
+      "locator": "https://aglog.kbs.msu.edu/observations/6974",
+      "observation_id": "6974",
+      "observation_date": "2026-05-27",
+      "area_code": "T4",
+      "replication_scope": "ALL_REPLICATIONS",
+      "replicate_order": [
+        "R5",
+        "R3",
+        "R4",
+        "R2",
+        "R1",
+        "R6"
+      ],
+      "crop_label": "corn",
+      "hybrid_label": "Blue River Organic Corn Seed 43-96P"
+    },
+    {
+      "locator": "https://lter.kbs.msu.edu/datatables/829",
+      "datatable_id": "KBS039-006.40",
+      "identity_columns": [
+        "treatment",
+        "replicate",
+        "subplot"
+      ],
+      "explicit_excerpt": {
+        "treatment": "T4",
+        "replicate": "R1",
+        "subplot": "strip"
+      },
+      "geometry_authority_use": "IDENTITY_STRUCTURE_ONLY_NO_RAW_GEOMETRY_REPUBLICATION"
+    },
+    {
+      "locator": "https://lter.kbs.msu.edu/maps/images/current-kbs-lter-mcse-plot-map.pdf",
+      "map_revision": "2026-03-10",
+      "explicit_plot_label": "T4 r1 Corn",
+      "replicate_legend": "r = replicate number",
+      "subplot_legend": "Prairie strip (T3 and T4) (4.5 m wide)"
+    }
+  ],
+  "normalized_context": {
+    "experiment.name": {
+      "type": "STRING",
+      "string": "Main Cropping System Experiment (MCSE)"
+    },
+    "treatment.code": {
+      "type": "CATEGORY",
+      "category": "T4"
+    },
+    "treatment.name": {
+      "type": "STRING",
+      "string": "Biologically Based"
+    },
+    "replicate.code": {
+      "type": "CATEGORY",
+      "category": "R1"
+    },
+    "crop.code": {
+      "type": "CATEGORY",
+      "category": "corn"
+    },
+    "planting.hybrid": {
+      "type": "STRING",
+      "string": "43-96P"
+    },
+    "planting.observation_id": {
+      "type": "STRING",
+      "string": "6974"
+    }
+  },
+  "evaluation_slice": {
+    "kind": "RETROSPECTIVE_YEAR_SLICE",
+    "start": "2026-01-01T00:00:00.000Z",
+    "end": "2027-01-01T00:00:00.000Z",
+    "representative_effective_at": "2026-05-27T16:00:00.000Z"
+  },
+  "correspondence_basis": {
+    "provider_target_components": [
+      "Main Cropping System Experiment (MCSE)",
+      "T4",
+      "R1"
+    ],
+    "relation_candidate": "CORRESPONDS_TO_SAME_KBS_MCSE_T4_R1_TARGET",
+    "identity_equality_claimed": false,
+    "geometry_equality_claimed": false,
+    "crop_only_zone_equality_claimed": false
+  },
+  "nonclaims": [
+    "NO_ADR_FARM_ID_CREATED",
+    "NO_ADR_FIELD_ID_CREATED",
+    "NO_ADR_ZONE_ID_CREATED",
+    "NO_GEOMETRY_REPUBLISHED",
+    "NO_GEOX_FIELD_ID_DERIVED_FROM_PROVIDER_STRING",
+    "NO_FIELD_ACTIONABILITY_AUTHORITY",
+    "NO_DISPATCH_AUTHORITY",
+    "NO_PRODUCTION_SITE_CLAIM"
+  ]
+}
