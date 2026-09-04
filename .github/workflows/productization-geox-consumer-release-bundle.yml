@@ -3,7 +3,9 @@ name: ADR Productization — GEOX Consumer Release Bundle
 on:
   push:
     branches:
+      - 'main'
       - 'feat/geox-consumer-release-bundle-*'
+      - 'fix/geox-consumer-release-bundle-*'
     paths:
       - 'adapters/geox/release-bundle.manifest.json'
       - 'adapters/geox/scripts/build-consumer-release-bundle.mjs'
