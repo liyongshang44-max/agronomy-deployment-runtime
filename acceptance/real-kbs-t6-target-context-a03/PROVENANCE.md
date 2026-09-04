@@ -98,6 +98,8 @@ The A01 targetRef intentionally contains only organization/tenant deployment sco
 The proof does **not** map T6 to ADR `farmId`, `fieldId`, `zoneId`, or another unsupported target granularity.
 The treatment-specific target context remains explicit in A02/A03/A04.
 
+A02 uses `spatialSupport.type = EXPERIMENTAL_TREATMENT` only. It deliberately omits `geometryRef`; the KBS treatment identifier is not laundered into geometry authority.
+
 ## Scientific qualification boundary
 
 The real T6 no-nitrogen knowledge is qualified for `AGRONOMIC_POLICY_INPUT` with three material semantic preconditions:
@@ -156,6 +158,30 @@ Its correctness claim remains:
 NONE_BINDING_PROVES_WHAT_WAS_USED_NOT_SCIENTIFIC_CORRECTNESS
 ```
 
+## Fail-closed mutation controls
+
+The same CI lane also executes three pure A08 predicate-engine negative controls. These are deliberately classified as engine mutation controls, not as second real-source authority publications.
+
+Each mutation changes exactly one material target predicate while leaving the other two matched:
+
+```text
+crop.code:      alfalfa -> switchgrass
+site.name:      Kellogg Biological Station -> Other Research Site
+treatment.name: Main Site Treatment 6 -> Main Site Treatment 7
+```
+
+Every mutation must produce:
+
+```text
+transportStatus = CONFLICT
+runtimeUse      = BLOCKED
+conflictCode    = SEMANTIC_PRECONDITION_MISMATCH
+```
+
+The mutated predicate must be `MISMATCH / CONFLICT`; both untouched predicates must remain `MATCH`.
+
+This complements the real positive authority path without pretending synthetic mutation values are independently sourced target evidence.
+
 ## What this proof establishes
 
 If the exact head is green, it establishes that the frozen existing contracts can carry the first real KBS T6 positive world through target ingestion, applicability, runtime planning, runtime eligibility, and RuntimeBinding without DEC-0034 or a new core abstraction.
@@ -163,7 +189,9 @@ If the exact head is green, it establishes that the frozen existing contracts ca
 In particular:
 
 - A03/A04 can represent and exactly replay independently sourced treatment-scoped target context;
+- no unsupported geometry authority is created;
 - A08 can match the three material real-world target preconditions;
+- A08 fails closed when crop, site, or treatment identity drifts;
 - R01 can compile the real compatible world with no open requirements;
 - R03 can declare the exact world runtime-eligible;
 - D01 can freeze which real knowledge and applicability authority were selected;
