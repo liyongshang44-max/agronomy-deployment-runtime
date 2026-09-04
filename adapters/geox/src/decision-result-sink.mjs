@@ -100,7 +100,8 @@ function normalizeStructuredAction(value, disposition) {
     return null;
   }
   const action = object(value, 'event.payload.structured_action');
-  if (text(action.contractVersion, 'event.payload.structured_action.contractVersion') !== 'adr.material-action-signature.v1') {
+  if (typeof action.contractVersion !== 'string'
+    || action.contractVersion.trim() !== 'adr.material-action-signature.v1') {
     throw new GeoxDecisionResultSinkError(
       'GEOX_DECISION_RESULT_ACTION_CONTRACT_REQUIRED',
       'ACT DecisionResult requires adr.material-action-signature.v1 structured action'
