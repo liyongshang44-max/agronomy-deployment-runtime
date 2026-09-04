@@ -39,7 +39,7 @@ import {
   sourceContentHash
 } from '../../packages/source-registry/src/index.mjs';
 import {
-  RUNTIME_PROFILE_CONTRACT_VERSION,
+  RUNTIME_PROFILE_ROBUSTNESS_CONTRACT_VERSION,
   publishRuntimeProfile,
   validateRuntimeProfileAuthority
 } from '../../packages/runtime-profile/src/index.mjs';
@@ -429,7 +429,7 @@ const profile = publishRuntimeProfile({
   logicalId: profileLogicalId,
   version: '1',
   profile: {
-    contractVersion: RUNTIME_PROFILE_CONTRACT_VERSION,
+    contractVersion: RUNTIME_PROFILE_ROBUSTNESS_CONTRACT_VERSION,
     controlScope: OWNERSHIP,
     knowledgeReleaseRef: release.ref,
     contextRequirements: {
@@ -448,6 +448,10 @@ const profile = publishRuntimeProfile({
       useClasses: ['TEST_ONLY'],
       runtimeEnvironments: ['STAGING'],
       rolloutStages: ['SHADOW']
+    },
+    robustnessRequirement: {
+      comparisonMode: 'EXACT_MATERIAL_ACTION_SIGNATURE',
+      sufficientCompletenessClasses: ['EXHAUSTIVE_ENUMERATION']
     }
   },
   principal: profileManager,
@@ -654,6 +658,33 @@ assert.deepEqual(validatedBinding.semanticPayload.knowledgeBindings, [{
 }]);
 assert.equal(validatedBinding.semanticPayload.limitations.length, 1);
 assert.equal(validatedBinding.semanticPayload.limitations[0].detail.code, EXPECTED_LIMITATION_CODE);
+
+export const plantingRuntimeWorld = Object.freeze({
+  ledger,
+  snapshotStore,
+  world,
+  decision,
+  manifest,
+  validatedDatums,
+  knowledge,
+  release,
+  profile,
+  deployment,
+  runtimePrincipal,
+  runtimeRole,
+  runtimeAuth,
+  retrieval,
+  applicability,
+  plan,
+  eligibility,
+  validatedEligibility,
+  limitedLegalPaths,
+  binding,
+  validatedBinding,
+  requiredSemanticIds,
+  expectedLimitationCode: EXPECTED_LIMITATION_CODE,
+  sourceArtifactHash: EXPECTED_SOURCE_HASH
+});
 
 const records = ledger.exportSnapshot().records;
 const forbiddenKinds = new Set([
