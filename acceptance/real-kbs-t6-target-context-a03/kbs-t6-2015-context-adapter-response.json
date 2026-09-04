@@ -1,0 +1,51 @@
+{
+  "adapter_contract": "adr.acceptance.kbs-public-context-adapter.v1",
+  "retrieved_at": "2026-09-04T07:00:00.000Z",
+  "source_evidence": [
+    {
+      "locator": "https://aglog.kbs.msu.edu/observations/3138",
+      "observation_date": "2015-04-15",
+      "area_code": "T6",
+      "site_label": "LTER Main Site",
+      "crop_label": "Alfalfa",
+      "replication_scope": "ALL_REPLICATIONS"
+    },
+    {
+      "locator": "https://lter.kbs.msu.edu/treatments/",
+      "experiment": "Main Cropping System Experiment (MCSE)",
+      "treatment_code": "T6",
+      "treatment_label": "Alfalfa"
+    },
+    {
+      "locator": "https://lter.kbs.msu.edu/research/long-term-experiments/main-cropping-system-experiment/",
+      "history": {
+        "2018": "T6_ALFALFA_DISCONTINUED_AFTER_2017_HARVEST",
+        "2019": "T6_PLANTED_TO_SWITCHGRASS"
+      }
+    }
+  ],
+  "normalized_context": {
+    "treatment.name": {
+      "type": "STRING",
+      "string": "Main Site Treatment 6"
+    },
+    "crop.code": {
+      "type": "CATEGORY",
+      "category": "alfalfa"
+    },
+    "site.name": {
+      "type": "STRING",
+      "string": "Kellogg Biological Station"
+    }
+  },
+  "evaluation_slice": {
+    "kind": "RETROSPECTIVE_YEAR_SLICE",
+    "start": "2015-01-01T00:00:00.000Z",
+    "end": "2016-01-01T00:00:00.000Z",
+    "representative_effective_at": "2015-04-15T12:00:00.000Z"
+  },
+  "normalization_notes": [
+    "T6 is retained as the source-native treatment code and normalized to the canonical label used by the retained 2015 KBS protocol knowledge fixture.",
+    "UTC slice boundaries and representative_effective_at are adapter-level retrospective evaluation coordinates, not asserted operation timestamps."
+  ]
+}
