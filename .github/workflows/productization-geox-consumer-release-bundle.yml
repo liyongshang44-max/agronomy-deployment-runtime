@@ -1,0 +1,63 @@
+name: ADR Productization — GEOX Consumer Release Bundle
+
+on:
+  push:
+    branches:
+      - 'feat/geox-consumer-release-bundle-*'
+    paths:
+      - 'adapters/geox/release-bundle.manifest.json'
+      - 'adapters/geox/scripts/build-consumer-release-bundle.mjs'
+      - 'adapters/geox/scripts/verify-consumer-release-bundle.mjs'
+      - 'adapters/geox/consumer-artifact.manifest.json'
+      - 'adapters/geox/scripts/build-consumer-artifact.mjs'
+      - 'adapters/geox/src/**'
+      - 'sdks/typescript/src/integration-contracts.mjs'
+      - 'acceptance/geox-consumer-release-bundle/**'
+      - '.github/workflows/productization-geox-consumer-release-bundle.yml'
+  pull_request:
+    paths:
+      - 'adapters/geox/release-bundle.manifest.json'
+      - 'adapters/geox/scripts/build-consumer-release-bundle.mjs'
+      - 'adapters/geox/scripts/verify-consumer-release-bundle.mjs'
+      - 'adapters/geox/consumer-artifact.manifest.json'
+      - 'adapters/geox/scripts/build-consumer-artifact.mjs'
+      - 'adapters/geox/src/**'
+      - 'sdks/typescript/src/integration-contracts.mjs'
+      - 'acceptance/geox-consumer-release-bundle/**'
+      - '.github/workflows/productization-geox-consumer-release-bundle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  geox_consumer_release_bundle:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Report runtime
+        run: |
+          node --version
+          npm --version
+      - name: Existing standalone consumer artifact qualification
+        run: node acceptance/geox-consumer-artifact/run.mjs
+      - name: Build and verify deterministic release bundle
+        run: node acceptance/geox-consumer-release-bundle/run.mjs
+      - name: Release bundle tamper and authority-boundary integrity
+        run: node acceptance/geox-consumer-release-bundle/integrity.mjs
+      - name: Build exact-head inspection bundle
+        run: node adapters/geox/scripts/build-consumer-release-bundle.mjs "$RUNNER_TEMP/geox-release-bundle" "$GITHUB_SHA"
+      - name: Verify exact-head inspection bundle
+        run: node adapters/geox/scripts/verify-consumer-release-bundle.mjs "$RUNNER_TEMP/geox-release-bundle/bundle" "$GITHUB_SHA"
+      - name: Upload qualified bundle candidate as CI evidence only
+        uses: actions/upload-artifact@v4
+        with:
+          name: geox-consumer-release-bundle-${{ github.sha }}
+          path: ${{ runner.temp }}/geox-release-bundle/bundle
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
