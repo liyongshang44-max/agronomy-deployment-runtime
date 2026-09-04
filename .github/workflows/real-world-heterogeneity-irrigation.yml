@@ -1,0 +1,31 @@
+name: ADR Real-World Heterogeneity — Irrigation
+
+on:
+  push:
+    branches:
+      - 'test/real-world-heterogeneity-irrigation-*'
+    paths:
+      - 'acceptance/real-kbs-rge-irrigation-target-context-a03/**'
+      - '.github/workflows/real-world-heterogeneity-irrigation.yml'
+  pull_request:
+    paths:
+      - 'acceptance/real-kbs-rge-irrigation-target-context-a03/**'
+      - '.github/workflows/real-world-heterogeneity-irrigation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  irrigation_runtime_composition:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Report runtime
+        run: node --version
+      - name: Real KBS RGE irrigation A03-A08-R01-R03-D01 strict positive proof
+        run: node acceptance/real-kbs-rge-irrigation-target-context-a03/run.mjs

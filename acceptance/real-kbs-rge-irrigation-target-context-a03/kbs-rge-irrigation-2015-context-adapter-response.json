@@ -1,0 +1,76 @@
+{
+  "adapter_contract": "adr.acceptance.kbs-public-context-adapter.v1",
+  "world": "KBS_RESOURCE_GRADIENT_IRRIGATED_2015",
+  "retained_at": "2026-09-04T08:35:00.000Z",
+  "source_evidence": [
+    {
+      "locator": "https://aglog.kbs.msu.edu/observations/3187",
+      "observation_date": "2015-05-21",
+      "source_labels": [
+        "LTER Main Site N-rate study",
+        "Fertility Gradient Study"
+      ],
+      "areas": [
+        "Resource_Gradient-Irrigated",
+        "Resource_Gradient_Non-Irrigated"
+      ],
+      "crop_label": "soybeans",
+      "evidence_role": "CROP_AND_EXPERIMENT_PARTITION_CONTEXT"
+    },
+    {
+      "locator": "https://aglog.kbs.msu.edu/observations/3320",
+      "observation_date": "2015-10-08",
+      "source_labels": [
+        "LTER N-rate Study",
+        "Resource Gradient Experiment",
+        "Irrigated Fertility Gradient",
+        "Non-Irrigated Fertility Gradient"
+      ],
+      "areas": [
+        "Resource_Gradient-Irrigated",
+        "Resource_Gradient_Non-Irrigated"
+      ],
+      "crop_label": "soybeans",
+      "evidence_role": "EXPERIMENT_ALIAS_CONVERGENCE"
+    },
+    {
+      "locator": "https://lter.kbs.msu.edu/research/long-term-experiments/resource-gradient/",
+      "source_labels": [
+        "Resource Gradient Experiment"
+      ],
+      "management_classes": [
+        "rainfed",
+        "irrigated"
+      ],
+      "evidence_role": "EXPERIMENT_IDENTITY_AND_IRRIGATION_PARTITION_CONTEXT"
+    }
+  ],
+  "normalization": {
+    "experiment_alias_rule": "SOURCE_EXPLICIT_ALIAS_PAIR_CANONICALIZED_TO_PROTOCOL_LABEL_ORDER",
+    "crop_rule": "SOURCE_LABEL_SOYBEANS_NORMALIZED_TO_CATEGORY_SOYBEAN"
+  },
+  "normalized_context": {
+    "crop.code": {
+      "type": "CATEGORY",
+      "category": "soybean"
+    },
+    "experiment.name": {
+      "type": "STRING",
+      "string": "Resource Gradient Experiment (N-rate Study)"
+    }
+  },
+  "evaluation_slice": {
+    "kind": "RETROSPECTIVE_SOURCE_DATE_SLICE",
+    "start": "2015-05-21T00:00:00.000Z",
+    "end": "2015-05-22T00:00:00.000Z",
+    "representative_effective_at": "2015-05-21T12:00:00.000Z",
+    "timezone_claim": "NONE_UTC_ACCEPTANCE_COORDINATE_ONLY"
+  },
+  "nonclaims": [
+    "NO_CURRENT_CROP_STATE",
+    "NO_SOIL_WATER_BALANCE_STATE",
+    "NO_TWO_DAY_TRIGGER_STATE",
+    "NO_IRRIGATION_DECISION_CORRECTNESS",
+    "NO_SOURCE_BACKED_GEOMETRY"
+  ]
+}
