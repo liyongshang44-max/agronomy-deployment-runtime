@@ -179,7 +179,7 @@ export function buildKbsT6TargetWorld() {
           end: adapterResponse.evaluation_slice.end
         },
         availableAt: KBS_T6_AVAILABLE_AT,
-        spatialSupport: { type: 'EXPERIMENTAL_TREATMENT', geometryRef: 'kbs:mcse:t6' },
+        spatialSupport: { type: 'EXPERIMENTAL_TREATMENT' },
         verticalSupport: null,
         temporalSupport: { type: adapterResponse.evaluation_slice.kind },
         uncertainty: { type: 'NONE' },
@@ -198,6 +198,7 @@ export function buildKbsT6TargetWorld() {
     assert.deepEqual(validatedDatum.semanticPayload.value, value);
     assert.equal(validatedDatum.semanticPayload.source.contentHash, providerHash);
     assert.equal(validatedDatum.semanticPayload.spatialSupport.type, 'EXPERIMENTAL_TREATMENT');
+    assert.equal('geometryRef' in validatedDatum.semanticPayload.spatialSupport, false);
 
     const receiptAuth = publishContextWriteAuthorization(receiptId, 'RESOLVED_CONTEXT_DATUM_RECEIPT', '2026-09-04T07:05:00.000Z');
     const receipt = publishResolvedContextDatumReceipt({
