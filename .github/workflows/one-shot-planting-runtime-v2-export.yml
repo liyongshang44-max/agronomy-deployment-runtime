@@ -1,0 +1,60 @@
+name: One-shot Planting Runtime V2 Export Patch
+
+on:
+  push:
+    branches:
+      - 'test/real-world-heterogeneity-planting-soybean-population-v1'
+    paths:
+      - '.github/workflows/one-shot-planting-runtime-v2-export.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: test/real-world-heterogeneity-planting-soybean-population-v1
+          fetch-depth: 0
+      - name: Upgrade acceptance profile to v2 and export real runtime world
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('acceptance/real-kbs-soybean-planting-population-target/run-runtime-composition-v1.mjs')
+          s = p.read_text()
+          replacements = [
+            (
+              "  RUNTIME_PROFILE_CONTRACT_VERSION,\n",
+              "  RUNTIME_PROFILE_ROBUSTNESS_CONTRACT_VERSION,\n"
+            ),
+            (
+              "    contractVersion: RUNTIME_PROFILE_CONTRACT_VERSION,",
+              "    contractVersion: RUNTIME_PROFILE_ROBUSTNESS_CONTRACT_VERSION,"
+            ),
+            (
+              "      rolloutStages: ['SHADOW']\n    }\n  },",
+              "      rolloutStages: ['SHADOW']\n    },\n    robustnessRequirement: {\n      comparisonMode: 'EXACT_MATERIAL_ACTION_SIGNATURE',\n      sufficientCompletenessClasses: ['EXHAUSTIVE_ENUMERATION']\n    }\n  },"
+            ),
+            (
+              "const records = ledger.exportSnapshot().records;",
+              "export const plantingRuntimeWorld = Object.freeze({\n  ledger,\n  snapshotStore,\n  world,\n  decision,\n  manifest,\n  validatedDatums,\n  knowledge,\n  release,\n  profile,\n  deployment,\n  runtimePrincipal,\n  runtimeRole,\n  runtimeAuth,\n  retrieval,\n  applicability,\n  plan,\n  eligibility,\n  validatedEligibility,\n  limitedLegalPaths,\n  binding,\n  validatedBinding,\n  requiredSemanticIds,\n  expectedLimitationCode: EXPECTED_LIMITATION_CODE,\n  sourceArtifactHash: EXPECTED_SOURCE_HASH\n});\n\nconst records = ledger.exportSnapshot().records;"
+            )
+          ]
+          for old, new in replacements:
+              if s.count(old) != 1:
+                  raise SystemExit(f'expected exactly one match for {old!r}, found {s.count(old)}')
+              s = s.replace(old, new)
+          p.write_text(s)
+          Path('.github/workflows/one-shot-planting-runtime-v2-export.yml').unlink()
+      - name: Commit exact acceptance refactor
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git diff --cached --stat
+          test "$(git diff --cached --name-only | wc -l)" -eq 2
+          git commit -m "test(adr): reuse planting world under robustness profile v2"
+          git push origin HEAD:test/real-world-heterogeneity-planting-soybean-population-v1
