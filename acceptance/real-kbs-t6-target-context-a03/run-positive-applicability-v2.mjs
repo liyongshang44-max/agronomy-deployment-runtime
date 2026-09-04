@@ -549,7 +549,11 @@ const applicability = assessKnowledgeApplicability({
   snapshotStore,
   audit: audit(runtimePrincipal, 'applicability-publish', '2026-09-04T07:21:00.000Z')
 });
-const validatedApplicability = validateApplicabilityAssessment({ ledger, applicabilityAssessmentRef: applicability.ref });
+const validatedApplicability = validateApplicabilityAssessment({
+  ledger,
+  applicabilityAssessmentRef: applicability.ref,
+  snapshotStore
+});
 assert.equal(validatedApplicability.semanticPayload.scientificUseStatus, 'QUALIFIED');
 assert.equal(validatedApplicability.semanticPayload.transportStatus, 'DIRECTLY_APPLICABLE');
 assert.equal(validatedApplicability.semanticPayload.runtimeUse, 'ALLOWED');
