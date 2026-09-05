@@ -109,6 +109,14 @@ for (const [label, key, value] of [
   });
 }
 
+expectCode('bilateral experiment locator drift is not correspondence authority', 'GEOX_TARGET_CORRESPONDENCE_CONSUMER_TARGET_INVALID', () => {
+  const message = clone(baseMessage);
+  const authority = clone(geoxAuthority);
+  message.payload.provider_target.experiment_locator = 'https://example.invalid/fake-mcse';
+  authority.provider_target.experiment_locator = 'https://example.invalid/fake-mcse';
+  project(message, authority);
+});
+
 expectCode('T4 authority source set cannot stand in for T3', 'GEOX_TARGET_CORRESPONDENCE_CONSUMER_AUTHORITY_INVALID', () => {
   const authority = clone(geoxAuthority);
   authority.authority_sources[0].path =
@@ -152,6 +160,18 @@ expectCode('correspondence cannot grant dispatch authority', 'GEOX_TARGET_CORRES
   project(baseMessage, authority);
 });
 
+expectCode('valid-format GEOX main SHA drift fails closed', 'GEOX_TARGET_CORRESPONDENCE_CONSUMER_AUTHORITY_INVALID', () => {
+  const authority = clone(geoxAuthority);
+  authority.source_main_sha = '1111111111111111111111111111111111111111';
+  project(baseMessage, authority);
+});
+
+expectCode('valid-format GEOX authority blob SHA drift fails closed', 'GEOX_TARGET_CORRESPONDENCE_CONSUMER_AUTHORITY_INVALID', () => {
+  const authority = clone(geoxAuthority);
+  authority.authority_sources[0].blob_sha = '2222222222222222222222222222222222222222';
+  project(baseMessage, authority);
+});
+
 expectCode('invalid GEOX main pin fails closed', 'GEOX_TARGET_CORRESPONDENCE_CONSUMER_AUTHORITY_INVALID', () => {
   const authority = clone(geoxAuthority);
   authority.source_main_sha = 'main';
@@ -171,4 +191,4 @@ assert.equal(safe.human_approval_authority, 'NONE');
 assert.equal(safe.machine_execution_authority, 'NONE');
 console.log('PASS safe T3R1 correspondence remains non-equality, non-actionable and non-dispatchable');
 
-console.log('KBS T3R1 target correspondence integrity: 17/17 passed');
+console.log('KBS T3R1 target correspondence integrity: 20/20 passed');
