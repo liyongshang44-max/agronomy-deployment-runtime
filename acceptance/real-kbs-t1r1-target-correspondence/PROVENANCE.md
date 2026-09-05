@@ -32,7 +32,7 @@ The retained provider-response bytes are content addressed by:
 
 `sha256:b79542a4a5f19f91d7d98c6404bf841cd5660b28672e9fb66bd4b9e6905c1fcd`
 
-ADR therefore resolves the provider target as:
+ADR therefore independently knows:
 
 `MCSE / T1 / R1 / corn / P0306Q / AgLog 6931`
 
@@ -53,7 +53,7 @@ Exact final V1 formal authority files:
 - `docs/digital_twin/mcft/cap_09/GEOX-MCFT-CAP-09-S6-FORMAL-CROP-CONTEXT-AUTHORITY-V1.json`
   - blob `b5de9d29189cb654444b3f57d00df290eefe16d3`
 
-These authorities independently bind:
+These final authorities independently bind:
 
 - site `KBS_MCSE_T1R1`
 - field `field_kbs_mcse_t1r1`
@@ -63,6 +63,14 @@ These authorities independently bind:
 - planting observation `6931`
 - planting local date `2026-05-11`
 - provider `KBS_AGLOG`
+
+They do **not** establish the planting hybrid `P0306Q` as GEOX final authority. The earlier EA1 site-source qualification is also insufficient for that promotion: it remains `INCOMPLETE_AUTHORITY` and freezes only the site/crop/geometry-source qualification boundary relevant here.
+
+Therefore the cross-namespace shared provider-target projection deliberately uses:
+
+`hybrid_code = NOT_ESTABLISHED_BY_CONSUMER_AUTHORITY`
+
+ADR retains `P0306Q` in its own independently sourced context, but the correspondence boundary does not promote that ADR-only fact into a GEOX-backed common component. Any attempt by either side to replace the sentinel with `P0306Q` fails closed.
 
 The V1 geometry boundary is intentionally different from the later T3/R1 and T4/R1 successor worlds. T1/R1 references restricted KBS provider geometry and does not republish it. The acceptance export therefore classifies geometry as:
 
@@ -76,13 +84,24 @@ The qualified relation is only:
 
 `CORRESPONDS_TO_SAME_KBS_MCSE_T1_R1_TARGET`
 
-It means both independently governed sides resolve to the same provider target components. It does not mean ADR and GEOX identities are equal.
+The independently common target components are:
+
+- official MCSE experiment locator
+- treatment `T1`
+- replicate `R1`
+- crop `corn`
+- planting observation `6931`
+
+Hybrid correspondence is explicitly **not established** by the GEOX final authority set.
+
+The relation does not mean ADR and GEOX identities are equal.
 
 The following remain false / NONE:
 
 - ADR↔GEOX identity equality
 - geometry equality
 - zone correspondence/equality
+- hybrid correspondence beyond the explicit consumer-unestablished sentinel
 - field actionability
 - dispatch authority
 - human approval authority

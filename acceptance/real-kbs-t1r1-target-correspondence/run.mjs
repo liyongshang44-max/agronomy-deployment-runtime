@@ -12,6 +12,8 @@ import {
 } from '../../adapters/geox/src/target-correspondence.mjs';
 import { buildKbsT1R1TargetWorld } from './target-world.mjs';
 
+const CONSUMER_UNESTABLISHED = 'NOT_ESTABLISHED_BY_CONSUMER_AUTHORITY';
+
 function toWireRef(ref) {
   return Object.freeze({
     kind: ref.kind,
@@ -40,6 +42,7 @@ const geoxTargetAuthority = JSON.parse(readFileSync(
   'utf8'
 ));
 assert.equal(geoxTargetAuthority.source_main_sha, '5050f1c08d2528048c56d56add4cbb068b956925');
+assert.equal(geoxTargetAuthority.provider_target.hybrid_code, CONSUMER_UNESTABLISHED);
 assert.equal(geoxTargetAuthority.geox_target.field_id, 'field_kbs_mcse_t1r1');
 assert.equal(geoxTargetAuthority.geox_target.zone_id, 'zone_kbs_mcse_t1r1_formal_v1');
 assert.equal(geoxTargetAuthority.geox_target.field_validity_proven, false);
@@ -67,7 +70,7 @@ const message = createIntegrationMessage({
       treatment_code: world.providerTarget.treatment,
       replicate_code: world.providerTarget.replicate,
       crop_code: world.providerTarget.crop,
-      hybrid_code: world.providerTarget.hybrid,
+      hybrid_code: CONSUMER_UNESTABLISHED,
       planting_observation_id: world.providerTarget.plantingObservationId
     },
     relation_candidate: GEOX_TARGET_CORRESPONDENCE_T1R1_RELATION,
@@ -95,7 +98,7 @@ assert.equal(
 assert.equal(projection.provider_target.treatment_code, 'T1');
 assert.equal(projection.provider_target.replicate_code, 'R1');
 assert.equal(projection.provider_target.crop_code, 'corn');
-assert.equal(projection.provider_target.hybrid_code, 'P0306Q');
+assert.equal(projection.provider_target.hybrid_code, CONSUMER_UNESTABLISHED);
 assert.equal(projection.provider_target.planting_observation_id, '6931');
 assert.equal(projection.geox_target.field_id, 'field_kbs_mcse_t1r1');
 assert.equal(projection.geox_target.zone_id, 'zone_kbs_mcse_t1r1_formal_v1');
@@ -134,13 +137,16 @@ console.log(JSON.stringify({
     seasonId: projection.geox_target.season_id,
     zoneId: projection.geox_target.zone_id,
     geometryAuthorityClass: geoxTargetAuthority.geometry_boundary.geometry_authority_class,
+    consumerHybridAuthority: CONSUMER_UNESTABLISHED,
     fieldValidityProven: false,
     productionSiteClaimed: false
   },
   correspondence: {
     status: projection.status,
     relation: projection.relation,
-    providerTarget: projection.provider_target,
+    sharedProviderTarget: projection.provider_target,
+    adrOnlyKnownHybrid: world.providerTarget.hybrid,
+    hybridCorrespondenceClaimed: false,
     consumerAuthorityClassification: projection.consumer_authority_pin.classification,
     identityEqualityClaimed: false,
     geometryEqualityClaimed: false,

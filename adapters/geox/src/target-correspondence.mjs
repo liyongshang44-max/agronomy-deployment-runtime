@@ -59,6 +59,7 @@ const T1R1_PINNED_AUTHORITY = Object.freeze({
 
 const GEOMETRY_CLASS_CROP_ONLY = 'CROP_ONLY_DERIVED_PROVIDER_GEOMETRY';
 const GEOMETRY_CLASS_REFERENCED_RESTRICTED = 'PROVIDER_GEOMETRY_REFERENCED_RESTRICTED_NOT_REPUBLISHED';
+const CONSUMER_UNESTABLISHED = 'NOT_ESTABLISHED_BY_CONSUMER_AUTHORITY';
 
 const CORRESPONDENCE_PROFILES = Object.freeze({
   [GEOX_TARGET_CORRESPONDENCE_RELATION]: Object.freeze({
@@ -111,7 +112,7 @@ const CORRESPONDENCE_PROFILES = Object.freeze({
       treatment_code: 'T1',
       replicate_code: 'R1',
       crop_code: 'corn',
-      hybrid_code: 'P0306Q',
+      hybrid_code: CONSUMER_UNESTABLISHED,
       planting_observation_id: '6931'
     }),
     geox: Object.freeze({
