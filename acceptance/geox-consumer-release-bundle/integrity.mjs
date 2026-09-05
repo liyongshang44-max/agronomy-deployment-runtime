@@ -114,11 +114,14 @@ try {
   }
   assert.match(workflow, /permissions:\s*\n\s*contents: read/);
   assert.match(workflow, /ADR_RELEASE_SOURCE_COMMIT: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/);
+  assert.match(workflow, /ref: \$\{\{ env\.ADR_RELEASE_SOURCE_COMMIT \}\}/, 'checkout must use the exact provenance source SHA');
+  assert.match(workflow, /ACTUAL_SOURCE_COMMIT="\$\(git rev-parse HEAD\)"/, 'workflow must resolve the actual checked-out commit');
+  assert.match(workflow, /test "\$ACTUAL_SOURCE_COMMIT" = "\$ADR_RELEASE_SOURCE_COMMIT"/, 'workflow must fail closed if checkout and provenance source differ');
   assert.match(workflow, /push:\s*\n\s*branches:\s*\n\s*- 'main'/, 'authoritative main must trigger exact-SHA release-bundle qualification');
 
   console.log(JSON.stringify({
     ok: true,
-    integrityCases: 10,
+    integrityCases: 11,
     checksumTamperRejected: true,
     sourceCommitDriftRejected: true,
     sourceContentHashDriftRejected: true,
@@ -128,6 +131,7 @@ try {
     unexpectedFileRejected: true,
     publicationSideEffectsAbsent: true,
     pullRequestSyntheticMergeRefExcludedFromSourceProvenance: true,
+    exactSourceCheckoutEnforced: true,
     authoritativeMainPushQualificationEnabled: true
   }, null, 2));
 } finally {
