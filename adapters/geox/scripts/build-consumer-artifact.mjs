@@ -69,11 +69,11 @@ function loadCompatibilityEnvelope(manifest) {
   if (!compatibility || typeof compatibility !== 'object' || Array.isArray(compatibility)) {
     fail('compatibility envelope is required');
   }
-  if (compatibility.contract_version !== 'adr.geox-consumer-compatibility-envelope.v1') {
+  if (compatibility.contract_version !== 'adr.geox-consumer-compatibility-envelope.v2') {
     fail('unsupported consumer compatibility envelope contract');
   }
   if (compatibility.package_version !== manifest.package_version) fail('compatibility package version must match artifact package version');
-  if (compatibility.change_policy !== 'EXACT_PACKAGE_API_AND_PROFILE_REGISTRY_COMPATIBILITY_REVIEW_REQUIRED') {
+  if (compatibility.change_policy !== 'EXACT_PACKAGE_API_PROFILE_AND_RUNTIME_COMPATIBILITY_REVIEW_REQUIRED') {
     fail('compatibility change policy drifted');
   }
   if (compatibility.authority_claim !== 'NONE_COMPATIBILITY_METADATA_ONLY_NO_RUNTIME_OR_PUBLICATION_AUTHORITY') {
@@ -107,6 +107,14 @@ function loadCompatibilityEnvelope(manifest) {
     fail('target correspondence profile registry compatibility hash drifted');
   }
 
+  const runtime = compatibility.runtime_environment;
+  if (!runtime || typeof runtime !== 'object' || Array.isArray(runtime)) {
+    fail('runtime_environment compatibility is required');
+  }
+  if (runtime.node_engine !== manifest.node_engine) {
+    fail('runtime_environment node engine must exactly match artifact node_engine');
+  }
+
   return Object.freeze({
     contract_version: compatibility.contract_version,
     package_version: compatibility.package_version,
@@ -117,6 +125,9 @@ function loadCompatibilityEnvelope(manifest) {
     target_correspondence_profile_registry: Object.freeze({
       registry_version: registry.registry_version,
       profile_set_hash: registry.profile_set_hash
+    }),
+    runtime_environment: Object.freeze({
+      node_engine: runtime.node_engine
     }),
     change_policy: compatibility.change_policy,
     authority_claim: compatibility.authority_claim
