@@ -18,6 +18,7 @@ const ADAPTER_SOURCE_DIR = join(REPO_ROOT, 'adapters/geox/src');
 const COMMIT_RE = /^[0-9a-f]{40}$/;
 const EXPECTED_BUNDLE_BUILDER_VERSION = 'adr.geox-consumer-release-bundle-builder.v1';
 const EXPECTED_CONSUMER_BUILDER_VERSION = 'adr.geox-consumer-artifact-builder.v1';
+const PACKED_ARTIFACT_CLOSURE_VERSION = 'adr.geox-consumer-packed-artifact-closure.v1';
 
 export const GEOX_CONSUMER_RELEASE_BUNDLE_VERIFIER_VERSION = 'adr.geox-consumer-release-bundle-verifier.v1';
 
@@ -84,14 +85,26 @@ function parseChecksums(path) {
   return entries;
 }
 
-function readPackedPackageJson(tarballPath) {
-  const extracted = spawnSync('tar', ['-xOf', tarballPath, 'package/package.json'], { encoding: 'utf8' });
-  if (extracted.status !== 0) fail('PACKAGE_TARBALL_INVALID', (extracted.stderr || extracted.stdout || 'tar extraction failed').trim());
-  try {
-    return JSON.parse(extracted.stdout);
-  } catch (error) {
-    fail('PACKAGE_TARBALL_INVALID', `packed package.json is invalid JSON: ${error?.message ?? error}`);
+function tarText(tarballPath, args, code) {
+  const result = spawnSync('tar', [...args, tarballPath], { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
+  if (result.status !== 0) fail(code, (result.stderr || result.stdout || 'tar command failed').trim());
+  return result.stdout;
+}
+
+function packedFileList(tarballPath) {
+  const result = spawnSync('tar', ['-tzf', tarballPath], { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
+  if (result.status !== 0) fail('PACKAGE_TARBALL_INVALID', (result.stderr || result.stdout || 'tar listing failed').trim());
+  const files = result.stdout.split('\n').map((entry) => entry.trim()).filter((entry) => entry && !entry.endsWith('/')).sort();
+  if (new Set(files).size !== files.length) fail('PACKAGE_FILE_SET_MISMATCH', 'packed artifact contains duplicate file paths');
+  return files;
+}
+
+function packedFileBytes(tarballPath, path) {
+  const result = spawnSync('tar', ['-xOf', tarballPath, path], { encoding: null, maxBuffer: 16 * 1024 * 1024 });
+  if (result.status !== 0) {
+    fail('PACKAGE_TARBALL_INVALID', Buffer.concat([result.stderr ?? Buffer.alloc(0), result.stdout ?? Buffer.alloc(0)]).toString('utf8').trim() || `cannot extract ${path}`);
   }
+  return result.stdout;
 }
 
 function expectedSourceHashes(consumerManifest) {
@@ -158,6 +171,97 @@ function expectedCompatibility(consumerManifest) {
     fail('PACKAGE_COMPATIBILITY_MISMATCH', 'consumer artifact compatibility envelope does not match exact API/registry source state');
   }
   return expected;
+}
+
+function expectedPackedPackageJson(consumerManifest, compatibility) {
+  return {
+    name: consumerManifest.package_name,
+    version: consumerManifest.package_version,
+    private: true,
+    type: 'module',
+    description: 'First-party ADR consumer adapter for GEOX-compatible inputs; packaging grants no dispatch authority.',
+    exports: consumerManifest.exports,
+    files: ['src'],
+    engines: { node: consumerManifest.node_engine },
+    adr_consumer_artifact: {
+      contract_version: consumerManifest.contract_version,
+      builder_version: EXPECTED_CONSUMER_BUILDER_VERSION,
+      compatibility,
+      authority_claim: consumerManifest.authority_claim
+    }
+  };
+}
+
+function expectedPackedContents(consumerManifest, compatibility) {
+  const contents = new Map();
+  const packageJson = expectedPackedPackageJson(consumerManifest, compatibility);
+  contents.set('package/package.json', Buffer.from(`${JSON.stringify(packageJson, null, 2)}\n`, 'utf8'));
+
+  const dependency = consumerManifest.bundled_dependency;
+  if (!dependency || typeof dependency !== 'object' || Array.isArray(dependency)) {
+    fail('CONSUMER_MANIFEST_INVALID', 'bundled_dependency is required for packed artifact closure');
+  }
+  const rewriteFrom = dependency.rewrite_from;
+  const rewriteTo = dependency.rewrite_to;
+  if (typeof rewriteFrom !== 'string' || !rewriteFrom || typeof rewriteTo !== 'string' || !rewriteTo) {
+    fail('CONSUMER_MANIFEST_INVALID', 'bundled dependency rewrite mapping is invalid');
+  }
+
+  for (const filename of consumerManifest.source_files ?? []) {
+    if (typeof filename !== 'string' || filename.includes('/') || !filename.endsWith('.mjs')) {
+      fail('CONSUMER_MANIFEST_INVALID', `unsafe source filename ${String(filename)}`);
+    }
+    const raw = readFileSync(join(ADAPTER_SOURCE_DIR, filename), 'utf8');
+    const artifactText = raw.split(rewriteFrom).join(rewriteTo);
+    if (artifactText.includes('../../../sdks/')) {
+      fail('PACKAGE_CONTENT_MISMATCH', `${filename} expected artifact content still contains a repository-internal SDK import`);
+    }
+    contents.set(`package/src/${filename}`, Buffer.from(artifactText, 'utf8'));
+  }
+
+  const dependencyPath = `package/${dependency.artifact_path}`;
+  if (contents.has(dependencyPath)) fail('CONSUMER_MANIFEST_INVALID', `bundled dependency collides with ${dependencyPath}`);
+  contents.set(dependencyPath, readFileSync(join(REPO_ROOT, dependency.source)));
+  return { contents, packageJson };
+}
+
+function verifyPackedArtifactClosure(tarballPath, consumerManifest, compatibility) {
+  const { contents: expectedContents, packageJson: expectedPackageJson } = expectedPackedContents(consumerManifest, compatibility);
+  const expectedFiles = [...expectedContents.keys()].sort();
+  const actualFiles = packedFileList(tarballPath);
+  if (!exactObject(actualFiles, expectedFiles)) {
+    fail('PACKAGE_FILE_SET_MISMATCH', `packed artifact file set drifted: expected ${expectedFiles.join(', ')}; got ${actualFiles.join(', ')}`);
+  }
+
+  const actualPackageJsonBytes = packedFileBytes(tarballPath, 'package/package.json');
+  let actualPackageJson;
+  try {
+    actualPackageJson = JSON.parse(actualPackageJsonBytes.toString('utf8'));
+  } catch (error) {
+    fail('PACKAGE_TARBALL_INVALID', `packed package.json is invalid JSON: ${error?.message ?? error}`);
+  }
+  if (!exactObject(actualPackageJson, expectedPackageJson)) {
+    fail('PACKAGE_METADATA_MISMATCH', 'packed package.json field set or values drifted from the governed artifact manifest');
+  }
+
+  const contentHashes = {};
+  for (const path of expectedFiles) {
+    const actualBytes = path === 'package/package.json' ? actualPackageJsonBytes : packedFileBytes(tarballPath, path);
+    const expectedBytes = expectedContents.get(path);
+    if (!actualBytes.equals(expectedBytes)) {
+      fail('PACKAGE_CONTENT_MISMATCH', `${path} bytes do not match the governed packed artifact closure`);
+    }
+    contentHashes[path] = sha256(actualBytes);
+  }
+
+  return Object.freeze({
+    contractVersion: PACKED_ARTIFACT_CLOSURE_VERSION,
+    fileCount: actualFiles.length,
+    fileSetHash: sha256Json(actualFiles),
+    contentClosureHash: sha256Json(contentHashes),
+    contentHashes: Object.freeze(contentHashes),
+    packageJson: Object.freeze(actualPackageJson)
+  });
 }
 
 export function verifyGeoxConsumerReleaseBundle({ bundleDir, expectedSourceCommit }) {
@@ -233,10 +337,8 @@ export function verifyGeoxConsumerReleaseBundle({ bundleDir, expectedSourceCommi
   };
   if (!exactObject(provenance.package, expectedPackage)) fail('PACKAGE_METADATA_MISMATCH', 'provenance package metadata does not match bundle bytes');
 
-  const packed = readPackedPackageJson(packagePath);
-  if (packed.name !== releaseManifest.package_name || packed.version !== releaseManifest.package_version || packed.private !== true) {
-    fail('PACKAGE_METADATA_MISMATCH', 'packed package.json does not match frozen release metadata');
-  }
+  const packedArtifactClosure = verifyPackedArtifactClosure(packagePath, consumerManifest, compatibility);
+  const packed = packedArtifactClosure.packageJson;
   if (!exactObject(packed.adr_consumer_artifact?.compatibility, compatibility)) {
     fail('PACKAGE_COMPATIBILITY_MISMATCH', 'packed package compatibility metadata does not match exact API/registry envelope');
   }
@@ -278,6 +380,13 @@ export function verifyGeoxConsumerReleaseBundle({ bundleDir, expectedSourceCommi
     packageTarballHash: packageHash,
     releaseStatus: provenance.release_status,
     compatibility: Object.freeze(canonical(compatibility)),
+    packedArtifactClosure: Object.freeze({
+      contractVersion: packedArtifactClosure.contractVersion,
+      fileCount: packedArtifactClosure.fileCount,
+      fileSetHash: packedArtifactClosure.fileSetHash,
+      contentClosureHash: packedArtifactClosure.contentClosureHash,
+      contentHashes: packedArtifactClosure.contentHashes
+    }),
     evidenceHash,
     authorityClaim: provenance.authority_claim
   });
