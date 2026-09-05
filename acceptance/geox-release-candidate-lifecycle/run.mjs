@@ -23,6 +23,10 @@ import {
 
 const CANDIDATE_A_SOURCE_COMMIT = '953e5def4913d9b7d597126adfc4760ea1ecf375';
 const CANDIDATE_B_SOURCE_COMMIT = 'c49afa1d70421f2402fabf0294ea6b50a58013c1';
+const HISTORICAL_A_CANDIDATE_ID = 'sha256:cf4d00647e019bbc07eacc148ccec43d93cb72491e7b642d3b5dc421b8337adc';
+const HISTORICAL_B_CANDIDATE_ID = 'sha256:439cf78bf33da119c67e76fc25c9983d72385b38b1d50bf0ef9dd6242530ecff';
+const HISTORICAL_AB_TRANSITION_ID = 'sha256:27a4c39735e11ceb3f2707b7ee9d8db14958f1ed4dbfe74e4e56a35218abee9e';
+const HISTORICAL_AB_LINEAGE_ID = 'sha256:bfbecffc29dae26daeec19ec7111693eb60a98e2a3e0ee15b0cc525505427cd9';
 const REPO_ROOT = resolve(process.cwd());
 
 function sha256(bytes) {
@@ -44,12 +48,19 @@ function run(command, args, options = {}) {
   return result;
 }
 
+function exactCurrentSourceCommit() {
+  const explicit = process.env.ADR_LIFECYCLE_QUALIFICATION_HEAD?.trim();
+  const value = explicit || run('git', ['rev-parse', 'HEAD']).stdout.trim();
+  assert.match(value, /^[0-9a-f]{40}$/);
+  return value;
+}
+
 function ensureCommit(commit) {
   const probe = spawnSync('git', ['cat-file', '-e', `${commit}^{commit}`], { cwd: REPO_ROOT, encoding: 'utf8' });
   if (probe.status === 0) return;
   run('git', ['fetch', '--no-tags', '--depth=1', 'origin', commit]);
   const verified = spawnSync('git', ['cat-file', '-e', `${commit}^{commit}`], { cwd: REPO_ROOT, encoding: 'utf8' });
-  assert.equal(verified.status, 0, `exact historical candidate commit ${commit} must be available after fetch`);
+  assert.equal(verified.status, 0, `exact candidate commit ${commit} must be available after fetch`);
 }
 
 function lifecycleVerificationSubset(verified) {
@@ -67,7 +78,7 @@ function lifecycleVerificationSubset(verified) {
   };
 }
 
-function buildHistoricalQualifiedCandidate({ commit, root }) {
+function buildQualifiedCandidate({ commit, root }) {
   ensureCommit(commit);
   const worktree = join(root, `worktree-${commit.slice(0, 12)}`);
   const buildRoot = join(root, `bundle-${commit.slice(0, 12)}`);
@@ -101,7 +112,7 @@ function buildHistoricalQualifiedCandidate({ commit, root }) {
   } finally {
     if (worktreeAdded) {
       const removed = spawnSync('git', ['worktree', 'remove', '--force', worktree], { cwd: REPO_ROOT, encoding: 'utf8' });
-      assert.equal(removed.status, 0, `historical worktree ${worktree} must be removable`);
+      assert.equal(removed.status, 0, `candidate worktree ${worktree} must be removable`);
     }
   }
 }
@@ -110,65 +121,109 @@ function expectCode(fn, code) {
   assert.throws(fn, (error) => error?.code === code, `expected lifecycle error ${code}`);
 }
 
+const currentSourceCommit = exactCurrentSourceCommit();
 const root = mkdtempSync(join(tmpdir(), 'adr-geox-release-candidate-lifecycle-'));
 try {
-  const a = buildHistoricalQualifiedCandidate({ commit: CANDIDATE_A_SOURCE_COMMIT, root });
-  const b = buildHistoricalQualifiedCandidate({ commit: CANDIDATE_B_SOURCE_COMMIT, root });
+  const a = buildQualifiedCandidate({ commit: CANDIDATE_A_SOURCE_COMMIT, root });
+  const b = buildQualifiedCandidate({ commit: CANDIDATE_B_SOURCE_COMMIT, root });
+  const c = buildQualifiedCandidate({ commit: currentSourceCommit, root });
   const candidateA = a.candidate;
   const candidateB = b.candidate;
+  const candidateC = c.candidate;
 
+  assert.equal(candidateA.candidateId, HISTORICAL_A_CANDIDATE_ID);
+  assert.equal(candidateB.candidateId, HISTORICAL_B_CANDIDATE_ID);
   assert.equal(candidateA.descriptor.source_commit, CANDIDATE_A_SOURCE_COMMIT);
   assert.equal(candidateB.descriptor.source_commit, CANDIDATE_B_SOURCE_COMMIT);
+  assert.equal(candidateC.descriptor.source_commit, currentSourceCommit);
   assert.equal(candidateA.descriptor.package_name, '@adr/geox-adapter');
   assert.equal(candidateB.descriptor.package_name, '@adr/geox-adapter');
+  assert.equal(candidateC.descriptor.package_name, '@adr/geox-adapter');
   assert.equal(candidateA.descriptor.package_metadata_version, '0.1.0-development');
   assert.equal(candidateB.descriptor.package_metadata_version, '0.1.0-development');
+  assert.equal(candidateC.descriptor.package_metadata_version, '0.1.0-development');
   assert.equal(candidateA.descriptor.package_tarball_sha256, candidateB.descriptor.package_tarball_sha256,
-    'A and B intentionally prove distinct candidate identity despite identical package bytes');
+    'historical A/B must retain the exact #199 identical-byte proof');
   assert.equal(candidateA.descriptor.consumer_api_surface_hash, candidateB.descriptor.consumer_api_surface_hash);
-  assert.equal(candidateA.descriptor.target_correspondence_profile_set_hash, candidateB.descriptor.target_correspondence_profile_set_hash);
-  assert.equal(candidateA.descriptor.compatibility_envelope_hash, candidateB.descriptor.compatibility_envelope_hash);
-  assert.notEqual(candidateA.candidateId, candidateB.candidateId, 'different source/qualification identity must create distinct candidate IDs');
-  assert.notEqual(candidateA.qualificationReceiptHash, candidateB.qualificationReceiptHash);
-  assert.notEqual(a.verifierSourceHash, b.verifierSourceHash,
-    'qualification receipt must distinguish verifier implementation changes even when verifier version text remains v1');
+  assert.equal(candidateB.descriptor.consumer_api_surface_hash, candidateC.descriptor.consumer_api_surface_hash,
+    'runtime support change must not masquerade as an API export change');
+  assert.equal(candidateB.descriptor.target_correspondence_profile_set_hash, candidateC.descriptor.target_correspondence_profile_set_hash,
+    'runtime support change must not alter correspondence profile authority');
+  assert.notEqual(candidateB.descriptor.compatibility_envelope_hash, candidateC.descriptor.compatibility_envelope_hash,
+    'runtime-bound v2 envelope must produce a distinct compatibility identity');
+  assert.notEqual(candidateB.candidateId, candidateC.candidateId);
 
-  requireKnownReleaseCandidate(candidateA.candidateId, [candidateA, candidateB]);
-  requireKnownReleaseCandidate(candidateB.candidateId, [candidateA, candidateB]);
+  requireKnownReleaseCandidate(candidateA.candidateId, [candidateA, candidateB, candidateC]);
+  requireKnownReleaseCandidate(candidateB.candidateId, [candidateA, candidateB, candidateC]);
+  requireKnownReleaseCandidate(candidateC.candidateId, [candidateA, candidateB, candidateC]);
   expectCode(
-    () => requireKnownReleaseCandidate(`sha256:${'f'.repeat(64)}`, [candidateA, candidateB]),
+    () => requireKnownReleaseCandidate(`sha256:${'f'.repeat(64)}`, [candidateA, candidateB, candidateC]),
     'UNKNOWN_CANDIDATE'
   );
 
-  const transition = assessReleaseCandidateTransitionCompatibility({ predecessor: candidateA, successor: candidateB });
-  assert.equal(transition.decision.package_metadata_version, 'SAME_INFORMATIONAL_ONLY');
-  assert.equal(transition.decision.artifact_tarball, 'SAME');
-  assert.equal(transition.decision.source_commit, 'DIFFERENT');
-  assert.equal(transition.decision.qualification_receipt, 'DIFFERENT');
-  assert.equal(transition.decision.consumer_api_surface, 'SAME');
-  assert.equal(transition.decision.target_correspondence_profile_set, 'SAME');
-  assert.equal(transition.decision.compatibility_envelope, 'SAME');
-  assert.equal(transition.decision.decision, 'REPLACEMENT_ELIGIBLE_FOR_SHADOW_INSTALL');
-  assert.equal(transition.decision.predecessor_rollback_eligibility, 'ELIGIBLE_IF_RETAINED');
-  assert.equal(transition.decision.authority.replacement_authorized, false);
-  assert.equal(transition.decision.authority.rollback_authorized, false);
-  assert.equal(transition.decision.authority.shadow_install_authorized, false);
+  const historicalTransition = assessReleaseCandidateTransitionCompatibility({ predecessor: candidateA, successor: candidateB });
+  assert.equal(historicalTransition.transitionDecisionId, HISTORICAL_AB_TRANSITION_ID,
+    'runtime-aware lifecycle must not rewrite #199 historical A/B transition identity');
+  assert.equal(historicalTransition.decision.contract_version, 'adr.geox-release-candidate-transition-compatibility-decision.v1');
+  assert.equal(historicalTransition.decision.package_metadata_version, 'SAME_INFORMATIONAL_ONLY');
+  assert.equal(historicalTransition.decision.artifact_tarball, 'SAME');
+  assert.equal(historicalTransition.decision.consumer_api_surface, 'SAME');
+  assert.equal(historicalTransition.decision.target_correspondence_profile_set, 'SAME');
+  assert.equal(historicalTransition.decision.compatibility_envelope, 'SAME');
+  assert.equal(historicalTransition.decision.decision, 'REPLACEMENT_ELIGIBLE_FOR_SHADOW_INSTALL');
 
-  const lineage = createReleaseCandidateLineage({
+  const historicalLineage = createReleaseCandidateLineage({
     predecessor: candidateA,
     successor: candidateB,
-    transitionDecision: transition,
+    transitionDecision: historicalTransition,
     retainPredecessorForRollback: true
   });
-  assert.equal(lineage.lineage.relation, 'REPLACES');
-  assert.equal(lineage.lineage.predecessor.validity_after_supersession, 'VALID_QUALIFIED_CANDIDATE_NOT_INVALIDATED');
-  assert.equal(lineage.lineage.predecessor.retained_state, 'RETAINED_FOR_ROLLBACK');
-  assert.equal(lineage.lineage.predecessor.rollback_eligibility, 'ELIGIBLE');
-  assert.equal(lineage.lineage.predecessor.rollback_authorization, 'NONE_CONSUMER_DEPLOYMENT_AUTHORITY_REQUIRED');
-  assert.equal(lineage.lineage.successor.lifecycle_state, 'ELIGIBLE_FOR_SHADOW_INSTALL');
-  assert.equal(lineage.lineage.successor.shadow_install_authorization, 'NONE_CONSUMER_DEPLOYMENT_AUTHORITY_REQUIRED');
-  assert.equal(lineage.lineage.authority.runtime_activation_authorized, false);
-  assert.equal(lineage.lineage.authority.publication_authorized, false);
+  assert.equal(historicalLineage.lineageId, HISTORICAL_AB_LINEAGE_ID,
+    'runtime-aware lifecycle must not rewrite #199 historical lineage identity');
+  assert.equal(historicalLineage.lineage.predecessor.validity_after_supersession, 'VALID_QUALIFIED_CANDIDATE_NOT_INVALIDATED');
+
+  const adoptionTransition = assessReleaseCandidateTransitionCompatibility({ predecessor: candidateB, successor: candidateC });
+  assert.equal(adoptionTransition.decision.contract_version, 'adr.geox-release-candidate-transition-compatibility-decision.v2');
+  assert.equal(adoptionTransition.decision.package_metadata_version, 'SAME_INFORMATIONAL_ONLY');
+  assert.equal(adoptionTransition.decision.consumer_api_surface, 'SAME');
+  assert.equal(adoptionTransition.decision.target_correspondence_profile_set, 'SAME');
+  assert.equal(adoptionTransition.decision.compatibility_contract, 'CHANGED_REQUIRES_REVIEW');
+  assert.equal(adoptionTransition.decision.runtime_environment, 'CHANGED_OR_UNBOUND_REQUIRES_REVIEW');
+  assert.equal(adoptionTransition.decision.compatibility_envelope, 'CHANGED_REQUIRES_REVIEW');
+  assert.equal(adoptionTransition.decision.decision, 'REVIEW_REQUIRED');
+  assert.equal(adoptionTransition.decision.predecessor_rollback_eligibility, 'NOT_ESTABLISHED');
+  assert.equal(adoptionTransition.decision.authority.replacement_authorized, false);
+  assert.equal(adoptionTransition.decision.authority.rollback_authorized, false);
+  assert.equal(adoptionTransition.decision.authority.shadow_install_authorized, false);
+  expectCode(
+    () => createReleaseCandidateLineage({
+      predecessor: candidateB,
+      successor: candidateC,
+      transitionDecision: adoptionTransition,
+      retainPredecessorForRollback: true
+    }),
+    'TRANSITION_NOT_ELIGIBLE'
+  );
+
+  const sameV2 = compareReleaseCandidateCompatibility(
+    candidateC.artifactFingerprint.compatibility,
+    candidateC.artifactFingerprint.compatibility
+  );
+  assert.equal(sameV2.compatibilityContract, 'SAME');
+  assert.equal(sameV2.runtimeEnvironment, 'SAME');
+  assert.equal(sameV2.decision, 'SAME');
+
+  const runtimeDrift = structuredClone(candidateC.artifactFingerprint.compatibility);
+  runtimeDrift.runtime_environment.node_engine = '>=24 <25';
+  const runtimeDriftDecision = compareReleaseCandidateCompatibility(
+    candidateC.artifactFingerprint.compatibility,
+    runtimeDrift
+  );
+  assert.equal(runtimeDriftDecision.consumerApiSurface, 'SAME');
+  assert.equal(runtimeDriftDecision.targetCorrespondenceProfileSet, 'SAME');
+  assert.equal(runtimeDriftDecision.runtimeEnvironment, 'CHANGED_OR_UNBOUND_REQUIRES_REVIEW');
+  assert.equal(runtimeDriftDecision.compatibilityEnvelope, 'CHANGED_REQUIRES_REVIEW');
+  assert.equal(runtimeDriftDecision.decision, 'REVIEW_REQUIRED');
 
   for (const [from, to] of [
     ['BUILT', 'QUALIFIED'],
@@ -181,61 +236,48 @@ try {
   expectCode(() => assertReleaseCandidateLifecycleTransition('QUALIFIED', 'SUPERSEDED'), 'LIFECYCLE_TRANSITION_INVALID');
   expectCode(() => assertReleaseCandidateLifecycleTransition('RETAINED_FOR_ROLLBACK', 'ELIGIBLE_FOR_SHADOW_INSTALL'), 'LIFECYCLE_TRANSITION_INVALID');
 
-  const tampered = structuredClone(candidateB);
+  const tampered = structuredClone(candidateC);
   tampered.descriptor.package_name = '@adr/unqualified-injected-package';
   expectCode(() => verifyReleaseCandidateRecord(tampered), 'CANDIDATE_DESCRIPTOR_MISMATCH');
 
-  const incompatibleEnvelope = structuredClone(candidateB.artifactFingerprint.compatibility);
-  incompatibleEnvelope.consumer_api_surface.surface_hash = `sha256:${'0'.repeat(64)}`;
-  const incompatibleDecision = compareReleaseCandidateCompatibility(
-    candidateB.artifactFingerprint.compatibility,
-    incompatibleEnvelope
-  );
-  assert.equal(incompatibleDecision.consumerApiSurface, 'CHANGED_REQUIRES_REVIEW');
-  assert.equal(incompatibleDecision.decision, 'REVIEW_REQUIRED');
-
   const evidence = {
     ok: true,
-    milestone: 'PRODUCTIZATION_GEOX_RELEASE_CANDIDATE_LIFECYCLE_V1',
-    candidateA: {
+    milestone: 'PRODUCTIZATION_GEOX_RELEASE_CANDIDATE_RUNTIME_COMPATIBILITY_V2',
+    historicalA: {
       sourceCommit: candidateA.descriptor.source_commit,
-      candidateId: candidateA.candidateId,
-      packageMetadataVersion: candidateA.descriptor.package_metadata_version,
-      packageTarballHash: candidateA.descriptor.package_tarball_sha256,
-      apiSurfaceHash: candidateA.descriptor.consumer_api_surface_hash,
-      profileSetHash: candidateA.descriptor.target_correspondence_profile_set_hash,
-      compatibilityEnvelopeHash: candidateA.descriptor.compatibility_envelope_hash,
-      qualificationReceiptHash: candidateA.qualificationReceiptHash,
-      verifierSourceHash: a.verifierSourceHash
+      candidateId: candidateA.candidateId
     },
-    candidateB: {
+    historicalB: {
       sourceCommit: candidateB.descriptor.source_commit,
-      candidateId: candidateB.candidateId,
-      packageMetadataVersion: candidateB.descriptor.package_metadata_version,
-      packageTarballHash: candidateB.descriptor.package_tarball_sha256,
-      apiSurfaceHash: candidateB.descriptor.consumer_api_surface_hash,
-      profileSetHash: candidateB.descriptor.target_correspondence_profile_set_hash,
-      compatibilityEnvelopeHash: candidateB.descriptor.compatibility_envelope_hash,
-      qualificationReceiptHash: candidateB.qualificationReceiptHash,
-      verifierSourceHash: b.verifierSourceHash
+      candidateId: candidateB.candidateId
     },
-    transitionCompatibilityDecision: transition,
-    releaseCandidateLineage: lineage,
+    candidateC: {
+      sourceCommit: candidateC.descriptor.source_commit,
+      candidateId: candidateC.candidateId,
+      packageMetadataVersion: candidateC.descriptor.package_metadata_version,
+      packageTarballHash: candidateC.descriptor.package_tarball_sha256,
+      apiSurfaceHash: candidateC.descriptor.consumer_api_surface_hash,
+      profileSetHash: candidateC.descriptor.target_correspondence_profile_set_hash,
+      compatibilityEnvelopeHash: candidateC.descriptor.compatibility_envelope_hash,
+      runtimeNodeEngine: candidateC.artifactFingerprint.compatibility.runtime_environment.node_engine,
+      qualificationReceiptHash: candidateC.qualificationReceiptHash,
+      verifierSourceHash: c.verifierSourceHash
+    },
+    historicalTransitionIdPreserved: historicalTransition.transitionDecisionId,
+    historicalLineageIdPreserved: historicalLineage.lineageId,
+    adoptionTransition,
     proofs: {
-      samePackageMetadataVersionDoesNotCollapseCandidateIdentity: true,
-      samePackageBytesDoNotCollapseCandidateIdentity: true,
-      sourceCommitParticipatesInCandidateIdentity: true,
-      qualificationReceiptParticipatesInCandidateIdentity: true,
-      verifierImplementationHashBoundIntoQualificationReceipt: true,
-      supersededDoesNotMeanInvalid: true,
-      rollbackEligibleDoesNotMeanRollbackAuthorized: true,
-      incompatibleEnvelopeRequiresReview: true,
-      tamperedCandidateRejected: true,
-      unknownCandidateRejected: true,
-      semverCreated: false,
-      packagePublicationAuthorized: false,
+      historicalV1ReplayIdentityPreserved: true,
+      v1ToV2RequiresReview: true,
+      v2RuntimeEngineDriftRequiresReview: true,
+      apiSurfaceUnchanged: true,
+      profileSetUnchanged: true,
+      packageMetadataVersionStillInformational: true,
+      automaticReplacementAuthorized: false,
+      rollbackAuthorized: false,
       shadowInstallAuthorized: false,
       runtimeActivationAuthorized: false,
+      packagePublicationAuthorized: false,
       geoxWriteAuthorityCreated: false,
       approvalAuthorityCreated: false,
       dispatchAuthorityCreated: false,
