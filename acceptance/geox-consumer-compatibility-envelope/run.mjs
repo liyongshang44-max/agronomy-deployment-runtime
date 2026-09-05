@@ -13,6 +13,8 @@ import {
   listGeoxTargetCorrespondenceProfiles
 } from '../../adapters/geox/src/target-correspondence-profile-registry.mjs';
 
+const QUALIFIED_NODE_ENGINE = '>=20 <21 || >=24 <25';
+
 function canonical(value) {
   if (Array.isArray(value)) return value.map(canonical);
   if (value && typeof value === 'object') {
@@ -58,7 +60,7 @@ const apiSurfaceHash = sha256Json(normalizedApiSurface(apiBaseline.modules));
 const profileSetHash = sha256Json(listGeoxTargetCorrespondenceProfiles());
 
 const expectedCompatibility = {
-  contract_version: 'adr.geox-consumer-compatibility-envelope.v1',
+  contract_version: 'adr.geox-consumer-compatibility-envelope.v2',
   package_version: '0.1.0-development',
   consumer_api_surface: {
     contract_version: 'adr.geox-consumer-api-surface.v1',
@@ -68,12 +70,17 @@ const expectedCompatibility = {
     registry_version: GEOX_TARGET_CORRESPONDENCE_PROFILE_REGISTRY_VERSION,
     profile_set_hash: profileSetHash
   },
-  change_policy: 'EXACT_PACKAGE_API_AND_PROFILE_REGISTRY_COMPATIBILITY_REVIEW_REQUIRED',
+  runtime_environment: {
+    node_engine: QUALIFIED_NODE_ENGINE
+  },
+  change_policy: 'EXACT_PACKAGE_API_PROFILE_AND_RUNTIME_COMPATIBILITY_REVIEW_REQUIRED',
   authority_claim: 'NONE_COMPATIBILITY_METADATA_ONLY_NO_RUNTIME_OR_PUBLICATION_AUTHORITY'
 };
 
 assert.equal(apiBaseline.surface_hash, 'sha256:5e456b5604ed474b667663e39aec558d59df76da1b9fb8d6796f54779e01003c');
 assert.equal(apiSurfaceHash, apiBaseline.surface_hash);
+assert.equal(apiBaseline.node_engine, QUALIFIED_NODE_ENGINE);
+assert.equal(manifest.node_engine, QUALIFIED_NODE_ENGINE);
 assert.equal(GEOX_TARGET_CORRESPONDENCE_PROFILE_REGISTRY_VERSION, 'adr.geox-target-correspondence-profile-registry.v1');
 assert.equal(profileSetHash, 'sha256:5f400e4cfd3bcfb72286a3a42bed7940cbb2b5d7450837ae4cebeff394cd55c4');
 assert.deepEqual(manifest.compatibility, expectedCompatibility);
@@ -85,6 +92,7 @@ try {
   assert.deepEqual(artifact.compatibility, expectedCompatibility);
   const packed = packedPackageJson(artifact.tarballPath);
   assert.deepEqual(packed.adr_consumer_artifact.compatibility, expectedCompatibility);
+  assert.equal(packed.engines.node, QUALIFIED_NODE_ENGINE);
   assert.equal(packed.private, true);
   assert.equal(packed.version, '0.1.0-development');
 
@@ -102,7 +110,7 @@ try {
 
   console.log(JSON.stringify({
     ok: true,
-    milestone: 'PRODUCTIZATION_GEOX_CONSUMER_COMPATIBILITY_ENVELOPE_V1',
+    milestone: 'PRODUCTIZATION_GEOX_CONSUMER_COMPATIBILITY_ENVELOPE_V2',
     sourceCommit,
     packageName: artifact.packageName,
     packageVersion: artifact.packageVersion,
@@ -112,14 +120,18 @@ try {
     consumerApiSurfaceHash: apiSurfaceHash,
     targetCorrespondenceProfileRegistryVersion: expectedCompatibility.target_correspondence_profile_registry.registry_version,
     targetCorrespondenceProfileSetHash: profileSetHash,
+    runtimeNodeEngine: expectedCompatibility.runtime_environment.node_engine,
+    qualifiedRuntimeMajors: [20, 24],
+    unqualifiedRuntimeMajors: [21, 22, 23],
     qualifiedProfileCount: 3,
     packageMetadataCarriesCompatibility: true,
     releaseProvenanceCarriesCompatibility: true,
     verifierIndependentlyRecomputedCompatibility: true,
+    runtimeEnvironmentBoundIntoCompatibility: true,
     semverCompatibilityClaimed: false,
     releaseStatusChanged: false,
     packagePublicationAuthorized: false,
-    runtimeModified: false,
+    runtimeActivationAuthorized: false,
     fieldActionabilityCreated: false,
     approvalAuthorityCreated: false,
     dispatchAuthorityCreated: false,
