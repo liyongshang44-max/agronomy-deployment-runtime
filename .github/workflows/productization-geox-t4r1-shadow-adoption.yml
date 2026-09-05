@@ -1,0 +1,69 @@
+name: ADR Productization — GEOX T4/R1 Same-Target Shadow Adoption
+
+on:
+  push:
+    branches:
+      - 'main'
+      - 'productization/geox-t4r1-shadow-adoption-*'
+    paths:
+      - 'acceptance/geox-t4r1-shadow-adoption/**'
+      - 'acceptance/real-kbs-t4r1-corn-hybrid-population-decision/**'
+      - 'adapters/geox/consumer-artifact.manifest.json'
+      - 'adapters/geox/release-bundle.manifest.json'
+      - 'adapters/geox/scripts/build-consumer-artifact.mjs'
+      - 'adapters/geox/scripts/build-consumer-release-bundle.mjs'
+      - 'adapters/geox/scripts/verify-consumer-release-bundle.mjs'
+      - 'adapters/geox/src/**'
+      - 'sdks/typescript/src/integration-contracts.mjs'
+      - '.github/workflows/productization-geox-t4r1-shadow-adoption.yml'
+  pull_request:
+    paths:
+      - 'acceptance/geox-t4r1-shadow-adoption/**'
+      - 'acceptance/real-kbs-t4r1-corn-hybrid-population-decision/**'
+      - 'adapters/geox/consumer-artifact.manifest.json'
+      - 'adapters/geox/release-bundle.manifest.json'
+      - 'adapters/geox/scripts/build-consumer-artifact.mjs'
+      - 'adapters/geox/scripts/build-consumer-release-bundle.mjs'
+      - 'adapters/geox/scripts/verify-consumer-release-bundle.mjs'
+      - 'adapters/geox/src/**'
+      - 'sdks/typescript/src/integration-contracts.mjs'
+      - '.github/workflows/productization-geox-t4r1-shadow-adoption.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  geox_t4r1_same_target_shadow_adoption:
+    runs-on: ubuntu-24.04
+    env:
+      ADR_SHADOW_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+      GEOX_SHADOW_SOURCE_COMMIT: e1f8b078bb8459ecb9a77d1fad0d95f4bf143221
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.ADR_SHADOW_SOURCE_COMMIT }}
+          fetch-depth: 1
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Prove exact ADR candidate checkout
+        run: |
+          test "$(git rev-parse HEAD)" = "$ADR_SHADOW_SOURCE_COMMIT"
+          echo "qualified ADR source commit: $ADR_SHADOW_SOURCE_COMMIT"
+          echo "qualified GEOX source commit: $GEOX_SHADOW_SOURCE_COMMIT"
+      - name: Reprove same-target D06 and qualify installed shadow adoption
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -o pipefail
+          node acceptance/geox-t4r1-shadow-adoption/run.mjs | tee "$RUNNER_TEMP/geox-t4r1-shadow-adoption.json"
+      - name: Upload independent shadow evidence only
+        uses: actions/upload-artifact@v4
+        with:
+          name: geox-t4r1-shadow-adoption-${{ env.ADR_SHADOW_SOURCE_COMMIT }}
+          path: ${{ runner.temp }}/geox-t4r1-shadow-adoption.json
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
