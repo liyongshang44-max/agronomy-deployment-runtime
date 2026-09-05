@@ -1,7 +1,7 @@
 {
   "contract_version": "adr.acceptance.geox-target-authority-export.v1",
   "source_repository": "liyongshang44-max/GEOX",
-  "source_main_sha": "5050f1c08d2528048c56d56add4cbb068b956925",
+  "source_main_sha": "0bd2300c9c8a58025df9212d7c14e640606add83",
   "authority_sources": [
     {
       "path": "docs/digital_twin/mcft/cap_09/GEOX-MCFT-CAP-09-S6-FORMAL-SITE-AUTHORITY-V1.json",
@@ -14,6 +14,10 @@
     {
       "path": "docs/digital_twin/mcft/cap_09/GEOX-MCFT-CAP-09-S6-FORMAL-CROP-CONTEXT-AUTHORITY-V1.json",
       "blob_sha": "b5de9d29189cb654444b3f57d00df290eefe16d3"
+    },
+    {
+      "path": "docs/digital_twin/mcft/cap_09/GEOX-MCFT-CAP-09-EA5E2-CURRENT-CROP-AUTHORITY-REQUALIFICATION-RESULT-V1.json",
+      "blob_sha": "a9196e16ab6402fcfe2d59b738a395ef52d7c236"
     }
   ],
   "provider_target": {
@@ -22,7 +26,7 @@
     "treatment_code": "T1",
     "replicate_code": "R1",
     "crop_code": "corn",
-    "hybrid_code": "NOT_ESTABLISHED_BY_CONSUMER_AUTHORITY",
+    "hybrid_code": "P0306Q",
     "planting_observation_id": "6931"
   },
   "geox_target": {
