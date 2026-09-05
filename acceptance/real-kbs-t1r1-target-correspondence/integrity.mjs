@@ -10,8 +10,6 @@ import {
 } from '../../adapters/geox/src/target-correspondence.mjs';
 import { buildKbsT1R1TargetWorld } from './target-world.mjs';
 
-const CONSUMER_UNESTABLISHED = 'NOT_ESTABLISHED_BY_CONSUMER_AUTHORITY';
-
 function toWireRef(ref) {
   return {
     kind: ref.kind,
@@ -61,7 +59,7 @@ const baseMessage = createIntegrationMessage({
       treatment_code: 'T1',
       replicate_code: 'R1',
       crop_code: 'corn',
-      hybrid_code: CONSUMER_UNESTABLISHED,
+      hybrid_code: 'P0306Q',
       planting_observation_id: '6931'
     },
     relation_candidate: GEOX_TARGET_CORRESPONDENCE_T1R1_RELATION,
@@ -102,6 +100,7 @@ for (const [label, key, value] of [
   ['treatment mismatch', 'treatment_code', 'T3'],
   ['replicate mismatch', 'replicate_code', 'R2'],
   ['crop mismatch', 'crop_code', 'soybean'],
+  ['hybrid mismatch', 'hybrid_code', 'OTHER'],
   ['planting observation mismatch', 'planting_observation_id', '9999']
 ]) {
   expectCode(`${label} blocks correspondence`, 'GEOX_TARGET_CORRESPONDENCE_PROVIDER_TARGET_MISMATCH', () => {
@@ -111,15 +110,16 @@ for (const [label, key, value] of [
   });
 }
 
-expectCode('ADR-only P0306Q may not be promoted into shared T1 correspondence', 'GEOX_TARGET_CORRESPONDENCE_PROVIDER_TARGET_MISMATCH', () => {
-  const message = clone(baseMessage);
-  message.payload.provider_target.hybrid_code = world.providerTarget.hybrid;
-  project(message);
+expectCode('GEOX T1 hybrid authority cannot drift', 'GEOX_TARGET_CORRESPONDENCE_CONSUMER_TARGET_INVALID', () => {
+  const authority = clone(geoxAuthority);
+  authority.provider_target.hybrid_code = 'OTHER';
+  project(baseMessage, authority);
 });
 
-expectCode('GEOX T1 export may not claim P0306Q without final hybrid authority', 'GEOX_TARGET_CORRESPONDENCE_CONSUMER_TARGET_INVALID', () => {
+expectCode('EA5E2 result authority cannot be replaced by its candidate config', 'GEOX_TARGET_CORRESPONDENCE_CONSUMER_AUTHORITY_INVALID', () => {
   const authority = clone(geoxAuthority);
-  authority.provider_target.hybrid_code = 'P0306Q';
+  authority.authority_sources[3].path =
+    'docs/digital_twin/mcft/cap_09/GEOX-MCFT-CAP-09-CURRENT-CROP-AUTHORITY-REQUALIFICATION-V1.json';
   project(baseMessage, authority);
 });
 
@@ -231,7 +231,7 @@ expectCode('T1 does not silently inherit the T4 online resolver', 'GEOX_TARGET_C
 const safe = project();
 assert.equal(safe.status, 'QUALIFIED_CORRESPONDENCE');
 assert.equal(safe.relation, GEOX_TARGET_CORRESPONDENCE_T1R1_RELATION);
-assert.equal(safe.provider_target.hybrid_code, CONSUMER_UNESTABLISHED);
+assert.equal(safe.provider_target.hybrid_code, 'P0306Q');
 assert.equal(safe.geox_target.field_id, 'field_kbs_mcse_t1r1');
 assert.equal(safe.identity_equality_claimed, false);
 assert.equal(safe.geometry_equality_claimed, false);
@@ -240,6 +240,6 @@ assert.equal(safe.field_actionable, false);
 assert.equal(safe.dispatch_authorized, false);
 assert.equal(safe.human_approval_authority, 'NONE');
 assert.equal(safe.machine_execution_authority, 'NONE');
-console.log('PASS safe T1R1 correspondence withholds consumer-unestablished hybrid and remains non-actionable');
+console.log('PASS safe T1R1 correspondence uses independently governed P0306Q and remains non-actionable');
 
-console.log('KBS T1R1 target correspondence integrity: 27/27 passed');
+console.log('KBS T1R1 target correspondence integrity: 28/28 passed');
