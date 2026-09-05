@@ -16,6 +16,7 @@ export const GEOX_TARGET_CORRESPONDENCE_VERSION = 'adr.geox-target-correspondenc
 export const GEOX_TARGET_CORRESPONDENCE_MESSAGE_TYPE = 'ADR_PROVIDER_TARGET_CORRESPONDENCE_CANDIDATE';
 export const GEOX_TARGET_CORRESPONDENCE_RELATION = 'CORRESPONDS_TO_SAME_KBS_MCSE_T4_R1_TARGET';
 export const GEOX_TARGET_CORRESPONDENCE_T3R1_RELATION = 'CORRESPONDS_TO_SAME_KBS_MCSE_T3_R1_TARGET';
+export const GEOX_TARGET_CORRESPONDENCE_T1R1_RELATION = 'CORRESPONDS_TO_SAME_KBS_MCSE_T1_R1_TARGET';
 export const GEOX_TARGET_CORRESPONDENCE_STATUS = 'QUALIFIED_CORRESPONDENCE';
 export const GEOX_TARGET_CORRESPONDENCE_AUTHORITY_CLAIM =
   'CORRESPONDENCE_ONLY_NOT_IDENTITY_ACTION_APPROVAL_OR_EXECUTION_AUTHORITY';
@@ -31,6 +32,12 @@ const T3R1_AUTHORITY_PATHS = Object.freeze([
   'docs/digital_twin/mcft/cap_09/GEOX-MCFT-CAP-09-S6-FORMAL-REALITY-BINDING-V2.json'
 ]);
 
+const T1R1_AUTHORITY_PATHS = Object.freeze([
+  'docs/digital_twin/mcft/cap_09/GEOX-MCFT-CAP-09-S6-FORMAL-SITE-AUTHORITY-V1.json',
+  'docs/digital_twin/mcft/cap_09/GEOX-MCFT-CAP-09-S6-FORMAL-REALITY-BINDING-V1.json',
+  'docs/digital_twin/mcft/cap_09/GEOX-MCFT-CAP-09-S6-FORMAL-CROP-CONTEXT-AUTHORITY-V1.json'
+]);
+
 const T3R1_PINNED_AUTHORITY = Object.freeze({
   sourceMainSha: '5050f1c08d2528048c56d56add4cbb068b956925',
   blobShas: Object.freeze({
@@ -41,12 +48,25 @@ const T3R1_PINNED_AUTHORITY = Object.freeze({
   })
 });
 
+const T1R1_PINNED_AUTHORITY = Object.freeze({
+  sourceMainSha: '5050f1c08d2528048c56d56add4cbb068b956925',
+  blobShas: Object.freeze({
+    [T1R1_AUTHORITY_PATHS[0]]: 'eb9eb1880e01eb16430c177be6e2ef2dc36b3ca8',
+    [T1R1_AUTHORITY_PATHS[1]]: 'dedc8db6e2e3c902066ed94b0d3322a69775b7b6',
+    [T1R1_AUTHORITY_PATHS[2]]: 'b5de9d29189cb654444b3f57d00df290eefe16d3'
+  })
+});
+
+const GEOMETRY_CLASS_CROP_ONLY = 'CROP_ONLY_DERIVED_PROVIDER_GEOMETRY';
+const GEOMETRY_CLASS_REFERENCED_RESTRICTED = 'PROVIDER_GEOMETRY_REFERENCED_RESTRICTED_NOT_REPUBLISHED';
+
 const CORRESPONDENCE_PROFILES = Object.freeze({
   [GEOX_TARGET_CORRESPONDENCE_RELATION]: Object.freeze({
     relation: GEOX_TARGET_CORRESPONDENCE_RELATION,
     authorityPaths: GEOX_TARGET_AUTHORITY_PATHS,
     replayableResolverSupported: true,
     pinnedAuthority: null,
+    geometryBoundaryClass: GEOMETRY_CLASS_CROP_ONLY,
     provider: Object.freeze({
       treatment_code: 'T4',
       replicate_code: 'R1',
@@ -65,6 +85,7 @@ const CORRESPONDENCE_PROFILES = Object.freeze({
     authorityPaths: T3R1_AUTHORITY_PATHS,
     replayableResolverSupported: false,
     pinnedAuthority: T3R1_PINNED_AUTHORITY,
+    geometryBoundaryClass: GEOMETRY_CLASS_CROP_ONLY,
     provider: Object.freeze({
       experiment_locator: 'https://lter.kbs.msu.edu/research/long-term-experiments/main-cropping-system-experiment/',
       treatment_code: 'T3',
@@ -77,6 +98,26 @@ const CORRESPONDENCE_PROFILES = Object.freeze({
       field_id: 'field_kbs_mcse_t3r1',
       season_id: 'season_2026_corn',
       zone_id: 'zone_kbs_mcse_t3r1_crop_formal_v1'
+    })
+  }),
+  [GEOX_TARGET_CORRESPONDENCE_T1R1_RELATION]: Object.freeze({
+    relation: GEOX_TARGET_CORRESPONDENCE_T1R1_RELATION,
+    authorityPaths: T1R1_AUTHORITY_PATHS,
+    replayableResolverSupported: false,
+    pinnedAuthority: T1R1_PINNED_AUTHORITY,
+    geometryBoundaryClass: GEOMETRY_CLASS_REFERENCED_RESTRICTED,
+    provider: Object.freeze({
+      experiment_locator: 'https://lter.kbs.msu.edu/research/long-term-experiments/main-cropping-system-experiment/',
+      treatment_code: 'T1',
+      replicate_code: 'R1',
+      crop_code: 'corn',
+      hybrid_code: 'P0306Q',
+      planting_observation_id: '6931'
+    }),
+    geox: Object.freeze({
+      field_id: 'field_kbs_mcse_t1r1',
+      season_id: 'season_2026_corn',
+      zone_id: 'zone_kbs_mcse_t1r1_formal_v1'
     })
   })
 });
@@ -109,7 +150,9 @@ function text(value, name) {
 
 function exactKeys(value, name, keys) {
   for (const key of Object.keys(value)) {
-    if (!keys.has(key)) fail('GEOX_TARGET_CORRESPONDENCE_FIELD_FORBIDDEN', `${name}.${key} is forbidden`);
+    if (!keys.has(key)) {
+      fail('GEOX_TARGET_CORRESPONDENCE_FIELD_FORBIDDEN', `${name}.${key} is forbidden`);
+    }
   }
 }
 
@@ -182,8 +225,65 @@ function profileForRelation(relation) {
 
 function exactProfileTarget(target, expected, code, name) {
   for (const [key, value] of Object.entries(expected)) {
-    if (target[key] !== value) fail(code, `${name}.${key} changed from the qualified profile`);
+    if (target[key] !== value) {
+      fail(code, `${name}.${key} changed from the qualified profile`);
+    }
   }
+}
+
+function validateGeometryBoundary(value, profile, providerTarget) {
+  const geometry = object(value, 'geoxTargetAuthority.geometry_boundary');
+  if (profile.geometryBoundaryClass === GEOMETRY_CLASS_CROP_ONLY) {
+    exactKeys(geometry, 'geoxTargetAuthority.geometry_boundary', new Set([
+      'provider_selector', 'whole_plot_assumed_crop_only', 'prairie_strip_excluded',
+      'raw_provider_geometry_republished', 'geox_zone_geometry_equal_to_provider_plot_claimed'
+    ]));
+    const selector = object(geometry.provider_selector, 'geoxTargetAuthority.geometry_boundary.provider_selector');
+    exactKeys(selector, 'geoxTargetAuthority.geometry_boundary.provider_selector', new Set([
+      'treatment', 'replicate', 'subplot'
+    ]));
+    if (selector.treatment !== providerTarget.treatment_code
+      || selector.replicate !== providerTarget.replicate_code
+      || selector.subplot !== 'main'
+      || geometry.whole_plot_assumed_crop_only !== false
+      || geometry.prairie_strip_excluded !== true
+      || geometry.raw_provider_geometry_republished !== false
+      || geometry.geox_zone_geometry_equal_to_provider_plot_claimed !== false) {
+      fail(
+        'GEOX_TARGET_CORRESPONDENCE_GEOMETRY_BOUNDARY_REQUIRED',
+        'GEOX crop-only geometry limitations must remain intact'
+      );
+    }
+    return;
+  }
+
+  if (profile.geometryBoundaryClass === GEOMETRY_CLASS_REFERENCED_RESTRICTED) {
+    exactKeys(geometry, 'geoxTargetAuthority.geometry_boundary', new Set([
+      'geometry_authority_class', 'provider_selector', 'provider_geometry_reference_only',
+      'provider_geometry_publication_authorized', 'derived_crop_only_geometry_claimed',
+      'raw_provider_geometry_republished', 'geox_zone_geometry_equal_to_provider_plot_claimed'
+    ]));
+    const selector = object(geometry.provider_selector, 'geoxTargetAuthority.geometry_boundary.provider_selector');
+    exactKeys(selector, 'geoxTargetAuthority.geometry_boundary.provider_selector', new Set([
+      'treatment', 'replicate'
+    ]));
+    if (geometry.geometry_authority_class !== GEOMETRY_CLASS_REFERENCED_RESTRICTED
+      || selector.treatment !== providerTarget.treatment_code
+      || selector.replicate !== providerTarget.replicate_code
+      || geometry.provider_geometry_reference_only !== true
+      || geometry.provider_geometry_publication_authorized !== false
+      || geometry.derived_crop_only_geometry_claimed !== false
+      || geometry.raw_provider_geometry_republished !== false
+      || geometry.geox_zone_geometry_equal_to_provider_plot_claimed !== false) {
+      fail(
+        'GEOX_TARGET_CORRESPONDENCE_GEOMETRY_BOUNDARY_REQUIRED',
+        'GEOX referenced/restricted provider geometry limitations must remain intact'
+      );
+    }
+    return;
+  }
+
+  fail('GEOX_TARGET_CORRESPONDENCE_GEOMETRY_BOUNDARY_REQUIRED', 'unknown qualified geometry boundary class');
 }
 
 function normalizeGeoxAuthorityExport(value, profile) {
@@ -195,7 +295,10 @@ function normalizeGeoxAuthorityExport(value, profile) {
   if (![LEGACY_GEOX_TARGET_AUTHORITY_EXPORT_VERSION, GEOX_TARGET_AUTHORITY_EXPORT_VERSION].includes(authority.contract_version)
     || authority.source_repository !== GEOX_TARGET_AUTHORITY_REPOSITORY
     || !GIT_SHA_RE.test(text(authority.source_main_sha, 'geoxTargetAuthority.source_main_sha'))) {
-    fail('GEOX_TARGET_CORRESPONDENCE_CONSUMER_AUTHORITY_INVALID', 'pinned or resolver-produced GEOX authority export is required');
+    fail(
+      'GEOX_TARGET_CORRESPONDENCE_CONSUMER_AUTHORITY_INVALID',
+      'pinned or resolver-produced GEOX authority export is required'
+    );
   }
   if (authority.contract_version === GEOX_TARGET_AUTHORITY_EXPORT_VERSION && !profile.replayableResolverSupported) {
     fail(
@@ -223,7 +326,10 @@ function normalizeGeoxAuthorityExport(value, profile) {
     const path = text(source.path, `authority_sources[${index}].path`);
     const blobSha = text(source.blob_sha, `authority_sources[${index}].blob_sha`);
     if (!expectedPaths.includes(path) || !GIT_SHA_RE.test(blobSha) || sourceByPath.has(path)) {
-      fail('GEOX_TARGET_CORRESPONDENCE_CONSUMER_AUTHORITY_INVALID', 'authority sources require the exact unique profile Git blobs');
+      fail(
+        'GEOX_TARGET_CORRESPONDENCE_CONSUMER_AUTHORITY_INVALID',
+        'authority sources require the exact unique profile Git blobs'
+      );
     }
     sourceByPath.set(path, blobSha);
   }
@@ -247,7 +353,10 @@ function normalizeGeoxAuthorityExport(value, profile) {
     'crop_code', 'hybrid_code', 'planting_observation_id'
   ]));
   if (provider.provider_site !== 'KBS_LTER_MAIN_CROPPING_SYSTEM_EXPERIMENT') {
-    fail('GEOX_TARGET_CORRESPONDENCE_CONSUMER_TARGET_INVALID', 'GEOX provider site must remain exact KBS MCSE authority');
+    fail(
+      'GEOX_TARGET_CORRESPONDENCE_CONSUMER_TARGET_INVALID',
+      'GEOX provider site must remain exact KBS MCSE authority'
+    );
   }
   const providerTarget = normalizeProviderTarget({
     experiment_locator: provider.experiment_locator,
@@ -278,20 +387,13 @@ function normalizeGeoxAuthorityExport(value, profile) {
   if (geoxTarget.authority_scope_class !== 'EXTERNAL_PUBLIC_RESEARCH_SCOPE'
     || geoxTarget.field_validity_proven !== false
     || geoxTarget.production_site_claimed !== false) {
-    fail('GEOX_TARGET_CORRESPONDENCE_CONSUMER_TARGET_INVALID', 'GEOX target must preserve formal research-scope limitations');
+    fail(
+      'GEOX_TARGET_CORRESPONDENCE_CONSUMER_TARGET_INVALID',
+      'GEOX target must preserve formal research-scope limitations'
+    );
   }
 
-  const geometry = object(authority.geometry_boundary, 'geoxTargetAuthority.geometry_boundary');
-  const selector = object(geometry.provider_selector, 'geoxTargetAuthority.geometry_boundary.provider_selector');
-  if (selector.treatment !== providerTarget.treatment_code
-    || selector.replicate !== providerTarget.replicate_code
-    || selector.subplot !== 'main'
-    || geometry.whole_plot_assumed_crop_only !== false
-    || geometry.prairie_strip_excluded !== true
-    || geometry.raw_provider_geometry_republished !== false
-    || geometry.geox_zone_geometry_equal_to_provider_plot_claimed !== false) {
-    fail('GEOX_TARGET_CORRESPONDENCE_GEOMETRY_BOUNDARY_REQUIRED', 'GEOX crop-only geometry limitations must remain intact');
-  }
+  validateGeometryBoundary(authority.geometry_boundary, profile, providerTarget);
 
   const boundary = object(authority.authority_boundary, 'geoxTargetAuthority.authority_boundary');
   if (boundary.adr_geox_identity_equality_claimed !== false
@@ -359,12 +461,18 @@ function normalizeResolutionReceipt(value, geoxAuthority, rawAuthority, profile)
     || receipt.dispatch_authorized !== false
     || receipt.human_approval_authority !== 'NONE'
     || receipt.machine_execution_authority !== 'NONE') {
-    fail('GEOX_TARGET_CORRESPONDENCE_RESOLUTION_RECEIPT_INVALID', 'replay receipt contract, source pin, or authority ceiling changed');
+    fail(
+      'GEOX_TARGET_CORRESPONDENCE_RESOLUTION_RECEIPT_INVALID',
+      'replay receipt contract, source pin, or authority ceiling changed'
+    );
   }
   if (!HASH_RE.test(text(receipt.snapshot_manifest_hash, 'receipt.snapshot_manifest_hash'))
     || !HASH_RE.test(text(receipt.authority_export_hash, 'receipt.authority_export_hash'))
     || canonicalJsonHash(rawAuthority) !== receipt.authority_export_hash) {
-    fail('GEOX_TARGET_CORRESPONDENCE_RESOLUTION_RECEIPT_HASH_MISMATCH', 'replay receipt does not bind exact GEOX authority export');
+    fail(
+      'GEOX_TARGET_CORRESPONDENCE_RESOLUTION_RECEIPT_HASH_MISMATCH',
+      'replay receipt does not bind exact GEOX authority export'
+    );
   }
 
   const expectedPaths = profile.authorityPaths;
@@ -374,7 +482,11 @@ function normalizeResolutionReceipt(value, geoxAuthority, rawAuthority, profile)
   const receiptByPath = new Map();
   for (const [index, item] of receipt.authority_sources.entries()) {
     const source = object(item, `geoxTargetAuthorityResolutionReceipt.authority_sources[${index}]`);
-    exactKeys(source, `geoxTargetAuthorityResolutionReceipt.authority_sources[${index}]`, new Set(['path', 'blob_sha', 'content_hash']));
+    exactKeys(
+      source,
+      `geoxTargetAuthorityResolutionReceipt.authority_sources[${index}]`,
+      new Set(['path', 'blob_sha', 'content_hash'])
+    );
     const path = text(source.path, `receipt.authority_sources[${index}].path`);
     const blobSha = text(source.blob_sha, `receipt.authority_sources[${index}].blob_sha`);
     const contentHash = text(source.content_hash, `receipt.authority_sources[${index}].content_hash`);
@@ -383,14 +495,20 @@ function normalizeResolutionReceipt(value, geoxAuthority, rawAuthority, profile)
       || !GIT_SHA_RE.test(blobSha)
       || !HASH_RE.test(contentHash)
       || geoxAuthority.authority_sources[path] !== blobSha) {
-      fail('GEOX_TARGET_CORRESPONDENCE_RESOLUTION_RECEIPT_INVALID', 'replay receipt source does not bind exact authority blob');
+      fail(
+        'GEOX_TARGET_CORRESPONDENCE_RESOLUTION_RECEIPT_INVALID',
+        'replay receipt source does not bind exact authority blob'
+      );
     }
     receiptByPath.set(path, Object.freeze({ path, blob_sha: blobSha, content_hash: contentHash }));
   }
   const canonicalSources = expectedPaths.map((path) => receiptByPath.get(path));
   if (canonicalSources.some((source) => !source)
     || canonicalJsonHash(canonicalSources) !== receipt.snapshot_manifest_hash) {
-    fail('GEOX_TARGET_CORRESPONDENCE_RESOLUTION_RECEIPT_HASH_MISMATCH', 'replay receipt source manifest is not reproducible');
+    fail(
+      'GEOX_TARGET_CORRESPONDENCE_RESOLUTION_RECEIPT_HASH_MISMATCH',
+      'replay receipt source manifest is not reproducible'
+    );
   }
   return Object.freeze({
     classification: GEOX_TARGET_AUTHORITY_RESOLUTION_CLASS,
