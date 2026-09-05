@@ -1,0 +1,59 @@
+name: ADR Productization — GEOX Consumer Public API Compatibility
+
+on:
+  push:
+    branches:
+      - 'main'
+      - 'productization/geox-consumer-api-compatibility-*'
+    paths:
+      - 'adapters/geox/consumer-api-surface.v1.json'
+      - 'adapters/geox/consumer-artifact.manifest.json'
+      - 'adapters/geox/scripts/build-consumer-artifact.mjs'
+      - 'adapters/geox/src/**'
+      - 'sdks/typescript/src/integration-contracts.mjs'
+      - 'acceptance/geox-consumer-api-compatibility/**'
+      - '.github/workflows/productization-geox-consumer-api-compatibility.yml'
+  pull_request:
+    paths:
+      - 'adapters/geox/consumer-api-surface.v1.json'
+      - 'adapters/geox/consumer-artifact.manifest.json'
+      - 'adapters/geox/scripts/build-consumer-artifact.mjs'
+      - 'adapters/geox/src/**'
+      - 'sdks/typescript/src/integration-contracts.mjs'
+      - 'acceptance/geox-consumer-api-compatibility/**'
+      - '.github/workflows/productization-geox-consumer-api-compatibility.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  geox_consumer_public_api_compatibility:
+    runs-on: ubuntu-24.04
+    env:
+      ADR_GEOX_API_COMPAT_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.ADR_GEOX_API_COMPAT_SOURCE_COMMIT }}
+          fetch-depth: 1
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Prove exact candidate checkout
+        run: |
+          test "$(git rev-parse HEAD)" = "$ADR_GEOX_API_COMPAT_SOURCE_COMMIT"
+          echo "qualified source commit: $ADR_GEOX_API_COMPAT_SOURCE_COMMIT"
+      - name: Install exact artifact and prove closed-world public API compatibility
+        run: |
+          set -o pipefail
+          node acceptance/geox-consumer-api-compatibility/run.mjs | tee "$RUNNER_TEMP/geox-consumer-api-compatibility.json"
+      - name: Upload public API compatibility evidence only
+        uses: actions/upload-artifact@v4
+        with:
+          name: geox-consumer-api-compatibility-${{ env.ADR_GEOX_API_COMPAT_SOURCE_COMMIT }}
+          path: ${{ runner.temp }}/geox-consumer-api-compatibility.json
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
