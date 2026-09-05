@@ -1,0 +1,61 @@
+name: ADR Productization — GEOX Installed Authority Replay
+
+on:
+  push:
+    branches:
+      - 'main'
+      - 'productization/geox-installed-authority-replay-*'
+    paths:
+      - 'adapters/geox/consumer-artifact.manifest.json'
+      - 'adapters/geox/scripts/build-consumer-artifact.mjs'
+      - 'adapters/geox/src/durable-target-authority-store.mjs'
+      - 'adapters/geox/src/target-authority-resolver.mjs'
+      - 'adapters/geox/src/target-correspondence-profile-registry.mjs'
+      - 'acceptance/geox-installed-authority-replay/**'
+      - '.github/workflows/productization-geox-installed-authority-replay.yml'
+  pull_request:
+    paths:
+      - 'adapters/geox/consumer-artifact.manifest.json'
+      - 'adapters/geox/scripts/build-consumer-artifact.mjs'
+      - 'adapters/geox/src/durable-target-authority-store.mjs'
+      - 'adapters/geox/src/target-authority-resolver.mjs'
+      - 'adapters/geox/src/target-correspondence-profile-registry.mjs'
+      - 'acceptance/geox-installed-authority-replay/**'
+      - '.github/workflows/productization-geox-installed-authority-replay.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  geox_installed_authority_replay:
+    runs-on: ubuntu-24.04
+    env:
+      ADR_INSTALLED_REPLAY_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.ADR_INSTALLED_REPLAY_SOURCE_COMMIT }}
+          fetch-depth: 1
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Prove exact candidate checkout
+        run: |
+          test "$(git rev-parse HEAD)" = "$ADR_INSTALLED_REPLAY_SOURCE_COMMIT"
+          echo "qualified source commit: $ADR_INSTALLED_REPLAY_SOURCE_COMMIT"
+      - name: Fresh installed consumer resolves online and replays offline
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -o pipefail
+          node acceptance/geox-installed-authority-replay/run.mjs | tee "$RUNNER_TEMP/geox-installed-authority-replay.json"
+      - name: Upload installed-replay evidence only
+        uses: actions/upload-artifact@v4
+        with:
+          name: geox-installed-authority-replay-${{ env.ADR_INSTALLED_REPLAY_SOURCE_COMMIT }}
+          path: ${{ runner.temp }}/geox-installed-authority-replay.json
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
