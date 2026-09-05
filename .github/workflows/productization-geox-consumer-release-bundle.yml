@@ -7,6 +7,7 @@ on:
       - 'feat/geox-consumer-release-bundle-*'
       - 'fix/geox-consumer-release-bundle-*'
       - 'productization/geox-consumer-compatibility-envelope-*'
+      - 'productization/geox-consumer-artifact-closure-*'
     paths:
       - 'adapters/geox/release-bundle.manifest.json'
       - 'adapters/geox/consumer-api-surface.v1.json'
@@ -17,6 +18,7 @@ on:
       - 'adapters/geox/src/**'
       - 'sdks/typescript/src/integration-contracts.mjs'
       - 'acceptance/geox-consumer-compatibility-envelope/**'
+      - 'acceptance/geox-consumer-artifact-closure/**'
       - 'acceptance/geox-consumer-release-bundle/**'
       - '.github/workflows/productization-geox-consumer-release-bundle.yml'
   pull_request:
@@ -30,6 +32,7 @@ on:
       - 'adapters/geox/src/**'
       - 'sdks/typescript/src/integration-contracts.mjs'
       - 'acceptance/geox-consumer-compatibility-envelope/**'
+      - 'acceptance/geox-consumer-artifact-closure/**'
       - 'acceptance/geox-consumer-release-bundle/**'
       - '.github/workflows/productization-geox-consumer-release-bundle.yml'
   workflow_dispatch:
@@ -65,6 +68,8 @@ jobs:
         run: node acceptance/geox-consumer-artifact/run.mjs
       - name: Consumer compatibility envelope qualification
         run: node acceptance/geox-consumer-compatibility-envelope/run.mjs
+      - name: Packed artifact source-closure qualification
+        run: node acceptance/geox-consumer-artifact-closure/run.mjs
       - name: Build and verify deterministic release bundle
         run: node acceptance/geox-consumer-release-bundle/run.mjs
       - name: Release bundle tamper and authority-boundary integrity
