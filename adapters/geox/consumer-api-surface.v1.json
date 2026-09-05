@@ -3,7 +3,7 @@
   "package_name": "@adr/geox-adapter",
   "package_version": "0.1.0-development",
   "private": true,
-  "node_engine": ">=24 <25",
+  "node_engine": ">=20 <21 || >=24 <25",
   "surface_hash": "sha256:5e456b5604ed474b667663e39aec558d59df76da1b9fb8d6796f54779e01003c",
   "change_policy": "EXACT_PUBLIC_MODULE_AND_EXPORT_SET_CHANGE_REQUIRES_EXPLICIT_BASELINE_UPDATE",
   "modules": {
