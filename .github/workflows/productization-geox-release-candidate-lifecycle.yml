@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       ADR_LIFECYCLE_QUALIFICATION_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
-      ADR_LIFECYCLE_EVIDENCE_PATH: ${{ runner.temp }}/geox-release-candidate-lifecycle/evidence.json
+      ADR_LIFECYCLE_EVIDENCE_PATH: /tmp/geox-release-candidate-lifecycle/evidence.json
     steps:
       - uses: actions/checkout@v6
         with:
