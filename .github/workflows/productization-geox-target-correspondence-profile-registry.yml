@@ -8,6 +8,8 @@ on:
     paths:
       - 'adapters/geox/src/target-correspondence-profile-registry.mjs'
       - 'adapters/geox/src/target-correspondence.mjs'
+      - 'adapters/geox/consumer-artifact.manifest.json'
+      - 'acceptance/geox-consumer-artifact/run.mjs'
       - 'acceptance/geox-target-correspondence-profile-registry/**'
       - 'acceptance/real-kbs-t1r1-target-correspondence/**'
       - 'acceptance/real-kbs-t3r1-target-correspondence/**'
@@ -17,6 +19,8 @@ on:
     paths:
       - 'adapters/geox/src/target-correspondence-profile-registry.mjs'
       - 'adapters/geox/src/target-correspondence.mjs'
+      - 'adapters/geox/consumer-artifact.manifest.json'
+      - 'acceptance/geox-consumer-artifact/run.mjs'
       - 'acceptance/geox-target-correspondence-profile-registry/**'
       - 'acceptance/real-kbs-t1r1-target-correspondence/**'
       - 'acceptance/real-kbs-t3r1-target-correspondence/**'
