@@ -103,6 +103,15 @@ try {
   });
   expectCode(() => verifyGeoxConsumerReleaseBundle({ bundleDir: packageDrift, expectedSourceCommit: sourceCommit }), 'PACKAGE_METADATA_MISMATCH');
 
+  const compatibilityDrift = join(root, 'compatibility-drift');
+  mutateProvenance(valid.bundleDir, compatibilityDrift, (provenance) => {
+    provenance.consumer_artifact.compatibility.target_correspondence_profile_registry.profile_set_hash = `sha256:${'0'.repeat(64)}`;
+  });
+  expectCode(
+    () => verifyGeoxConsumerReleaseBundle({ bundleDir: compatibilityDrift, expectedSourceCommit: sourceCommit }),
+    'PACKAGE_COMPATIBILITY_MISMATCH'
+  );
+
   const extraFile = join(root, 'extra-file');
   cpSync(valid.bundleDir, extraFile, { recursive: true });
   writeFileSync(join(extraFile, 'UNQUALIFIED.txt'), 'not part of bundle\n');
@@ -118,21 +127,26 @@ try {
   assert.match(workflow, /ACTUAL_SOURCE_COMMIT="\$\(git rev-parse HEAD\)"/, 'workflow must resolve the actual checked-out commit');
   assert.match(workflow, /test "\$ACTUAL_SOURCE_COMMIT" = "\$ADR_RELEASE_SOURCE_COMMIT"/, 'workflow must fail closed if checkout and provenance source differ');
   assert.match(workflow, /push:\s*\n\s*branches:\s*\n\s*- 'main'/, 'authoritative main must trigger exact-SHA release-bundle qualification');
+  assert.match(workflow, /productization\/geox-consumer-compatibility-envelope-\*/, 'compatibility-envelope branches must self-qualify before PR merge');
+  assert.match(workflow, /adapters\/geox\/consumer-api-surface\.v1\.json/, 'API surface baseline changes must trigger release compatibility qualification');
 
   console.log(JSON.stringify({
     ok: true,
-    integrityCases: 11,
+    integrityCases: 12,
     checksumTamperRejected: true,
     sourceCommitDriftRejected: true,
     sourceContentHashDriftRejected: true,
     builderVersionDriftRejected: true,
     authorityPromotionRejected: true,
     packageMetadataDriftRejected: true,
+    compatibilityEnvelopeDriftRejected: true,
     unexpectedFileRejected: true,
     publicationSideEffectsAbsent: true,
     pullRequestSyntheticMergeRefExcludedFromSourceProvenance: true,
     exactSourceCheckoutEnforced: true,
-    authoritativeMainPushQualificationEnabled: true
+    authoritativeMainPushQualificationEnabled: true,
+    compatibilityBranchSelfQualificationEnabled: true,
+    apiSurfacePathAuthorityCovered: true
   }, null, 2));
 } finally {
   rmSync(root, { recursive: true, force: true });

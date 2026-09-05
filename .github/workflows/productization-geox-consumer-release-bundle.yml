@@ -6,25 +6,30 @@ on:
       - 'main'
       - 'feat/geox-consumer-release-bundle-*'
       - 'fix/geox-consumer-release-bundle-*'
+      - 'productization/geox-consumer-compatibility-envelope-*'
     paths:
       - 'adapters/geox/release-bundle.manifest.json'
+      - 'adapters/geox/consumer-api-surface.v1.json'
       - 'adapters/geox/scripts/build-consumer-release-bundle.mjs'
       - 'adapters/geox/scripts/verify-consumer-release-bundle.mjs'
       - 'adapters/geox/consumer-artifact.manifest.json'
       - 'adapters/geox/scripts/build-consumer-artifact.mjs'
       - 'adapters/geox/src/**'
       - 'sdks/typescript/src/integration-contracts.mjs'
+      - 'acceptance/geox-consumer-compatibility-envelope/**'
       - 'acceptance/geox-consumer-release-bundle/**'
       - '.github/workflows/productization-geox-consumer-release-bundle.yml'
   pull_request:
     paths:
       - 'adapters/geox/release-bundle.manifest.json'
+      - 'adapters/geox/consumer-api-surface.v1.json'
       - 'adapters/geox/scripts/build-consumer-release-bundle.mjs'
       - 'adapters/geox/scripts/verify-consumer-release-bundle.mjs'
       - 'adapters/geox/consumer-artifact.manifest.json'
       - 'adapters/geox/scripts/build-consumer-artifact.mjs'
       - 'adapters/geox/src/**'
       - 'sdks/typescript/src/integration-contracts.mjs'
+      - 'acceptance/geox-consumer-compatibility-envelope/**'
       - 'acceptance/geox-consumer-release-bundle/**'
       - '.github/workflows/productization-geox-consumer-release-bundle.yml'
   workflow_dispatch:
@@ -58,6 +63,8 @@ jobs:
           npm --version
       - name: Existing standalone consumer artifact qualification
         run: node acceptance/geox-consumer-artifact/run.mjs
+      - name: Consumer compatibility envelope qualification
+        run: node acceptance/geox-consumer-compatibility-envelope/run.mjs
       - name: Build and verify deterministic release bundle
         run: node acceptance/geox-consumer-release-bundle/run.mjs
       - name: Release bundle tamper and authority-boundary integrity

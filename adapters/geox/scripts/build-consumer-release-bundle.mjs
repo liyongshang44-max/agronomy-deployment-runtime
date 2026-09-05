@@ -130,6 +130,7 @@ export function buildGeoxConsumerReleaseBundle({ outputDir, sourceCommit }) {
       manifest_contract_version: artifact.manifestContractVersion,
       source_hashes: artifact.sourceHashes,
       bundled_dependency: artifact.bundledDependency,
+      compatibility: artifact.compatibility,
       authority_claim: artifact.authorityClaim
     },
     authority_ceiling: releaseManifest.authority_ceiling,
@@ -167,6 +168,7 @@ export function buildGeoxConsumerReleaseBundle({ outputDir, sourceCommit }) {
     provenanceHash,
     checksumsPath,
     bundleDir,
+    compatibility: artifact.compatibility,
     authorityCeiling: Object.freeze({ ...releaseManifest.authority_ceiling }),
     prohibitedPublicationActions: Object.freeze([...releaseManifest.prohibited_publication_actions]),
     authorityClaim: releaseManifest.authority_claim
