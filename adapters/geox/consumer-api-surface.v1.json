@@ -1,0 +1,78 @@
+{
+  "contract_version": "adr.geox-consumer-api-surface.v1",
+  "package_name": "@adr/geox-adapter",
+  "package_version": "0.1.0-development",
+  "private": true,
+  "node_engine": ">=24 <25",
+  "surface_hash": "sha256:5e456b5604ed474b667663e39aec558d59df76da1b9fb8d6796f54779e01003c",
+  "change_policy": "EXACT_PUBLIC_MODULE_AND_EXPORT_SET_CHANGE_REQUIRES_EXPLICIT_BASELINE_UPDATE",
+  "modules": {
+    ".": [
+      "GEOX_COMPATIBILITY_BASELINE",
+      "GEOX_CROP_CONTEXT_CONTRACT",
+      "GEOX_DEVICE_OBSERVATION_CONTRACT",
+      "GEOX_FIRST_PARTY_ADAPTER_VERSION",
+      "GEOX_RESULT_SINK_VERSION",
+      "GeoxAdapterError",
+      "consumeAdrApplicabilityForGeox",
+      "createGeoxTargetContextProvider",
+      "translateGeoxDeviceObservationV1"
+    ],
+    "./decision-result-sink": [
+      "GEOX_DECISION_RESULT_AUTHORITY_BOUNDARY",
+      "GEOX_DECISION_RESULT_CONSUMER_DISPOSITION",
+      "GEOX_DECISION_RESULT_SINK_VERSION",
+      "GEOX_DECISION_RESULT_TARGET_BINDING_MODE",
+      "GeoxDecisionResultSinkError",
+      "consumeAdrDecisionResultForGeox"
+    ],
+    "./durable-target-authority-store": [
+      "GEOX_DURABLE_TARGET_AUTHORITY_STORE_CLASS",
+      "GEOX_DURABLE_TARGET_AUTHORITY_STORE_VERSION",
+      "GeoxDurableTargetAuthorityStore",
+      "GeoxDurableTargetAuthorityStoreError"
+    ],
+    "./target-authority-resolver": [
+      "GEOX_TARGET_AUTHORITY_EXPORT_VERSION",
+      "GEOX_TARGET_AUTHORITY_PATHS",
+      "GEOX_TARGET_AUTHORITY_REPOSITORY",
+      "GEOX_TARGET_AUTHORITY_RESOLUTION_CLASS",
+      "GEOX_TARGET_AUTHORITY_RESOLUTION_RECEIPT_VERSION",
+      "GeoxTargetAuthorityResolverError",
+      "GeoxTargetAuthoritySnapshotStore",
+      "createGitHubPublicAuthorityTransport",
+      "replayGeoxTargetAuthorityResolution",
+      "resolveGeoxTargetAuthority"
+    ],
+    "./target-correspondence": [
+      "GEOX_TARGET_CORRESPONDENCE_AUTHORITY_CLAIM",
+      "GEOX_TARGET_CORRESPONDENCE_MESSAGE_TYPE",
+      "GEOX_TARGET_CORRESPONDENCE_RELATION",
+      "GEOX_TARGET_CORRESPONDENCE_STATUS",
+      "GEOX_TARGET_CORRESPONDENCE_T1R1_RELATION",
+      "GEOX_TARGET_CORRESPONDENCE_T3R1_RELATION",
+      "GEOX_TARGET_CORRESPONDENCE_VERSION",
+      "GeoxTargetCorrespondenceError",
+      "consumeAdrTargetCorrespondenceForGeox"
+    ],
+    "./target-correspondence-profile-registry": [
+      "GEOX_TARGET_CORRESPONDENCE_GEOMETRY_CLASS_CROP_ONLY",
+      "GEOX_TARGET_CORRESPONDENCE_GEOMETRY_CLASS_REFERENCED_RESTRICTED",
+      "GEOX_TARGET_CORRESPONDENCE_PROFILE_REGISTRY_VERSION",
+      "GEOX_TARGET_CORRESPONDENCE_RELATION",
+      "GEOX_TARGET_CORRESPONDENCE_T1R1_RELATION",
+      "GEOX_TARGET_CORRESPONDENCE_T3R1_RELATION",
+      "getGeoxTargetCorrespondenceProfile",
+      "listGeoxTargetCorrespondenceProfiles"
+    ],
+    "./target-identity-token": [
+      "GEOX_TARGET_IDENTITY_AUTHORITY_CLAIM",
+      "GEOX_TARGET_IDENTITY_MAPPING_STATUS",
+      "GEOX_TARGET_IDENTITY_MESSAGE_TYPE",
+      "GEOX_TARGET_IDENTITY_TOKEN_VERSION",
+      "GeoxTargetIdentityTokenError",
+      "consumeAdrTargetIdentityTokenForGeox"
+    ]
+  },
+  "authority_claim": "NONE_PUBLIC_API_COMPATIBILITY_BASELINE_ONLY_NO_PUBLICATION_OR_DOMAIN_AUTHORITY"
+}
