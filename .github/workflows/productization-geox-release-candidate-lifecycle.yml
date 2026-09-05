@@ -1,0 +1,56 @@
+name: ADR Productization — GEOX Release Candidate Lifecycle
+
+on:
+  push:
+    branches:
+      - 'main'
+      - 'productization/geox-release-candidate-lifecycle-*'
+    paths:
+      - 'adapters/geox/scripts/release-candidate-lifecycle.mjs'
+      - 'acceptance/geox-release-candidate-lifecycle/**'
+      - '.github/workflows/productization-geox-release-candidate-lifecycle.yml'
+  pull_request:
+    paths:
+      - 'adapters/geox/scripts/release-candidate-lifecycle.mjs'
+      - 'acceptance/geox-release-candidate-lifecycle/**'
+      - '.github/workflows/productization-geox-release-candidate-lifecycle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  geox_release_candidate_lifecycle:
+    runs-on: ubuntu-24.04
+    env:
+      ADR_LIFECYCLE_QUALIFICATION_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      ADR_LIFECYCLE_EVIDENCE_PATH: ${{ runner.temp }}/geox-release-candidate-lifecycle/evidence.json
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.ADR_LIFECYCLE_QUALIFICATION_HEAD }}
+          fetch-depth: 1
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Prove exact lifecycle implementation checkout
+        run: |
+          ACTUAL_HEAD="$(git rev-parse HEAD)"
+          test "$ACTUAL_HEAD" = "$ADR_LIFECYCLE_QUALIFICATION_HEAD"
+          echo "lifecycle implementation head: $ADR_LIFECYCLE_QUALIFICATION_HEAD"
+      - name: Report runtime
+        run: |
+          node --version
+          npm --version
+          git --version
+      - name: Rebuild real qualified candidates and prove lifecycle semantics
+        run: node acceptance/geox-release-candidate-lifecycle/run.mjs
+      - name: Upload lifecycle evidence only
+        uses: actions/upload-artifact@v4
+        with:
+          name: geox-release-candidate-lifecycle-${{ env.ADR_LIFECYCLE_QUALIFICATION_HEAD }}
+          path: ${{ env.ADR_LIFECYCLE_EVIDENCE_PATH }}
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
