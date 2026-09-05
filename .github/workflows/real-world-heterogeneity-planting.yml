@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - 'test/real-world-heterogeneity-planting-*'
+      - 'test/blueprint-historical-decision-basis-reconstruction-*'
     paths:
       - 'acceptance/real-kbs-soybean-planting-population-target/**'
       - '.github/workflows/real-world-heterogeneity-planting.yml'
@@ -33,3 +34,5 @@ jobs:
         run: node acceptance/real-kbs-soybean-planting-population-target/run-runtime-composition-v1.mjs
       - name: Real MSU planting D02-D04-D05-D06 strict decision proof
         run: node acceptance/real-kbs-soybean-planting-population-target/run-decision-result-v1.mjs
+      - name: Blueprint Phase 1 historical DecisionResult basis reconstruction proof
+        run: node acceptance/real-kbs-soybean-planting-population-target/run-historical-decision-basis-reconstruction-v1.mjs
