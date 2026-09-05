@@ -13,10 +13,15 @@ export function evaluateCornSeedingRateRange({ inputEntries }) {
   const hybrid = String(readValue(inputEntries, 'planting.hybrid') ?? '').trim().toUpperCase();
 
   if (crop !== 'corn' || hybrid !== '43-96P') {
-    return { actionCode: 'ABSTAIN', parameters: [] };
+    return {
+      contractVersion: 'adr.policy-action-output.v1',
+      actionCode: 'ABSTAIN',
+      parameters: []
+    };
   }
 
   return {
+    contractVersion: 'adr.policy-action-output.v1',
     actionCode: 'SET_CORN_SEEDING_RATE_RANGE',
     parameters: [
       { name: 'minimum_population', value: { type: 'DECIMAL', decimal: '28000' } },
