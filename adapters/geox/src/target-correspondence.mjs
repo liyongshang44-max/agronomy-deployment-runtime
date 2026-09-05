@@ -31,11 +31,22 @@ const T3R1_AUTHORITY_PATHS = Object.freeze([
   'docs/digital_twin/mcft/cap_09/GEOX-MCFT-CAP-09-S6-FORMAL-REALITY-BINDING-V2.json'
 ]);
 
+const T3R1_PINNED_AUTHORITY = Object.freeze({
+  sourceMainSha: '5050f1c08d2528048c56d56add4cbb068b956925',
+  blobShas: Object.freeze({
+    [T3R1_AUTHORITY_PATHS[0]]: 'be02ea8a6fe54affed1e0abedb1f1d6e407c661a',
+    [T3R1_AUTHORITY_PATHS[1]]: 'f9d664a0f58c6024f3090edbd5aee26d8d1b680a',
+    [T3R1_AUTHORITY_PATHS[2]]: '87b1c8fa37939085be68abb66bfa8e0918f65e95',
+    [T3R1_AUTHORITY_PATHS[3]]: 'deb6c15ef7848a8c1ab00bce0847324aaa68ba24'
+  })
+});
+
 const CORRESPONDENCE_PROFILES = Object.freeze({
   [GEOX_TARGET_CORRESPONDENCE_RELATION]: Object.freeze({
     relation: GEOX_TARGET_CORRESPONDENCE_RELATION,
     authorityPaths: GEOX_TARGET_AUTHORITY_PATHS,
     replayableResolverSupported: true,
+    pinnedAuthority: null,
     provider: Object.freeze({
       treatment_code: 'T4',
       replicate_code: 'R1',
@@ -53,7 +64,9 @@ const CORRESPONDENCE_PROFILES = Object.freeze({
     relation: GEOX_TARGET_CORRESPONDENCE_T3R1_RELATION,
     authorityPaths: T3R1_AUTHORITY_PATHS,
     replayableResolverSupported: false,
+    pinnedAuthority: T3R1_PINNED_AUTHORITY,
     provider: Object.freeze({
+      experiment_locator: 'https://lter.kbs.msu.edu/research/long-term-experiments/main-cropping-system-experiment/',
       treatment_code: 'T3',
       replicate_code: 'R1',
       crop_code: 'corn',
@@ -190,6 +203,14 @@ function normalizeGeoxAuthorityExport(value, profile) {
       'this correspondence profile is qualified only for an exact pinned consumer authority export'
     );
   }
+  if (authority.contract_version === LEGACY_GEOX_TARGET_AUTHORITY_EXPORT_VERSION
+    && profile.pinnedAuthority
+    && authority.source_main_sha !== profile.pinnedAuthority.sourceMainSha) {
+    fail(
+      'GEOX_TARGET_CORRESPONDENCE_CONSUMER_AUTHORITY_INVALID',
+      'pinned consumer authority export must retain the exact qualified GEOX main SHA'
+    );
+  }
 
   const expectedPaths = profile.authorityPaths;
   if (!Array.isArray(authority.authority_sources) || authority.authority_sources.length !== expectedPaths.length) {
@@ -208,6 +229,16 @@ function normalizeGeoxAuthorityExport(value, profile) {
   }
   if (!expectedPaths.every((path) => sourceByPath.has(path))) {
     fail('GEOX_TARGET_CORRESPONDENCE_CONSUMER_AUTHORITY_INVALID', 'required GEOX authority path is missing');
+  }
+  if (authority.contract_version === LEGACY_GEOX_TARGET_AUTHORITY_EXPORT_VERSION && profile.pinnedAuthority) {
+    for (const path of expectedPaths) {
+      if (sourceByPath.get(path) !== profile.pinnedAuthority.blobShas[path]) {
+        fail(
+          'GEOX_TARGET_CORRESPONDENCE_CONSUMER_AUTHORITY_INVALID',
+          `pinned consumer authority blob changed for ${path}`
+        );
+      }
+    }
   }
 
   const provider = object(authority.provider_target, 'geoxTargetAuthority.provider_target');
