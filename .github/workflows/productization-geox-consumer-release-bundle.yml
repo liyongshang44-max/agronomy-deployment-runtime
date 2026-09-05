@@ -39,15 +39,23 @@ jobs:
       ADR_RELEASE_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.ADR_RELEASE_SOURCE_COMMIT }}
+          fetch-depth: 1
       - uses: actions/setup-node@v6
         with:
           node-version: 24
           package-manager-cache: false
+      - name: Prove exact source checkout
+        run: |
+          ACTUAL_SOURCE_COMMIT="$(git rev-parse HEAD)"
+          test "$ACTUAL_SOURCE_COMMIT" = "$ADR_RELEASE_SOURCE_COMMIT"
+          echo "qualified source commit: $ADR_RELEASE_SOURCE_COMMIT"
+          echo "checked out source commit: $ACTUAL_SOURCE_COMMIT"
       - name: Report runtime
         run: |
           node --version
           npm --version
-          echo "qualified source commit: $ADR_RELEASE_SOURCE_COMMIT"
       - name: Existing standalone consumer artifact qualification
         run: node acceptance/geox-consumer-artifact/run.mjs
       - name: Build and verify deterministic release bundle
