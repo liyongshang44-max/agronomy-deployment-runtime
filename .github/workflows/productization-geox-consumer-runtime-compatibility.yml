@@ -74,3 +74,10 @@ jobs:
         env:
           ADR_USABILITY_SOURCE_COMMIT: ${{ env.ADR_RUNTIME_QUALIFICATION_HEAD }}
         run: node acceptance/geox-independent-consumer-usability/run.mjs
+
+      - name: Prove historical lifecycle replay and runtime transition gating
+        if: matrix.node == 24
+        env:
+          ADR_LIFECYCLE_QUALIFICATION_HEAD: ${{ env.ADR_RUNTIME_QUALIFICATION_HEAD }}
+          ADR_LIFECYCLE_EVIDENCE_PATH: /tmp/geox-runtime-compatibility-lifecycle-evidence.json
+        run: node acceptance/geox-release-candidate-lifecycle/run.mjs
