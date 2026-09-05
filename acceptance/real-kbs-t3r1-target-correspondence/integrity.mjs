@@ -23,6 +23,16 @@ function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+const workflowSource = readFileSync(
+  new URL('../../.github/workflows/productization-kbs-t3r1-target-correspondence.yml', import.meta.url),
+  'utf8'
+);
+assert.ok(
+  workflowSource.includes("  push:\n    branches:\n      - 'main'\n      - 'test/productization-kbs-t3r1-target-correspondence-*'"),
+  'dedicated T3R1 workflow must retain authoritative-main push qualification'
+);
+console.log('PASS authoritative-main T3R1 push qualification trigger is frozen');
+
 const world = buildKbsT3R1TargetWorld();
 const geoxAuthority = JSON.parse(readFileSync(
   new URL('./geox-kbs-t3r1-authority-export.json', import.meta.url), 'utf8'
@@ -161,4 +171,4 @@ assert.equal(safe.human_approval_authority, 'NONE');
 assert.equal(safe.machine_execution_authority, 'NONE');
 console.log('PASS safe T3R1 correspondence remains non-equality, non-actionable and non-dispatchable');
 
-console.log('KBS T3R1 target correspondence integrity: 16/16 passed');
+console.log('KBS T3R1 target correspondence integrity: 17/17 passed');

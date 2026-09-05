@@ -3,6 +3,7 @@ name: ADR Productization — KBS T3R1 Target Correspondence
 on:
   push:
     branches:
+      - 'main'
       - 'test/productization-kbs-t3r1-target-correspondence-*'
     paths:
       - 'adapters/geox/src/target-correspondence.mjs'
