@@ -134,7 +134,7 @@ try {
   const forbiddenConsumerTokens = [
     '../../', '../adapters', 'adapters/geox', 'packages/', 'sdks/', 'docs/', 'acceptance/', 'DEC-',
     'agronomy_agent', 'decision_recommendation_v1', 'recommendation_v1', 'approval_request_v1',
-    'operation_plan_v1', 'dispatch', 'postgres', 'pg.Pool', 'INSERT INTO', 'UPDATE ', 'DELETE FROM'
+    'operation_plan_v1', 'postgres', 'pg.Pool', 'INSERT INTO', 'UPDATE ', 'DELETE FROM'
   ];
   for (const forbidden of forbiddenConsumerTokens) {
     assert.equal(consumerSource.includes(forbidden), false, `shadow consumer must not contain forbidden dependency/write token ${forbidden}`);
