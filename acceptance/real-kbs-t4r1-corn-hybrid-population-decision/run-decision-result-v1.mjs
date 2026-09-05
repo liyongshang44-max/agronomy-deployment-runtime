@@ -472,20 +472,21 @@ assert.equal(validatedRobustness.semanticPayload.actionEvaluations.length, 1);
 assert.equal(validatedRobustness.semanticPayload.actionEvaluations[0].status, 'ACTION_AVAILABLE');
 const actionSignature = validatedRobustness.semanticPayload.actionEvaluations[0].materialActionSignature;
 assert.equal(actionSignature.actionCode, ACTION_CODE);
+// DecisionRobustness canonicalizes material parameters by semantic identity.
 assert.deepEqual(actionSignature.materialParameters, [
-  {
-    name: MIN_PARAMETER.name,
-    semanticId: MIN_PARAMETER.semanticId,
-    valueType: MIN_PARAMETER.valueType,
-    unit: MIN_PARAMETER.unit,
-    value: { type: 'DECIMAL', decimal: '28000' }
-  },
   {
     name: MAX_PARAMETER.name,
     semanticId: MAX_PARAMETER.semanticId,
     valueType: MAX_PARAMETER.valueType,
     unit: MAX_PARAMETER.unit,
     value: { type: 'DECIMAL', decimal: '36000' }
+  },
+  {
+    name: MIN_PARAMETER.name,
+    semanticId: MIN_PARAMETER.semanticId,
+    valueType: MIN_PARAMETER.valueType,
+    unit: MIN_PARAMETER.unit,
+    value: { type: 'DECIMAL', decimal: '28000' }
   }
 ]);
 
