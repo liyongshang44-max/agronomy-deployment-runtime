@@ -85,12 +85,6 @@ function parseChecksums(path) {
   return entries;
 }
 
-function tarText(tarballPath, args, code) {
-  const result = spawnSync('tar', [...args, tarballPath], { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
-  if (result.status !== 0) fail(code, (result.stderr || result.stdout || 'tar command failed').trim());
-  return result.stdout;
-}
-
 function packedFileList(tarballPath) {
   const result = spawnSync('tar', ['-tzf', tarballPath], { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
   if (result.status !== 0) fail('PACKAGE_TARBALL_INVALID', (result.stderr || result.stdout || 'tar listing failed').trim());
@@ -154,7 +148,7 @@ function expectedCompatibility(consumerManifest) {
   }
   const actualProfileSetHash = sha256Json(listGeoxTargetCorrespondenceProfiles());
   const expected = {
-    contract_version: 'adr.geox-consumer-compatibility-envelope.v1',
+    contract_version: 'adr.geox-consumer-compatibility-envelope.v2',
     package_version: consumerManifest.package_version,
     consumer_api_surface: {
       contract_version: apiBaseline.contract_version,
@@ -164,11 +158,14 @@ function expectedCompatibility(consumerManifest) {
       registry_version: GEOX_TARGET_CORRESPONDENCE_PROFILE_REGISTRY_VERSION,
       profile_set_hash: actualProfileSetHash
     },
-    change_policy: 'EXACT_PACKAGE_API_AND_PROFILE_REGISTRY_COMPATIBILITY_REVIEW_REQUIRED',
+    runtime_environment: {
+      node_engine: consumerManifest.node_engine
+    },
+    change_policy: 'EXACT_PACKAGE_API_PROFILE_AND_RUNTIME_COMPATIBILITY_REVIEW_REQUIRED',
     authority_claim: 'NONE_COMPATIBILITY_METADATA_ONLY_NO_RUNTIME_OR_PUBLICATION_AUTHORITY'
   };
   if (!exactObject(declared, expected)) {
-    fail('PACKAGE_COMPATIBILITY_MISMATCH', 'consumer artifact compatibility envelope does not match exact API/registry source state');
+    fail('PACKAGE_COMPATIBILITY_MISMATCH', 'consumer artifact compatibility envelope does not match exact API/registry/runtime source state');
   }
   return expected;
 }
@@ -340,7 +337,7 @@ export function verifyGeoxConsumerReleaseBundle({ bundleDir, expectedSourceCommi
   const packedArtifactClosure = verifyPackedArtifactClosure(packagePath, consumerManifest, compatibility);
   const packed = packedArtifactClosure.packageJson;
   if (!exactObject(packed.adr_consumer_artifact?.compatibility, compatibility)) {
-    fail('PACKAGE_COMPATIBILITY_MISMATCH', 'packed package compatibility metadata does not match exact API/registry envelope');
+    fail('PACKAGE_COMPATIBILITY_MISMATCH', 'packed package compatibility metadata does not match exact API/registry/runtime envelope');
   }
   if (packed.adr_consumer_artifact?.authority_claim !== consumerManifest.authority_claim) {
     fail('PACKAGE_AUTHORITY_BOUNDARY_MISMATCH', 'packed consumer artifact authority claim drift');
@@ -357,7 +354,7 @@ export function verifyGeoxConsumerReleaseBundle({ bundleDir, expectedSourceCommi
   if (!exactObject(provenance.consumer_artifact, expectedConsumerArtifact)) {
     if (provenance.consumer_artifact?.builder_version !== EXPECTED_CONSUMER_BUILDER_VERSION) fail('BUILDER_VERSION_MISMATCH', 'consumer artifact builder version drift');
     if (!exactObject(provenance.consumer_artifact?.compatibility, compatibility)) {
-      fail('PACKAGE_COMPATIBILITY_MISMATCH', 'release provenance compatibility metadata drifted from exact API/registry envelope');
+      fail('PACKAGE_COMPATIBILITY_MISMATCH', 'release provenance compatibility metadata drifted from exact API/registry/runtime envelope');
     }
     fail('SOURCE_CONTENT_HASH_MISMATCH', 'adapter source or bundled dependency provenance does not match exact repository bytes');
   }
