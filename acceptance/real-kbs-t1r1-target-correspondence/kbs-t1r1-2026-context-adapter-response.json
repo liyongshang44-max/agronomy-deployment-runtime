@@ -1,0 +1,96 @@
+{
+  "adapter_contract": "adr.acceptance.kbs-public-context-adapter.v1",
+  "world": "KBS_MCSE_T1R1_2026_TARGET_CORRESPONDENCE",
+  "retained_at": "2026-09-05T03:25:00.000Z",
+  "source_evidence": [
+    {
+      "locator": "https://lter.kbs.msu.edu/research/long-term-experiments/main-cropping-system-experiment/",
+      "experiment": "Main Cropping System Experiment (MCSE)",
+      "treatment_code": "T1",
+      "treatment_label": "Conventional",
+      "replicate_structure": "SIX_REPLICATE_BLOCKS"
+    },
+    {
+      "locator": "https://aglog.kbs.msu.edu/observations/6931",
+      "observation_id": "6931",
+      "observation_date": "2026-05-11",
+      "area_code": "T1",
+      "replication_scope": "ALL_T1_REPLICATIONS",
+      "crop_label": "corn",
+      "hybrid_label": "Pioneer P0306Q",
+      "event_time_precision": "LOCAL_CALENDAR_DAY_ONLY"
+    },
+    {
+      "locator": "https://lter.kbs.msu.edu/datasets/7",
+      "dataset_id": "KBS004",
+      "replicate_blocks": [
+        "R1",
+        "R2",
+        "R3",
+        "R4",
+        "R5",
+        "R6"
+      ],
+      "treatment_code": "T1",
+      "treatment_label": "Conventional",
+      "geometry_authority_use": "IDENTITY_STRUCTURE_ONLY_NOT_REPUBLISHED"
+    }
+  ],
+  "normalized_context": {
+    "experiment.name": {
+      "type": "STRING",
+      "string": "Main Cropping System Experiment (MCSE)"
+    },
+    "treatment.code": {
+      "type": "CATEGORY",
+      "category": "T1"
+    },
+    "treatment.name": {
+      "type": "STRING",
+      "string": "Conventional"
+    },
+    "replicate.code": {
+      "type": "CATEGORY",
+      "category": "R1"
+    },
+    "crop.code": {
+      "type": "CATEGORY",
+      "category": "corn"
+    },
+    "planting.hybrid": {
+      "type": "STRING",
+      "string": "P0306Q"
+    },
+    "planting.observation_id": {
+      "type": "STRING",
+      "string": "6931"
+    }
+  },
+  "evaluation_slice": {
+    "kind": "RETROSPECTIVE_YEAR_SLICE",
+    "start": "2026-01-01T00:00:00.000Z",
+    "end": "2027-01-01T00:00:00.000Z",
+    "representative_effective_at": "2026-05-11T04:00:00.000Z"
+  },
+  "correspondence_basis": {
+    "provider_target_components": [
+      "Main Cropping System Experiment (MCSE)",
+      "T1",
+      "R1"
+    ],
+    "relation_candidate": "CORRESPONDS_TO_SAME_KBS_MCSE_T1_R1_TARGET",
+    "identity_equality_claimed": false,
+    "geometry_equality_claimed": false,
+    "provider_geometry_republished": false
+  },
+  "nonclaims": [
+    "NO_ADR_FARM_ID_CREATED",
+    "NO_ADR_FIELD_ID_CREATED",
+    "NO_ADR_ZONE_ID_CREATED",
+    "NO_GEOMETRY_REPUBLISHED",
+    "NO_GEOX_FIELD_ID_DERIVED_FROM_PROVIDER_STRING",
+    "NO_FIELD_ACTIONABILITY_AUTHORITY",
+    "NO_DISPATCH_AUTHORITY",
+    "NO_PRODUCTION_SITE_CLAIM"
+  ]
+}
