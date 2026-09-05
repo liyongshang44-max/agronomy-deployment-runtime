@@ -9,6 +9,7 @@
     "durable-target-authority-store.mjs",
     "index.mjs",
     "target-authority-resolver.mjs",
+    "target-correspondence-profile-registry.mjs",
     "target-correspondence.mjs",
     "target-identity-token.mjs"
   ],
