@@ -3,7 +3,7 @@
   "package_name": "@adr/geox-adapter",
   "package_version": "0.1.0-development",
   "private": true,
-  "node_engine": ">=24 <25",
+  "node_engine": ">=20 <21 || >=24 <25",
   "source_files": [
     "decision-result-sink.mjs",
     "durable-target-authority-store.mjs",
@@ -29,7 +29,7 @@
     "rewrite_to": "./integration-contracts.mjs"
   },
   "compatibility": {
-    "contract_version": "adr.geox-consumer-compatibility-envelope.v1",
+    "contract_version": "adr.geox-consumer-compatibility-envelope.v2",
     "package_version": "0.1.0-development",
     "consumer_api_surface": {
       "contract_version": "adr.geox-consumer-api-surface.v1",
@@ -39,7 +39,10 @@
       "registry_version": "adr.geox-target-correspondence-profile-registry.v1",
       "profile_set_hash": "sha256:5f400e4cfd3bcfb72286a3a42bed7940cbb2b5d7450837ae4cebeff394cd55c4"
     },
-    "change_policy": "EXACT_PACKAGE_API_AND_PROFILE_REGISTRY_COMPATIBILITY_REVIEW_REQUIRED",
+    "runtime_environment": {
+      "node_engine": ">=20 <21 || >=24 <25"
+    },
+    "change_policy": "EXACT_PACKAGE_API_PROFILE_AND_RUNTIME_COMPATIBILITY_REVIEW_REQUIRED",
     "authority_claim": "NONE_COMPATIBILITY_METADATA_ONLY_NO_RUNTIME_OR_PUBLICATION_AUTHORITY"
   },
   "authority_claim": "NONE_PACKAGING_ONLY_NO_NEW_ADR_OR_GEOX_AUTHORITY"

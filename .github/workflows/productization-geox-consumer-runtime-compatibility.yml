@@ -1,0 +1,83 @@
+name: ADR Productization — GEOX Consumer Runtime Compatibility
+
+on:
+  push:
+    branches:
+      - main
+      - productization/geox-node20-runtime-compatibility-v2
+    paths:
+      - 'adapters/geox/consumer-artifact.manifest.json'
+      - 'adapters/geox/consumer-api-surface.v1.json'
+      - 'adapters/geox/scripts/build-consumer-artifact.mjs'
+      - 'adapters/geox/scripts/build-consumer-release-bundle.mjs'
+      - 'adapters/geox/scripts/verify-consumer-release-bundle.mjs'
+      - 'adapters/geox/scripts/release-candidate-lifecycle.mjs'
+      - 'adapters/geox/src/**'
+      - 'acceptance/geox-consumer-compatibility-envelope/**'
+      - 'acceptance/geox-independent-consumer-usability/**'
+      - 'acceptance/geox-release-candidate-lifecycle/**'
+      - '.github/workflows/productization-geox-consumer-runtime-compatibility.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'adapters/geox/consumer-artifact.manifest.json'
+      - 'adapters/geox/consumer-api-surface.v1.json'
+      - 'adapters/geox/scripts/build-consumer-artifact.mjs'
+      - 'adapters/geox/scripts/build-consumer-release-bundle.mjs'
+      - 'adapters/geox/scripts/verify-consumer-release-bundle.mjs'
+      - 'adapters/geox/scripts/release-candidate-lifecycle.mjs'
+      - 'adapters/geox/src/**'
+      - 'acceptance/geox-consumer-compatibility-envelope/**'
+      - 'acceptance/geox-independent-consumer-usability/**'
+      - 'acceptance/geox-release-candidate-lifecycle/**'
+      - '.github/workflows/productization-geox-consumer-runtime-compatibility.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  consumer_runtime_compatibility:
+    name: Node ${{ matrix.node }} installed consumer
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 24]
+    env:
+      ADR_RUNTIME_QUALIFICATION_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.ADR_RUNTIME_QUALIFICATION_HEAD }}
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node }}
+          package-manager-cache: false
+
+      - name: Prove exact candidate checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$ADR_RUNTIME_QUALIFICATION_HEAD"
+          node --version
+          npm --version
+
+      - name: Prove runtime-bound compatibility envelope
+        env:
+          ADR_RELEASE_SOURCE_COMMIT: ${{ env.ADR_RUNTIME_QUALIFICATION_HEAD }}
+        run: node acceptance/geox-consumer-compatibility-envelope/run.mjs
+
+      - name: Prove clean installed consumer on qualified runtime
+        env:
+          ADR_USABILITY_SOURCE_COMMIT: ${{ env.ADR_RUNTIME_QUALIFICATION_HEAD }}
+        run: node acceptance/geox-independent-consumer-usability/run.mjs
+
+      - name: Prove historical lifecycle replay and runtime transition gating
+        if: matrix.node == 24
+        env:
+          ADR_LIFECYCLE_QUALIFICATION_HEAD: ${{ env.ADR_RUNTIME_QUALIFICATION_HEAD }}
+          ADR_LIFECYCLE_EVIDENCE_PATH: /tmp/geox-runtime-compatibility-lifecycle-evidence.json
+        run: node acceptance/geox-release-candidate-lifecycle/run.mjs
