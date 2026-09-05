@@ -3,6 +3,7 @@ name: ADR Productization — GEOX T4/R1 Same-Target Decision
 on:
   push:
     branches:
+      - 'main'
       - 'productization/geox-t4r1-same-target-decision-*'
     paths:
       - 'acceptance/real-kbs-t4r1-corn-hybrid-population-decision/**'
