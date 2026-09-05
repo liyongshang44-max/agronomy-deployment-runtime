@@ -218,6 +218,18 @@ assert.equal(validatedPolicy.semanticPayload.contractVersion, POLICY_CONTRACT_VE
 assert.equal(validatedPolicy.semanticPayload.thresholdAuthority.mode, 'EXTERNAL_AUTHORITY');
 assert.deepEqual(validatedPolicy.semanticPayload.thresholdAuthority.authorityRefs, [knowledge.ref]);
 assert.equal(validatedPolicy.semanticPayload.requiredRuntimeOutputs.length, 0);
+const requiredInputSemanticIds = validatedPolicy.semanticPayload.requiredInputs
+  .map((item) => item.semanticId)
+  .sort();
+assert.deepEqual(requiredInputSemanticIds, ['crop.code', 'planting.hybrid']);
+const requiredInputSemanticIdSet = new Set(requiredInputSemanticIds);
+const exactInputDatums = validatedDatums.filter((datum) =>
+  requiredInputSemanticIdSet.has(datum.semanticPayload.semanticId)
+);
+assert.deepEqual(
+  exactInputDatums.map((datum) => datum.semanticPayload.semanticId).sort(),
+  requiredInputSemanticIds
+);
 
 const implementationManager = createPrincipal({
   principalId: 't4r1-corn-policy-v1-implementation-manager',
@@ -343,7 +355,7 @@ const conformance = publishImplementationConformance({
       testId: 't4r1-corn-executor-exact-context-fixture',
       definitionHash: executorHash,
       resultHash: sha256Text(JSON.stringify(evaluateCornSeedingRateRange({
-        inputEntries: validatedDatums.map((datum) => ({
+        inputEntries: exactInputDatums.map((datum) => ({
           semanticId: datum.semanticPayload.semanticId,
           payload: datum.semanticPayload
         }))
@@ -410,7 +422,8 @@ const broker = new RuntimeExecutionBroker({
   clock: () => clockValues[Math.min(clockIndex++, clockValues.length - 1)],
   timeoutMs: 100
 });
-const inputDatumRefs = validatedDatums.map((datum) => datum.record.ref);
+const inputDatumRefs = exactInputDatums.map((datum) => datum.record.ref);
+assert.equal(inputDatumRefs.length, requiredInputSemanticIds.length);
 const executionEnvelope = await broker.execute({
   ledger,
   runtimeBindingRef: executionBinding.ref,
