@@ -4,8 +4,11 @@ export const GEOX_RELEASE_CANDIDATE_ARTIFACT_FINGERPRINT_VERSION = 'adr.geox-rel
 export const GEOX_RELEASE_CANDIDATE_QUALIFICATION_RECEIPT_VERSION = 'adr.geox-release-candidate-qualification-receipt.v1';
 export const GEOX_RELEASE_CANDIDATE_DESCRIPTOR_VERSION = 'adr.geox-release-candidate-descriptor.v1';
 export const GEOX_RELEASE_CANDIDATE_TRANSITION_DECISION_VERSION = 'adr.geox-release-candidate-transition-compatibility-decision.v1';
+export const GEOX_RELEASE_CANDIDATE_TRANSITION_DECISION_VERSION_V2 = 'adr.geox-release-candidate-transition-compatibility-decision.v2';
 export const GEOX_RELEASE_CANDIDATE_LINEAGE_VERSION = 'adr.geox-release-candidate-lineage.v1';
 
+const COMPATIBILITY_V1 = 'adr.geox-consumer-compatibility-envelope.v1';
+const COMPATIBILITY_V2 = 'adr.geox-consumer-compatibility-envelope.v2';
 const COMMIT_RE = /^[0-9a-f]{40}$/;
 const SHA256_RE = /^sha256:[0-9a-f]{64}$/;
 const QUALIFIED_RELEASE_STATUS = 'QUALIFIED_BUNDLE_CANDIDATE_NOT_PUBLISHED';
@@ -76,17 +79,29 @@ function requireHash(value, label) {
 }
 
 function normalizedCompatibility(value) {
-  exactKeys(value, [
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    fail('COMPATIBILITY_ENVELOPE_INVALID', 'compatibility envelope must be an object');
+  }
+  const version = requireText(value.contract_version, 'compatibility.contract_version');
+  const commonKeys = [
     'contract_version',
     'package_version',
     'consumer_api_surface',
     'target_correspondence_profile_registry',
     'change_policy',
     'authority_claim'
-  ], 'COMPATIBILITY_ENVELOPE_INVALID', 'compatibility envelope');
+  ];
+  if (version === COMPATIBILITY_V1) {
+    exactKeys(value, commonKeys, 'COMPATIBILITY_ENVELOPE_INVALID', 'compatibility envelope v1');
+  } else if (version === COMPATIBILITY_V2) {
+    exactKeys(value, [...commonKeys, 'runtime_environment'], 'COMPATIBILITY_ENVELOPE_INVALID', 'compatibility envelope v2');
+    exactKeys(value.runtime_environment, ['node_engine'], 'COMPATIBILITY_ENVELOPE_INVALID', 'runtime_environment');
+    requireText(value.runtime_environment.node_engine, 'compatibility.runtime_environment.node_engine');
+  } else {
+    fail('COMPATIBILITY_ENVELOPE_INVALID', `unsupported compatibility envelope ${version}`);
+  }
   exactKeys(value.consumer_api_surface, ['contract_version', 'surface_hash'], 'COMPATIBILITY_ENVELOPE_INVALID', 'consumer_api_surface');
   exactKeys(value.target_correspondence_profile_registry, ['registry_version', 'profile_set_hash'], 'COMPATIBILITY_ENVELOPE_INVALID', 'target_correspondence_profile_registry');
-  requireText(value.contract_version, 'compatibility.contract_version');
   requireText(value.package_version, 'compatibility.package_version');
   requireText(value.consumer_api_surface.contract_version, 'compatibility.consumer_api_surface.contract_version');
   requireHash(value.consumer_api_surface.surface_hash, 'compatibility.consumer_api_surface.surface_hash');
@@ -101,9 +116,13 @@ function compatibilityFacts(value) {
   const compatibility = normalizedCompatibility(value);
   return Object.freeze({
     compatibility,
+    contractVersion: compatibility.contract_version,
     compatibilityEnvelopeHash: hashCanonicalReleaseCandidateValue(compatibility),
     apiSurfaceHash: compatibility.consumer_api_surface.surface_hash,
-    profileSetHash: compatibility.target_correspondence_profile_registry.profile_set_hash
+    profileSetHash: compatibility.target_correspondence_profile_registry.profile_set_hash,
+    runtimeNodeEngine: compatibility.contract_version === COMPATIBILITY_V2
+      ? compatibility.runtime_environment.node_engine
+      : null
   });
 }
 
@@ -304,17 +323,34 @@ export function compareReleaseCandidateCompatibility(leftCompatibility, rightCom
   const api = left.apiSurfaceHash === right.apiSurfaceHash ? 'SAME' : 'CHANGED_REQUIRES_REVIEW';
   const profiles = left.profileSetHash === right.profileSetHash ? 'SAME' : 'CHANGED_REQUIRES_REVIEW';
   const envelope = left.compatibilityEnvelopeHash === right.compatibilityEnvelopeHash ? 'SAME' : 'CHANGED_REQUIRES_REVIEW';
+  const contract = left.contractVersion === right.contractVersion ? 'SAME' : 'CHANGED_REQUIRES_REVIEW';
+  let runtime;
+  if (left.contractVersion === COMPATIBILITY_V1 && right.contractVersion === COMPATIBILITY_V1 && envelope === 'SAME') {
+    runtime = 'LEGACY_UNBOUND_SAME_ENVELOPE';
+  } else if (left.contractVersion === COMPATIBILITY_V2 && right.contractVersion === COMPATIBILITY_V2
+    && left.runtimeNodeEngine === right.runtimeNodeEngine) {
+    runtime = 'SAME';
+  } else {
+    runtime = 'CHANGED_OR_UNBOUND_REQUIRES_REVIEW';
+  }
+  const runtimeAcceptable = runtime === 'SAME' || runtime === 'LEGACY_UNBOUND_SAME_ENVELOPE';
   return Object.freeze({
+    compatibilityContract: contract,
     consumerApiSurface: api,
     targetCorrespondenceProfileSet: profiles,
+    runtimeEnvironment: runtime,
     compatibilityEnvelope: envelope,
-    decision: api === 'SAME' && profiles === 'SAME' && envelope === 'SAME' ? 'SAME' : 'REVIEW_REQUIRED'
+    decision: contract === 'SAME' && api === 'SAME' && profiles === 'SAME' && runtimeAcceptable && envelope === 'SAME'
+      ? 'SAME'
+      : 'REVIEW_REQUIRED'
   });
 }
 
 export function assessReleaseCandidateTransitionCompatibility({ predecessor, successor }) {
   verifyReleaseCandidateRecord(predecessor);
   verifyReleaseCandidateRecord(successor);
+  const predecessorCompatibility = compatibilityFacts(predecessor.artifactFingerprint.compatibility);
+  const successorCompatibility = compatibilityFacts(successor.artifactFingerprint.compatibility);
   const compatibility = compareReleaseCandidateCompatibility(
     predecessor.artifactFingerprint.compatibility,
     successor.artifactFingerprint.compatibility
@@ -327,7 +363,9 @@ export function assessReleaseCandidateTransitionCompatibility({ predecessor, suc
   else if (compatibility.decision !== 'SAME') decision = 'REVIEW_REQUIRED';
   else decision = 'REPLACEMENT_ELIGIBLE_FOR_SHADOW_INSTALL';
 
-  const body = canonical({
+  const isHistoricalV1 = predecessorCompatibility.contractVersion === COMPATIBILITY_V1
+    && successorCompatibility.contractVersion === COMPATIBILITY_V1;
+  const body = canonical(isHistoricalV1 ? {
     contract_version: GEOX_RELEASE_CANDIDATE_TRANSITION_DECISION_VERSION,
     predecessor_candidate_id: predecessor.candidateId,
     successor_candidate_id: successor.candidateId,
@@ -344,6 +382,34 @@ export function assessReleaseCandidateTransitionCompatibility({ predecessor, suc
     qualification_receipt: predecessor.qualificationReceiptHash === successor.qualificationReceiptHash ? 'SAME' : 'DIFFERENT',
     consumer_api_surface: compatibility.consumerApiSurface,
     target_correspondence_profile_set: compatibility.targetCorrespondenceProfileSet,
+    compatibility_envelope: compatibility.compatibilityEnvelope,
+    decision,
+    predecessor_rollback_eligibility: decision === 'REPLACEMENT_ELIGIBLE_FOR_SHADOW_INSTALL' ? 'ELIGIBLE_IF_RETAINED' : 'NOT_ESTABLISHED',
+    authority: {
+      shadow_install_authorized: false,
+      replacement_authorized: false,
+      rollback_authorized: false,
+      publication_authorized: false
+    }
+  } : {
+    contract_version: GEOX_RELEASE_CANDIDATE_TRANSITION_DECISION_VERSION_V2,
+    predecessor_candidate_id: predecessor.candidateId,
+    successor_candidate_id: successor.candidateId,
+    qualification: {
+      predecessor: 'VALID',
+      successor: 'VALID'
+    },
+    package_identity: samePackageName ? 'SAME_PACKAGE_NAME' : 'DIFFERENT_PACKAGE_NAME',
+    package_metadata_version: predecessor.descriptor.package_metadata_version === successor.descriptor.package_metadata_version
+      ? 'SAME_INFORMATIONAL_ONLY'
+      : 'DIFFERENT_INFORMATIONAL_ONLY',
+    artifact_tarball: predecessor.descriptor.package_tarball_sha256 === successor.descriptor.package_tarball_sha256 ? 'SAME' : 'DIFFERENT',
+    source_commit: predecessor.descriptor.source_commit === successor.descriptor.source_commit ? 'SAME' : 'DIFFERENT',
+    qualification_receipt: predecessor.qualificationReceiptHash === successor.qualificationReceiptHash ? 'SAME' : 'DIFFERENT',
+    compatibility_contract: compatibility.compatibilityContract,
+    consumer_api_surface: compatibility.consumerApiSurface,
+    target_correspondence_profile_set: compatibility.targetCorrespondenceProfileSet,
+    runtime_environment: compatibility.runtimeEnvironment,
     compatibility_envelope: compatibility.compatibilityEnvelope,
     decision,
     predecessor_rollback_eligibility: decision === 'REPLACEMENT_ELIGIBLE_FOR_SHADOW_INSTALL' ? 'ELIGIBLE_IF_RETAINED' : 'NOT_ESTABLISHED',
