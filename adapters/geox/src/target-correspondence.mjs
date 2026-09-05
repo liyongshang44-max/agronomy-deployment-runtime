@@ -35,7 +35,8 @@ const T3R1_AUTHORITY_PATHS = Object.freeze([
 const T1R1_AUTHORITY_PATHS = Object.freeze([
   'docs/digital_twin/mcft/cap_09/GEOX-MCFT-CAP-09-S6-FORMAL-SITE-AUTHORITY-V1.json',
   'docs/digital_twin/mcft/cap_09/GEOX-MCFT-CAP-09-S6-FORMAL-REALITY-BINDING-V1.json',
-  'docs/digital_twin/mcft/cap_09/GEOX-MCFT-CAP-09-S6-FORMAL-CROP-CONTEXT-AUTHORITY-V1.json'
+  'docs/digital_twin/mcft/cap_09/GEOX-MCFT-CAP-09-S6-FORMAL-CROP-CONTEXT-AUTHORITY-V1.json',
+  'docs/digital_twin/mcft/cap_09/GEOX-MCFT-CAP-09-EA5E2-CURRENT-CROP-AUTHORITY-REQUALIFICATION-RESULT-V1.json'
 ]);
 
 const T3R1_PINNED_AUTHORITY = Object.freeze({
@@ -49,17 +50,17 @@ const T3R1_PINNED_AUTHORITY = Object.freeze({
 });
 
 const T1R1_PINNED_AUTHORITY = Object.freeze({
-  sourceMainSha: '5050f1c08d2528048c56d56add4cbb068b956925',
+  sourceMainSha: '0bd2300c9c8a58025df9212d7c14e640606add83',
   blobShas: Object.freeze({
     [T1R1_AUTHORITY_PATHS[0]]: 'eb9eb1880e01eb16430c177be6e2ef2dc36b3ca8',
     [T1R1_AUTHORITY_PATHS[1]]: 'dedc8db6e2e3c902066ed94b0d3322a69775b7b6',
-    [T1R1_AUTHORITY_PATHS[2]]: 'b5de9d29189cb654444b3f57d00df290eefe16d3'
+    [T1R1_AUTHORITY_PATHS[2]]: 'b5de9d29189cb654444b3f57d00df290eefe16d3',
+    [T1R1_AUTHORITY_PATHS[3]]: 'a9196e16ab6402fcfe2d59b738a395ef52d7c236'
   })
 });
 
 const GEOMETRY_CLASS_CROP_ONLY = 'CROP_ONLY_DERIVED_PROVIDER_GEOMETRY';
 const GEOMETRY_CLASS_REFERENCED_RESTRICTED = 'PROVIDER_GEOMETRY_REFERENCED_RESTRICTED_NOT_REPUBLISHED';
-const CONSUMER_UNESTABLISHED = 'NOT_ESTABLISHED_BY_CONSUMER_AUTHORITY';
 
 const CORRESPONDENCE_PROFILES = Object.freeze({
   [GEOX_TARGET_CORRESPONDENCE_RELATION]: Object.freeze({
@@ -112,7 +113,7 @@ const CORRESPONDENCE_PROFILES = Object.freeze({
       treatment_code: 'T1',
       replicate_code: 'R1',
       crop_code: 'corn',
-      hybrid_code: CONSUMER_UNESTABLISHED,
+      hybrid_code: 'P0306Q',
       planting_observation_id: '6931'
     }),
     geox: Object.freeze({
