@@ -1,0 +1,55 @@
+name: ADR Productization — GEOX Consumer Profile Discovery
+
+on:
+  push:
+    branches:
+      - 'main'
+      - 'productization/geox-consumer-profile-discovery-*'
+    paths:
+      - 'adapters/geox/consumer-artifact.manifest.json'
+      - 'adapters/geox/src/target-correspondence-profile-registry.mjs'
+      - 'adapters/geox/scripts/build-consumer-artifact.mjs'
+      - 'acceptance/geox-consumer-profile-discovery/**'
+      - '.github/workflows/productization-geox-consumer-profile-discovery.yml'
+  pull_request:
+    paths:
+      - 'adapters/geox/consumer-artifact.manifest.json'
+      - 'adapters/geox/src/target-correspondence-profile-registry.mjs'
+      - 'adapters/geox/scripts/build-consumer-artifact.mjs'
+      - 'acceptance/geox-consumer-profile-discovery/**'
+      - '.github/workflows/productization-geox-consumer-profile-discovery.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  geox_consumer_profile_discovery:
+    runs-on: ubuntu-24.04
+    env:
+      ADR_PROFILE_DISCOVERY_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.ADR_PROFILE_DISCOVERY_SOURCE_COMMIT }}
+          fetch-depth: 1
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Prove exact candidate checkout
+        run: |
+          test "$(git rev-parse HEAD)" = "$ADR_PROFILE_DISCOVERY_SOURCE_COMMIT"
+          echo "qualified source commit: $ADR_PROFILE_DISCOVERY_SOURCE_COMMIT"
+      - name: Fresh offline consumer discovers and selects closed profiles
+        run: |
+          set -o pipefail
+          node acceptance/geox-consumer-profile-discovery/run.mjs | tee "$RUNNER_TEMP/geox-consumer-profile-discovery.json"
+      - name: Upload profile-discovery evidence only
+        uses: actions/upload-artifact@v4
+        with:
+          name: geox-consumer-profile-discovery-${{ env.ADR_PROFILE_DISCOVERY_SOURCE_COMMIT }}
+          path: ${{ runner.temp }}/geox-consumer-profile-discovery.json
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0

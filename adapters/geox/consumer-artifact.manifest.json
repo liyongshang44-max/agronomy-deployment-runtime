@@ -18,6 +18,7 @@
     "./decision-result-sink": "./src/decision-result-sink.mjs",
     "./durable-target-authority-store": "./src/durable-target-authority-store.mjs",
     "./target-authority-resolver": "./src/target-authority-resolver.mjs",
+    "./target-correspondence-profile-registry": "./src/target-correspondence-profile-registry.mjs",
     "./target-correspondence": "./src/target-correspondence.mjs",
     "./target-identity-token": "./src/target-identity-token.mjs"
   },
