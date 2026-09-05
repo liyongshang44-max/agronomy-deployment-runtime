@@ -1,0 +1,47 @@
+name: ADR Productization — GEOX T4/R1 Same-Target Decision
+
+on:
+  push:
+    branches:
+      - 'main'
+      - 'productization/geox-t4r1-same-target-decision-*'
+    paths:
+      - 'acceptance/real-kbs-t4r1-corn-hybrid-population-decision/**'
+      - 'acceptance/real-kbs-t4r1-target-correspondence/**'
+      - 'adapters/geox/src/target-correspondence-profile-registry.mjs'
+      - '.github/workflows/productization-geox-t4r1-same-target-decision.yml'
+  pull_request:
+    paths:
+      - 'acceptance/real-kbs-t4r1-corn-hybrid-population-decision/**'
+      - 'acceptance/real-kbs-t4r1-target-correspondence/**'
+      - 'adapters/geox/src/target-correspondence-profile-registry.mjs'
+      - '.github/workflows/productization-geox-t4r1-same-target-decision.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  geox_t4r1_same_target_decision:
+    runs-on: ubuntu-24.04
+    env:
+      ADR_SAME_TARGET_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.ADR_SAME_TARGET_SOURCE_COMMIT }}
+          fetch-depth: 1
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Prove exact candidate checkout
+        run: |
+          test "$(git rev-parse HEAD)" = "$ADR_SAME_TARGET_SOURCE_COMMIT"
+          echo "qualified source commit: $ADR_SAME_TARGET_SOURCE_COMMIT"
+      - name: Reprove existing T4/R1 cross-namespace correspondence
+        run: node acceptance/real-kbs-t4r1-target-correspondence/run.mjs
+      - name: Same-target real corn Knowledge through A08 R01 R03 D01
+        run: node acceptance/real-kbs-t4r1-corn-hybrid-population-decision/run-runtime-composition-v1.mjs
+      - name: Same-target D02 D04 D05 D06 DecisionResult
+        run: node acceptance/real-kbs-t4r1-corn-hybrid-population-decision/run-decision-result-v1.mjs
