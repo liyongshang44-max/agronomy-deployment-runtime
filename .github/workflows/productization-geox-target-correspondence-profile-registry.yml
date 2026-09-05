@@ -1,0 +1,58 @@
+name: ADR Productization — GEOX Target Correspondence Profile Registry
+
+on:
+  push:
+    branches:
+      - 'main'
+      - 'refactor/productization-geox-correspondence-profile-registry-*'
+    paths:
+      - 'adapters/geox/src/target-correspondence-profile-registry.mjs'
+      - 'adapters/geox/src/target-correspondence.mjs'
+      - 'adapters/geox/consumer-artifact.manifest.json'
+      - 'acceptance/geox-consumer-artifact/run.mjs'
+      - 'acceptance/geox-target-correspondence-profile-registry/**'
+      - 'acceptance/real-kbs-t1r1-target-correspondence/**'
+      - 'acceptance/real-kbs-t3r1-target-correspondence/**'
+      - 'acceptance/real-kbs-t4r1-target-correspondence/**'
+      - '.github/workflows/productization-geox-target-correspondence-profile-registry.yml'
+  pull_request:
+    paths:
+      - 'adapters/geox/src/target-correspondence-profile-registry.mjs'
+      - 'adapters/geox/src/target-correspondence.mjs'
+      - 'adapters/geox/consumer-artifact.manifest.json'
+      - 'acceptance/geox-consumer-artifact/run.mjs'
+      - 'acceptance/geox-target-correspondence-profile-registry/**'
+      - 'acceptance/real-kbs-t1r1-target-correspondence/**'
+      - 'acceptance/real-kbs-t3r1-target-correspondence/**'
+      - 'acceptance/real-kbs-t4r1-target-correspondence/**'
+      - '.github/workflows/productization-geox-target-correspondence-profile-registry.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  geox_target_correspondence_profile_registry:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Report runtime
+        run: node --version
+      - name: Closed profile registry integrity
+        run: node acceptance/geox-target-correspondence-profile-registry/run.mjs
+      - name: Existing KBS T4R1 correspondence regression
+        run: |
+          node acceptance/real-kbs-t4r1-target-correspondence/run.mjs
+          node acceptance/real-kbs-t4r1-target-correspondence/integrity.mjs
+      - name: Existing KBS T3R1 correspondence regression
+        run: |
+          node acceptance/real-kbs-t3r1-target-correspondence/run.mjs
+          node acceptance/real-kbs-t3r1-target-correspondence/integrity.mjs
+      - name: Existing KBS T1R1 correspondence regression
+        run: |
+          node acceptance/real-kbs-t1r1-target-correspondence/run.mjs
+          node acceptance/real-kbs-t1r1-target-correspondence/integrity.mjs

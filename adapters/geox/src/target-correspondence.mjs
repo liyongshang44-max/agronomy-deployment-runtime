@@ -6,17 +6,27 @@ import {
 } from '../../../sdks/typescript/src/index.mjs';
 import {
   GEOX_TARGET_AUTHORITY_EXPORT_VERSION,
-  GEOX_TARGET_AUTHORITY_PATHS,
   GEOX_TARGET_AUTHORITY_REPOSITORY,
   GEOX_TARGET_AUTHORITY_RESOLUTION_CLASS,
   GEOX_TARGET_AUTHORITY_RESOLUTION_RECEIPT_VERSION
 } from './target-authority-resolver.mjs';
+import {
+  GEOX_TARGET_CORRESPONDENCE_GEOMETRY_CLASS_CROP_ONLY as GEOMETRY_CLASS_CROP_ONLY,
+  GEOX_TARGET_CORRESPONDENCE_GEOMETRY_CLASS_REFERENCED_RESTRICTED as GEOMETRY_CLASS_REFERENCED_RESTRICTED,
+  GEOX_TARGET_CORRESPONDENCE_RELATION,
+  GEOX_TARGET_CORRESPONDENCE_T1R1_RELATION,
+  GEOX_TARGET_CORRESPONDENCE_T3R1_RELATION,
+  getGeoxTargetCorrespondenceProfile
+} from './target-correspondence-profile-registry.mjs';
+
+export {
+  GEOX_TARGET_CORRESPONDENCE_RELATION,
+  GEOX_TARGET_CORRESPONDENCE_T1R1_RELATION,
+  GEOX_TARGET_CORRESPONDENCE_T3R1_RELATION
+} from './target-correspondence-profile-registry.mjs';
 
 export const GEOX_TARGET_CORRESPONDENCE_VERSION = 'adr.geox-target-correspondence.v1';
 export const GEOX_TARGET_CORRESPONDENCE_MESSAGE_TYPE = 'ADR_PROVIDER_TARGET_CORRESPONDENCE_CANDIDATE';
-export const GEOX_TARGET_CORRESPONDENCE_RELATION = 'CORRESPONDS_TO_SAME_KBS_MCSE_T4_R1_TARGET';
-export const GEOX_TARGET_CORRESPONDENCE_T3R1_RELATION = 'CORRESPONDS_TO_SAME_KBS_MCSE_T3_R1_TARGET';
-export const GEOX_TARGET_CORRESPONDENCE_T1R1_RELATION = 'CORRESPONDS_TO_SAME_KBS_MCSE_T1_R1_TARGET';
 export const GEOX_TARGET_CORRESPONDENCE_STATUS = 'QUALIFIED_CORRESPONDENCE';
 export const GEOX_TARGET_CORRESPONDENCE_AUTHORITY_CLAIM =
   'CORRESPONDENCE_ONLY_NOT_IDENTITY_ACTION_APPROVAL_OR_EXECUTION_AUTHORITY';
@@ -24,105 +34,6 @@ export const GEOX_TARGET_CORRESPONDENCE_AUTHORITY_CLAIM =
 const LEGACY_GEOX_TARGET_AUTHORITY_EXPORT_VERSION = 'adr.acceptance.geox-target-authority-export.v1';
 const HASH_RE = /^sha256:[0-9a-f]{64}$/;
 const GIT_SHA_RE = /^[0-9a-f]{40}$/;
-
-const T3R1_AUTHORITY_PATHS = Object.freeze([
-  'docs/digital_twin/mcft/cap_09/GEOX-MCFT-CAP-09-S6-FORMAL-SITE-AUTHORITY-V2.json',
-  'docs/digital_twin/mcft/cap_09/GEOX-MCFT-CAP-09-AMENDMENT-17-T3R1-FORMAL-SUCCESSOR-SCOPE-AUTHORITY.md',
-  'docs/digital_twin/mcft/cap_09/GEOX-MCFT-CAP-09-T3R1-CROP-ONLY-GEOMETRY-AUTHORITY-V1.json',
-  'docs/digital_twin/mcft/cap_09/GEOX-MCFT-CAP-09-S6-FORMAL-REALITY-BINDING-V2.json'
-]);
-
-const T1R1_AUTHORITY_PATHS = Object.freeze([
-  'docs/digital_twin/mcft/cap_09/GEOX-MCFT-CAP-09-S6-FORMAL-SITE-AUTHORITY-V1.json',
-  'docs/digital_twin/mcft/cap_09/GEOX-MCFT-CAP-09-S6-FORMAL-REALITY-BINDING-V1.json',
-  'docs/digital_twin/mcft/cap_09/GEOX-MCFT-CAP-09-S6-FORMAL-CROP-CONTEXT-AUTHORITY-V1.json',
-  'docs/digital_twin/mcft/cap_09/GEOX-MCFT-CAP-09-EA5E2-CURRENT-CROP-AUTHORITY-REQUALIFICATION-RESULT-V1.json'
-]);
-
-const T3R1_PINNED_AUTHORITY = Object.freeze({
-  sourceMainSha: '5050f1c08d2528048c56d56add4cbb068b956925',
-  blobShas: Object.freeze({
-    [T3R1_AUTHORITY_PATHS[0]]: 'be02ea8a6fe54affed1e0abedb1f1d6e407c661a',
-    [T3R1_AUTHORITY_PATHS[1]]: 'f9d664a0f58c6024f3090edbd5aee26d8d1b680a',
-    [T3R1_AUTHORITY_PATHS[2]]: '87b1c8fa37939085be68abb66bfa8e0918f65e95',
-    [T3R1_AUTHORITY_PATHS[3]]: 'deb6c15ef7848a8c1ab00bce0847324aaa68ba24'
-  })
-});
-
-const T1R1_PINNED_AUTHORITY = Object.freeze({
-  sourceMainSha: '0bd2300c9c8a58025df9212d7c14e640606add83',
-  blobShas: Object.freeze({
-    [T1R1_AUTHORITY_PATHS[0]]: 'eb9eb1880e01eb16430c177be6e2ef2dc36b3ca8',
-    [T1R1_AUTHORITY_PATHS[1]]: 'dedc8db6e2e3c902066ed94b0d3322a69775b7b6',
-    [T1R1_AUTHORITY_PATHS[2]]: 'b5de9d29189cb654444b3f57d00df290eefe16d3',
-    [T1R1_AUTHORITY_PATHS[3]]: 'a9196e16ab6402fcfe2d59b738a395ef52d7c236'
-  })
-});
-
-const GEOMETRY_CLASS_CROP_ONLY = 'CROP_ONLY_DERIVED_PROVIDER_GEOMETRY';
-const GEOMETRY_CLASS_REFERENCED_RESTRICTED = 'PROVIDER_GEOMETRY_REFERENCED_RESTRICTED_NOT_REPUBLISHED';
-
-const CORRESPONDENCE_PROFILES = Object.freeze({
-  [GEOX_TARGET_CORRESPONDENCE_RELATION]: Object.freeze({
-    relation: GEOX_TARGET_CORRESPONDENCE_RELATION,
-    authorityPaths: GEOX_TARGET_AUTHORITY_PATHS,
-    replayableResolverSupported: true,
-    pinnedAuthority: null,
-    geometryBoundaryClass: GEOMETRY_CLASS_CROP_ONLY,
-    provider: Object.freeze({
-      treatment_code: 'T4',
-      replicate_code: 'R1',
-      crop_code: 'corn',
-      hybrid_code: '43-96P',
-      planting_observation_id: '6974'
-    }),
-    geox: Object.freeze({
-      field_id: 'field_kbs_mcse_t4r1',
-      season_id: 'season_2026_corn',
-      zone_id: 'zone_kbs_mcse_t4r1_crop_formal_v1'
-    })
-  }),
-  [GEOX_TARGET_CORRESPONDENCE_T3R1_RELATION]: Object.freeze({
-    relation: GEOX_TARGET_CORRESPONDENCE_T3R1_RELATION,
-    authorityPaths: T3R1_AUTHORITY_PATHS,
-    replayableResolverSupported: false,
-    pinnedAuthority: T3R1_PINNED_AUTHORITY,
-    geometryBoundaryClass: GEOMETRY_CLASS_CROP_ONLY,
-    provider: Object.freeze({
-      experiment_locator: 'https://lter.kbs.msu.edu/research/long-term-experiments/main-cropping-system-experiment/',
-      treatment_code: 'T3',
-      replicate_code: 'R1',
-      crop_code: 'corn',
-      hybrid_code: 'P0306Q',
-      planting_observation_id: '6966'
-    }),
-    geox: Object.freeze({
-      field_id: 'field_kbs_mcse_t3r1',
-      season_id: 'season_2026_corn',
-      zone_id: 'zone_kbs_mcse_t3r1_crop_formal_v1'
-    })
-  }),
-  [GEOX_TARGET_CORRESPONDENCE_T1R1_RELATION]: Object.freeze({
-    relation: GEOX_TARGET_CORRESPONDENCE_T1R1_RELATION,
-    authorityPaths: T1R1_AUTHORITY_PATHS,
-    replayableResolverSupported: false,
-    pinnedAuthority: T1R1_PINNED_AUTHORITY,
-    geometryBoundaryClass: GEOMETRY_CLASS_REFERENCED_RESTRICTED,
-    provider: Object.freeze({
-      experiment_locator: 'https://lter.kbs.msu.edu/research/long-term-experiments/main-cropping-system-experiment/',
-      treatment_code: 'T1',
-      replicate_code: 'R1',
-      crop_code: 'corn',
-      hybrid_code: 'P0306Q',
-      planting_observation_id: '6931'
-    }),
-    geox: Object.freeze({
-      field_id: 'field_kbs_mcse_t1r1',
-      season_id: 'season_2026_corn',
-      zone_id: 'zone_kbs_mcse_t1r1_formal_v1'
-    })
-  })
-});
 
 export class GeoxTargetCorrespondenceError extends Error {
   constructor(code, message) {
@@ -215,7 +126,7 @@ function normalizeProviderTarget(value, name) {
 }
 
 function profileForRelation(relation) {
-  const profile = CORRESPONDENCE_PROFILES[relation];
+  const profile = getGeoxTargetCorrespondenceProfile(relation);
   if (!profile) {
     fail(
       'GEOX_TARGET_CORRESPONDENCE_RELATION_INVALID',
