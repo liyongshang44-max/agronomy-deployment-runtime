@@ -28,5 +28,19 @@
     "rewrite_from": "../../../sdks/typescript/src/index.mjs",
     "rewrite_to": "./integration-contracts.mjs"
   },
+  "compatibility": {
+    "contract_version": "adr.geox-consumer-compatibility-envelope.v1",
+    "package_version": "0.1.0-development",
+    "consumer_api_surface": {
+      "contract_version": "adr.geox-consumer-api-surface.v1",
+      "surface_hash": "sha256:5e456b5604ed474b667663e39aec558d59df76da1b9fb8d6796f54779e01003c"
+    },
+    "target_correspondence_profile_registry": {
+      "registry_version": "adr.geox-target-correspondence-profile-registry.v1",
+      "profile_set_hash": "sha256:5f400e4cfd3bcfb72286a3a42bed7940cbb2b5d7450837ae4cebeff394cd55c4"
+    },
+    "change_policy": "EXACT_PACKAGE_API_AND_PROFILE_REGISTRY_COMPATIBILITY_REVIEW_REQUIRED",
+    "authority_claim": "NONE_COMPATIBILITY_METADATA_ONLY_NO_RUNTIME_OR_PUBLICATION_AUTHORITY"
+  },
   "authority_claim": "NONE_PACKAGING_ONLY_NO_NEW_ADR_OR_GEOX_AUTHORITY"
 }

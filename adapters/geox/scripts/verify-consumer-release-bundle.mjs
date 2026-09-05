@@ -4,10 +4,16 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import {
+  GEOX_TARGET_CORRESPONDENCE_PROFILE_REGISTRY_VERSION,
+  listGeoxTargetCorrespondenceProfiles
+} from '../src/target-correspondence-profile-registry.mjs';
+
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const REPO_ROOT = resolve(dirname(SCRIPT_PATH), '../../..');
 const RELEASE_MANIFEST_PATH = join(REPO_ROOT, 'adapters/geox/release-bundle.manifest.json');
 const CONSUMER_MANIFEST_PATH = join(REPO_ROOT, 'adapters/geox/consumer-artifact.manifest.json');
+const API_SURFACE_PATH = join(REPO_ROOT, 'adapters/geox/consumer-api-surface.v1.json');
 const ADAPTER_SOURCE_DIR = join(REPO_ROOT, 'adapters/geox/src');
 const COMMIT_RE = /^[0-9a-f]{40}$/;
 const EXPECTED_BUNDLE_BUILDER_VERSION = 'adr.geox-consumer-release-bundle-builder.v1';
@@ -41,6 +47,10 @@ function canonical(value) {
 
 function canonicalJson(value) {
   return `${JSON.stringify(canonical(value), null, 2)}\n`;
+}
+
+function sha256Json(value) {
+  return sha256(Buffer.from(JSON.stringify(canonical(value)), 'utf8'));
 }
 
 function exactObject(left, right) {
@@ -101,12 +111,62 @@ function expectedBundledDependency(consumerManifest) {
   };
 }
 
+function normalizedApiSurface(modules) {
+  if (!modules || typeof modules !== 'object' || Array.isArray(modules)) {
+    fail('PACKAGE_COMPATIBILITY_MISMATCH', 'consumer API surface modules must be an object');
+  }
+  return Object.fromEntries(Object.keys(modules).sort().map((modulePath) => {
+    const exports = modules[modulePath];
+    if (!Array.isArray(exports) || exports.length === 0) {
+      fail('PACKAGE_COMPATIBILITY_MISMATCH', `consumer API surface ${modulePath} must contain exports`);
+    }
+    return [modulePath, [...exports].sort()];
+  }));
+}
+
+function expectedCompatibility(consumerManifest) {
+  const declared = consumerManifest.compatibility;
+  if (!declared || typeof declared !== 'object' || Array.isArray(declared)) {
+    fail('PACKAGE_COMPATIBILITY_MISMATCH', 'consumer artifact compatibility envelope is required');
+  }
+  const apiBaseline = parseJson(API_SURFACE_PATH, 'PACKAGE_COMPATIBILITY_MISMATCH');
+  const actualApiHash = sha256Json(normalizedApiSurface(apiBaseline.modules));
+  if (apiBaseline.contract_version !== 'adr.geox-consumer-api-surface.v1'
+    || apiBaseline.package_name !== consumerManifest.package_name
+    || apiBaseline.package_version !== consumerManifest.package_version
+    || apiBaseline.private !== consumerManifest.private
+    || apiBaseline.node_engine !== consumerManifest.node_engine
+    || apiBaseline.surface_hash !== actualApiHash) {
+    fail('PACKAGE_COMPATIBILITY_MISMATCH', 'consumer API baseline identity or hash drifted');
+  }
+  const actualProfileSetHash = sha256Json(listGeoxTargetCorrespondenceProfiles());
+  const expected = {
+    contract_version: 'adr.geox-consumer-compatibility-envelope.v1',
+    package_version: consumerManifest.package_version,
+    consumer_api_surface: {
+      contract_version: apiBaseline.contract_version,
+      surface_hash: actualApiHash
+    },
+    target_correspondence_profile_registry: {
+      registry_version: GEOX_TARGET_CORRESPONDENCE_PROFILE_REGISTRY_VERSION,
+      profile_set_hash: actualProfileSetHash
+    },
+    change_policy: 'EXACT_PACKAGE_API_AND_PROFILE_REGISTRY_COMPATIBILITY_REVIEW_REQUIRED',
+    authority_claim: 'NONE_COMPATIBILITY_METADATA_ONLY_NO_RUNTIME_OR_PUBLICATION_AUTHORITY'
+  };
+  if (!exactObject(declared, expected)) {
+    fail('PACKAGE_COMPATIBILITY_MISMATCH', 'consumer artifact compatibility envelope does not match exact API/registry source state');
+  }
+  return expected;
+}
+
 export function verifyGeoxConsumerReleaseBundle({ bundleDir, expectedSourceCommit }) {
   const root = resolve(bundleDir);
   if (!COMMIT_RE.test(expectedSourceCommit ?? '')) fail('SOURCE_COMMIT_INVALID', 'expectedSourceCommit must be exact lowercase 40-hex');
 
   const releaseManifest = parseJson(RELEASE_MANIFEST_PATH, 'RELEASE_MANIFEST_INVALID');
   const consumerManifest = parseJson(CONSUMER_MANIFEST_PATH, 'CONSUMER_MANIFEST_INVALID');
+  const compatibility = expectedCompatibility(consumerManifest);
   const consumerManifestBytes = readFileSync(CONSUMER_MANIFEST_PATH);
   const releaseManifestBytes = readFileSync(RELEASE_MANIFEST_PATH);
   const files = readdirSync(root).sort();
@@ -177,6 +237,9 @@ export function verifyGeoxConsumerReleaseBundle({ bundleDir, expectedSourceCommi
   if (packed.name !== releaseManifest.package_name || packed.version !== releaseManifest.package_version || packed.private !== true) {
     fail('PACKAGE_METADATA_MISMATCH', 'packed package.json does not match frozen release metadata');
   }
+  if (!exactObject(packed.adr_consumer_artifact?.compatibility, compatibility)) {
+    fail('PACKAGE_COMPATIBILITY_MISMATCH', 'packed package compatibility metadata does not match exact API/registry envelope');
+  }
   if (packed.adr_consumer_artifact?.authority_claim !== consumerManifest.authority_claim) {
     fail('PACKAGE_AUTHORITY_BOUNDARY_MISMATCH', 'packed consumer artifact authority claim drift');
   }
@@ -186,10 +249,14 @@ export function verifyGeoxConsumerReleaseBundle({ bundleDir, expectedSourceCommi
     manifest_contract_version: consumerManifest.contract_version,
     source_hashes: expectedSourceHashes(consumerManifest),
     bundled_dependency: expectedBundledDependency(consumerManifest),
+    compatibility,
     authority_claim: consumerManifest.authority_claim
   };
   if (!exactObject(provenance.consumer_artifact, expectedConsumerArtifact)) {
     if (provenance.consumer_artifact?.builder_version !== EXPECTED_CONSUMER_BUILDER_VERSION) fail('BUILDER_VERSION_MISMATCH', 'consumer artifact builder version drift');
+    if (!exactObject(provenance.consumer_artifact?.compatibility, compatibility)) {
+      fail('PACKAGE_COMPATIBILITY_MISMATCH', 'release provenance compatibility metadata drifted from exact API/registry envelope');
+    }
     fail('SOURCE_CONTENT_HASH_MISMATCH', 'adapter source or bundled dependency provenance does not match exact repository bytes');
   }
 
@@ -210,6 +277,7 @@ export function verifyGeoxConsumerReleaseBundle({ bundleDir, expectedSourceCommi
     packageVersion: packed.version,
     packageTarballHash: packageHash,
     releaseStatus: provenance.release_status,
+    compatibility: Object.freeze(canonical(compatibility)),
     evidenceHash,
     authorityClaim: provenance.authority_claim
   });
