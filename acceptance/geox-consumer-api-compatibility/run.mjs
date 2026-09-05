@@ -15,6 +15,7 @@ import { buildGeoxConsumerArtifact } from '../../adapters/geox/scripts/build-con
 
 const BASELINE_PATH = 'adapters/geox/consumer-api-surface.v1.json';
 const MANIFEST_PATH = 'adapters/geox/consumer-artifact.manifest.json';
+const QUALIFIED_NODE_ENGINE = '>=20 <21 || >=24 <25';
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, { encoding: 'utf8', ...options });
@@ -98,7 +99,7 @@ assert.equal(baseline.contract_version, 'adr.geox-consumer-api-surface.v1');
 assert.equal(baseline.package_name, '@adr/geox-adapter');
 assert.equal(baseline.package_version, '0.1.0-development');
 assert.equal(baseline.private, true);
-assert.equal(baseline.node_engine, '>=24 <25');
+assert.equal(baseline.node_engine, QUALIFIED_NODE_ENGINE);
 assert.equal(
   baseline.change_policy,
   'EXACT_PUBLIC_MODULE_AND_EXPORT_SET_CHANGE_REQUIRES_EXPLICIT_BASELINE_UPDATE'
@@ -121,6 +122,8 @@ assert.equal(manifest.package_name, baseline.package_name);
 assert.equal(manifest.package_version, baseline.package_version);
 assert.equal(manifest.private, baseline.private);
 assert.equal(manifest.node_engine, baseline.node_engine);
+assert.equal(manifest.compatibility?.contract_version, 'adr.geox-consumer-compatibility-envelope.v2');
+assert.equal(manifest.compatibility?.runtime_environment?.node_engine, baseline.node_engine);
 assert.deepEqual(
   Object.keys(manifest.exports).sort(),
   Object.keys(expectedSurface).sort(),
@@ -161,6 +164,8 @@ try {
   assert.equal(installedPackage.version, baseline.package_version);
   assert.equal(installedPackage.private, true);
   assert.deepEqual(installedPackage.engines, { node: baseline.node_engine });
+  assert.equal(installedPackage.adr_consumer_artifact?.compatibility?.contract_version, 'adr.geox-consumer-compatibility-envelope.v2');
+  assert.equal(installedPackage.adr_consumer_artifact?.compatibility?.runtime_environment?.node_engine, baseline.node_engine);
   assert.deepEqual(installedPackage.exports, manifest.exports, 'installed package exports map must match source manifest exactly');
 
   const inspectorSource = `
@@ -235,6 +240,8 @@ console.log(JSON.stringify({ ok: true, networkAttempted, surfaces }));
     packageTarballHash: build.tarballHash,
     privatePackage: installedPackage.private,
     nodeEngine: installedPackage.engines.node,
+    compatibilityEnvelopeContractVersion: installedPackage.adr_consumer_artifact.compatibility.contract_version,
+    runtimeEnvironmentBoundIntoCompatibility: true,
     publicModuleCount: Object.keys(observedSurface).length,
     publicExportSymbolCount: Object.values(observedSurface).reduce((count, exports) => count + exports.length, 0),
     publicApiSurfaceHash: sha256Json(observedSurface),
