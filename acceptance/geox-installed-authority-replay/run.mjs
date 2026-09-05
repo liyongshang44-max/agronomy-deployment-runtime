@@ -39,12 +39,7 @@ try {
   }, null, 2)}\n`, 'utf8');
 
   run('npm', [
-    'install',
-    '--ignore-scripts',
-    '--no-audit',
-    '--no-fund',
-    '--offline',
-    build.tarballPath
+    'install', '--ignore-scripts', '--no-audit', '--no-fund', '--offline', build.tarballPath
   ], {
     cwd: consumerDir,
     env: {
@@ -80,7 +75,7 @@ const authenticatedFetch = async (url, init = {}) => globalThis.fetch(url, {
   ...init,
   headers: {
     ...(init.headers ?? {}),
-    ...(token ? { Authorization: \`Bearer \${token}\` } : {})
+    ...(token ? { Authorization: 'Bearer ' + token } : {})
   }
 });
 
@@ -99,8 +94,11 @@ assert.equal(live.receipt.authority_sources.length, 4);
 assert.equal(store.count(), 4);
 assert.match(live.receipt.resolved_commit_sha, /^[0-9a-f]{40}$/);
 assert.equal(live.authorityExport.source_repository, 'liyongshang44-max/GEOX');
-assert.equal(live.authorityExport.provider_target.treatment_code, profile.provider.treatment);
-assert.equal(live.authorityExport.provider_target.replicate_code, profile.provider.replicate);
+assert.equal(live.authorityExport.provider_target.treatment_code, profile.provider.treatment_code);
+assert.equal(live.authorityExport.provider_target.replicate_code, profile.provider.replicate_code);
+assert.equal(live.authorityExport.provider_target.crop_code, profile.provider.crop_code);
+assert.equal(live.authorityExport.provider_target.hybrid_code, profile.provider.hybrid_code);
+assert.equal(live.authorityExport.provider_target.planting_observation_id, profile.provider.planting_observation_id);
 assert.equal(live.authorityExport.geox_target.field_id, profile.geox.field_id);
 assert.equal(live.authorityExport.geox_target.season_id, profile.geox.season_id);
 assert.equal(live.authorityExport.geox_target.zone_id, profile.geox.zone_id);
@@ -154,7 +152,6 @@ globalThis.fetch = async () => {
 const profile = getGeoxTargetCorrespondenceProfile(GEOX_TARGET_CORRESPONDENCE_RELATION);
 assert.ok(profile);
 assert.equal(profile.replayableResolverSupported, true);
-
 const store = new GeoxDurableTargetAuthorityStore({ rootDir });
 const receipt = store.loadReceipt(receiptHash);
 assert.equal(receipt.resolved_commit_sha, expectedCommit);
@@ -165,8 +162,11 @@ assert.equal(networkAttempted, false, 'exact replay must not attempt network acc
 assert.equal(replay.replayClass, 'EXACT');
 assert.equal(store.count(), 4);
 assert.equal(replay.authorityExport.source_main_sha, expectedCommit);
-assert.equal(replay.authorityExport.provider_target.treatment_code, profile.provider.treatment);
-assert.equal(replay.authorityExport.provider_target.replicate_code, profile.provider.replicate);
+assert.equal(replay.authorityExport.provider_target.treatment_code, profile.provider.treatment_code);
+assert.equal(replay.authorityExport.provider_target.replicate_code, profile.provider.replicate_code);
+assert.equal(replay.authorityExport.provider_target.crop_code, profile.provider.crop_code);
+assert.equal(replay.authorityExport.provider_target.hybrid_code, profile.provider.hybrid_code);
+assert.equal(replay.authorityExport.provider_target.planting_observation_id, profile.provider.planting_observation_id);
 assert.equal(replay.authorityExport.geox_target.field_id, profile.geox.field_id);
 assert.equal(replay.authorityExport.geox_target.season_id, profile.geox.season_id);
 assert.equal(replay.authorityExport.geox_target.zone_id, profile.geox.zone_id);
@@ -200,10 +200,7 @@ console.log(JSON.stringify({
 
   const processA = run(process.execPath, ['process-a.mjs', durableRoot], {
     cwd: consumerDir,
-    env: {
-      ...process.env,
-      NODE_PATH: ''
-    }
+    env: { ...process.env, NODE_PATH: '' }
   });
   const live = parseSingleJsonLine(processA.stdout, 'process A');
   assert.equal(live.ok, true);
@@ -213,16 +210,9 @@ console.log(JSON.stringify({
   delete offlineEnv.GITHUB_TOKEN;
   delete offlineEnv.GH_TOKEN;
   const processB = run(process.execPath, [
-    'process-b.mjs',
-    durableRoot,
-    live.receiptHash,
-    live.resolvedCommitSha,
-    live.authorityExportHash,
-    String(live.processId)
-  ], {
-    cwd: consumerDir,
-    env: offlineEnv
-  });
+    'process-b.mjs', durableRoot, live.receiptHash, live.resolvedCommitSha,
+    live.authorityExportHash, String(live.processId)
+  ], { cwd: consumerDir, env: offlineEnv });
   const replay = parseSingleJsonLine(processB.stdout, 'process B');
   assert.equal(replay.ok, true);
   assert.notEqual(replay.processId, live.processId);
