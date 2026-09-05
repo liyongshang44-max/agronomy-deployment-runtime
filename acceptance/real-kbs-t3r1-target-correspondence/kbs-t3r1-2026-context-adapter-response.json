@@ -1,0 +1,106 @@
+{
+  "adapter_contract": "adr.acceptance.kbs-public-context-adapter.v1",
+  "world": "KBS_MCSE_T3R1_2026_TARGET_CORRESPONDENCE",
+  "retained_at": "2026-09-05T02:00:00.000Z",
+  "source_evidence": [
+    {
+      "locator": "https://lter.kbs.msu.edu/research/long-term-experiments/main-cropping-system-experiment/",
+      "experiment": "Main Cropping System Experiment (MCSE)",
+      "treatment_code": "T3",
+      "treatment_label": "Reduced Input",
+      "replicate_structure": "SIX_REPLICATE_BLOCKS",
+      "plot_size_ha": "1",
+      "prairie_strip_since": "2019"
+    },
+    {
+      "locator": "https://aglog.kbs.msu.edu/observations/6966",
+      "observation_id": "6966",
+      "observation_date": "2026-05-20",
+      "area_code": "T3",
+      "replication_scope": "ALL_T3_REPLICATIONS",
+      "replicate_order": [
+        "R3",
+        "R1",
+        "R2",
+        "R4",
+        "R5",
+        "R6"
+      ],
+      "crop_label": "corn",
+      "hybrid_label": "Pioneer P0306Q"
+    },
+    {
+      "locator": "https://lter.kbs.msu.edu/datasets/7",
+      "dataset_id": "KBS004",
+      "replicate_blocks": [
+        "R1",
+        "R2",
+        "R3",
+        "R4",
+        "R5",
+        "R6"
+      ],
+      "treatment_code": "T3",
+      "treatment_label": "Reduced Input",
+      "prairie_strip_in_each_replicate_since": "2019",
+      "geometry_authority_use": "NONE_IDENTITY_STRUCTURE_ONLY"
+    }
+  ],
+  "normalized_context": {
+    "experiment.name": {
+      "type": "STRING",
+      "string": "Main Cropping System Experiment (MCSE)"
+    },
+    "treatment.code": {
+      "type": "CATEGORY",
+      "category": "T3"
+    },
+    "treatment.name": {
+      "type": "STRING",
+      "string": "Reduced Input"
+    },
+    "replicate.code": {
+      "type": "CATEGORY",
+      "category": "R1"
+    },
+    "crop.code": {
+      "type": "CATEGORY",
+      "category": "corn"
+    },
+    "planting.hybrid": {
+      "type": "STRING",
+      "string": "P0306Q"
+    },
+    "planting.observation_id": {
+      "type": "STRING",
+      "string": "6966"
+    }
+  },
+  "evaluation_slice": {
+    "kind": "RETROSPECTIVE_YEAR_SLICE",
+    "start": "2026-01-01T00:00:00.000Z",
+    "end": "2027-01-01T00:00:00.000Z",
+    "representative_effective_at": "2026-05-20T16:00:00.000Z"
+  },
+  "correspondence_basis": {
+    "provider_target_components": [
+      "Main Cropping System Experiment (MCSE)",
+      "T3",
+      "R1"
+    ],
+    "relation_candidate": "CORRESPONDS_TO_SAME_KBS_MCSE_T3_R1_TARGET",
+    "identity_equality_claimed": false,
+    "geometry_equality_claimed": false,
+    "crop_only_zone_equality_claimed": false
+  },
+  "nonclaims": [
+    "NO_ADR_FARM_ID_CREATED",
+    "NO_ADR_FIELD_ID_CREATED",
+    "NO_ADR_ZONE_ID_CREATED",
+    "NO_GEOMETRY_REPUBLISHED",
+    "NO_GEOX_FIELD_ID_DERIVED_FROM_PROVIDER_STRING",
+    "NO_FIELD_ACTIONABILITY_AUTHORITY",
+    "NO_DISPATCH_AUTHORITY",
+    "NO_PRODUCTION_SITE_CLAIM"
+  ]
+}

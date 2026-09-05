@@ -15,6 +15,7 @@ import {
 export const GEOX_TARGET_CORRESPONDENCE_VERSION = 'adr.geox-target-correspondence.v1';
 export const GEOX_TARGET_CORRESPONDENCE_MESSAGE_TYPE = 'ADR_PROVIDER_TARGET_CORRESPONDENCE_CANDIDATE';
 export const GEOX_TARGET_CORRESPONDENCE_RELATION = 'CORRESPONDS_TO_SAME_KBS_MCSE_T4_R1_TARGET';
+export const GEOX_TARGET_CORRESPONDENCE_T3R1_RELATION = 'CORRESPONDS_TO_SAME_KBS_MCSE_T3_R1_TARGET';
 export const GEOX_TARGET_CORRESPONDENCE_STATUS = 'QUALIFIED_CORRESPONDENCE';
 export const GEOX_TARGET_CORRESPONDENCE_AUTHORITY_CLAIM =
   'CORRESPONDENCE_ONLY_NOT_IDENTITY_ACTION_APPROVAL_OR_EXECUTION_AUTHORITY';
@@ -22,7 +23,63 @@ export const GEOX_TARGET_CORRESPONDENCE_AUTHORITY_CLAIM =
 const LEGACY_GEOX_TARGET_AUTHORITY_EXPORT_VERSION = 'adr.acceptance.geox-target-authority-export.v1';
 const HASH_RE = /^sha256:[0-9a-f]{64}$/;
 const GIT_SHA_RE = /^[0-9a-f]{40}$/;
-const EXPECTED_GEOX_AUTHORITY_PATHS = GEOX_TARGET_AUTHORITY_PATHS;
+
+const T3R1_AUTHORITY_PATHS = Object.freeze([
+  'docs/digital_twin/mcft/cap_09/GEOX-MCFT-CAP-09-S6-FORMAL-SITE-AUTHORITY-V2.json',
+  'docs/digital_twin/mcft/cap_09/GEOX-MCFT-CAP-09-AMENDMENT-17-T3R1-FORMAL-SUCCESSOR-SCOPE-AUTHORITY.md',
+  'docs/digital_twin/mcft/cap_09/GEOX-MCFT-CAP-09-T3R1-CROP-ONLY-GEOMETRY-AUTHORITY-V1.json',
+  'docs/digital_twin/mcft/cap_09/GEOX-MCFT-CAP-09-S6-FORMAL-REALITY-BINDING-V2.json'
+]);
+
+const T3R1_PINNED_AUTHORITY = Object.freeze({
+  sourceMainSha: '5050f1c08d2528048c56d56add4cbb068b956925',
+  blobShas: Object.freeze({
+    [T3R1_AUTHORITY_PATHS[0]]: 'be02ea8a6fe54affed1e0abedb1f1d6e407c661a',
+    [T3R1_AUTHORITY_PATHS[1]]: 'f9d664a0f58c6024f3090edbd5aee26d8d1b680a',
+    [T3R1_AUTHORITY_PATHS[2]]: '87b1c8fa37939085be68abb66bfa8e0918f65e95',
+    [T3R1_AUTHORITY_PATHS[3]]: 'deb6c15ef7848a8c1ab00bce0847324aaa68ba24'
+  })
+});
+
+const CORRESPONDENCE_PROFILES = Object.freeze({
+  [GEOX_TARGET_CORRESPONDENCE_RELATION]: Object.freeze({
+    relation: GEOX_TARGET_CORRESPONDENCE_RELATION,
+    authorityPaths: GEOX_TARGET_AUTHORITY_PATHS,
+    replayableResolverSupported: true,
+    pinnedAuthority: null,
+    provider: Object.freeze({
+      treatment_code: 'T4',
+      replicate_code: 'R1',
+      crop_code: 'corn',
+      hybrid_code: '43-96P',
+      planting_observation_id: '6974'
+    }),
+    geox: Object.freeze({
+      field_id: 'field_kbs_mcse_t4r1',
+      season_id: 'season_2026_corn',
+      zone_id: 'zone_kbs_mcse_t4r1_crop_formal_v1'
+    })
+  }),
+  [GEOX_TARGET_CORRESPONDENCE_T3R1_RELATION]: Object.freeze({
+    relation: GEOX_TARGET_CORRESPONDENCE_T3R1_RELATION,
+    authorityPaths: T3R1_AUTHORITY_PATHS,
+    replayableResolverSupported: false,
+    pinnedAuthority: T3R1_PINNED_AUTHORITY,
+    provider: Object.freeze({
+      experiment_locator: 'https://lter.kbs.msu.edu/research/long-term-experiments/main-cropping-system-experiment/',
+      treatment_code: 'T3',
+      replicate_code: 'R1',
+      crop_code: 'corn',
+      hybrid_code: 'P0306Q',
+      planting_observation_id: '6966'
+    }),
+    geox: Object.freeze({
+      field_id: 'field_kbs_mcse_t3r1',
+      season_id: 'season_2026_corn',
+      zone_id: 'zone_kbs_mcse_t3r1_crop_formal_v1'
+    })
+  })
+});
 
 export class GeoxTargetCorrespondenceError extends Error {
   constructor(code, message) {
@@ -64,7 +121,9 @@ function normalizeWireRef(value, name) {
   const ref = object(value, name);
   exactKeys(ref, name, new Set(['kind', 'logical_id', 'version', 'semantic_hash']));
   const semanticHash = text(ref.semantic_hash, `${name}.semantic_hash`);
-  if (!HASH_RE.test(semanticHash)) fail('GEOX_TARGET_CORRESPONDENCE_AUTHORITY_REF_INVALID', `${name} requires canonical sha256 semantic hash`);
+  if (!HASH_RE.test(semanticHash)) {
+    fail('GEOX_TARGET_CORRESPONDENCE_AUTHORITY_REF_INVALID', `${name} requires canonical sha256 semantic hash`);
+  }
   return Object.freeze({
     kind: text(ref.kind, `${name}.kind`),
     logical_id: text(ref.logical_id, `${name}.logical_id`),
@@ -74,7 +133,9 @@ function normalizeWireRef(value, name) {
 }
 
 function normalizeAdrAuthorityRefs(values) {
-  if (!Array.isArray(values)) fail('GEOX_TARGET_CORRESPONDENCE_ADR_AUTHORITY_REQUIRED', 'message.authority_refs must be an array');
+  if (!Array.isArray(values)) {
+    fail('GEOX_TARGET_CORRESPONDENCE_ADR_AUTHORITY_REQUIRED', 'message.authority_refs must be an array');
+  }
   const refs = values.map((value, index) => normalizeWireRef(value, `message.authority_refs[${index}]`));
   const decision = refs.filter((ref) => ref.kind === 'DecisionProblem');
   const manifest = refs.filter((ref) => ref.kind === 'ContextManifest');
@@ -108,7 +169,24 @@ function normalizeProviderTarget(value, name) {
   });
 }
 
-function normalizeGeoxAuthorityExport(value) {
+function profileForRelation(relation) {
+  const profile = CORRESPONDENCE_PROFILES[relation];
+  if (!profile) {
+    fail(
+      'GEOX_TARGET_CORRESPONDENCE_RELATION_INVALID',
+      'relation candidate is not a qualified cross-namespace target correspondence profile'
+    );
+  }
+  return profile;
+}
+
+function exactProfileTarget(target, expected, code, name) {
+  for (const [key, value] of Object.entries(expected)) {
+    if (target[key] !== value) fail(code, `${name}.${key} changed from the qualified profile`);
+  }
+}
+
+function normalizeGeoxAuthorityExport(value, profile) {
   const authority = object(value, 'geoxTargetAuthority');
   exactKeys(authority, 'geoxTargetAuthority', new Set([
     'contract_version', 'source_repository', 'source_main_sha', 'authority_sources',
@@ -119,8 +197,23 @@ function normalizeGeoxAuthorityExport(value) {
     || !GIT_SHA_RE.test(text(authority.source_main_sha, 'geoxTargetAuthority.source_main_sha'))) {
     fail('GEOX_TARGET_CORRESPONDENCE_CONSUMER_AUTHORITY_INVALID', 'pinned or resolver-produced GEOX authority export is required');
   }
+  if (authority.contract_version === GEOX_TARGET_AUTHORITY_EXPORT_VERSION && !profile.replayableResolverSupported) {
+    fail(
+      'GEOX_TARGET_CORRESPONDENCE_CONSUMER_AUTHORITY_INVALID',
+      'this correspondence profile is qualified only for an exact pinned consumer authority export'
+    );
+  }
+  if (authority.contract_version === LEGACY_GEOX_TARGET_AUTHORITY_EXPORT_VERSION
+    && profile.pinnedAuthority
+    && authority.source_main_sha !== profile.pinnedAuthority.sourceMainSha) {
+    fail(
+      'GEOX_TARGET_CORRESPONDENCE_CONSUMER_AUTHORITY_INVALID',
+      'pinned consumer authority export must retain the exact qualified GEOX main SHA'
+    );
+  }
 
-  if (!Array.isArray(authority.authority_sources) || authority.authority_sources.length !== EXPECTED_GEOX_AUTHORITY_PATHS.length) {
+  const expectedPaths = profile.authorityPaths;
+  if (!Array.isArray(authority.authority_sources) || authority.authority_sources.length !== expectedPaths.length) {
     fail('GEOX_TARGET_CORRESPONDENCE_CONSUMER_AUTHORITY_INVALID', 'exact GEOX authority source set is required');
   }
   const sourceByPath = new Map();
@@ -129,13 +222,23 @@ function normalizeGeoxAuthorityExport(value) {
     exactKeys(source, `geoxTargetAuthority.authority_sources[${index}]`, new Set(['path', 'blob_sha']));
     const path = text(source.path, `authority_sources[${index}].path`);
     const blobSha = text(source.blob_sha, `authority_sources[${index}].blob_sha`);
-    if (!GIT_SHA_RE.test(blobSha) || sourceByPath.has(path)) {
-      fail('GEOX_TARGET_CORRESPONDENCE_CONSUMER_AUTHORITY_INVALID', 'authority sources require unique pinned Git blobs');
+    if (!expectedPaths.includes(path) || !GIT_SHA_RE.test(blobSha) || sourceByPath.has(path)) {
+      fail('GEOX_TARGET_CORRESPONDENCE_CONSUMER_AUTHORITY_INVALID', 'authority sources require the exact unique profile Git blobs');
     }
     sourceByPath.set(path, blobSha);
   }
-  if (!EXPECTED_GEOX_AUTHORITY_PATHS.every((path) => sourceByPath.has(path))) {
+  if (!expectedPaths.every((path) => sourceByPath.has(path))) {
     fail('GEOX_TARGET_CORRESPONDENCE_CONSUMER_AUTHORITY_INVALID', 'required GEOX authority path is missing');
+  }
+  if (authority.contract_version === LEGACY_GEOX_TARGET_AUTHORITY_EXPORT_VERSION && profile.pinnedAuthority) {
+    for (const path of expectedPaths) {
+      if (sourceByPath.get(path) !== profile.pinnedAuthority.blobShas[path]) {
+        fail(
+          'GEOX_TARGET_CORRESPONDENCE_CONSUMER_AUTHORITY_INVALID',
+          `pinned consumer authority blob changed for ${path}`
+        );
+      }
+    }
   }
 
   const provider = object(authority.provider_target, 'geoxTargetAuthority.provider_target');
@@ -154,12 +257,24 @@ function normalizeGeoxAuthorityExport(value) {
     hybrid_code: provider.hybrid_code,
     planting_observation_id: provider.planting_observation_id
   }, 'geoxTargetAuthority.provider_target');
+  exactProfileTarget(
+    providerTarget,
+    profile.provider,
+    'GEOX_TARGET_CORRESPONDENCE_CONSUMER_TARGET_INVALID',
+    'geoxTargetAuthority.provider_target'
+  );
 
   const geoxTarget = object(authority.geox_target, 'geoxTargetAuthority.geox_target');
   exactKeys(geoxTarget, 'geoxTargetAuthority.geox_target', new Set([
     'field_id', 'season_id', 'zone_id', 'authority_scope_class',
     'field_validity_proven', 'production_site_claimed'
   ]));
+  exactProfileTarget(
+    geoxTarget,
+    profile.geox,
+    'GEOX_TARGET_CORRESPONDENCE_CONSUMER_TARGET_INVALID',
+    'geoxTargetAuthority.geox_target'
+  );
   if (geoxTarget.authority_scope_class !== 'EXTERNAL_PUBLIC_RESEARCH_SCOPE'
     || geoxTarget.field_validity_proven !== false
     || geoxTarget.production_site_claimed !== false) {
@@ -183,7 +298,10 @@ function normalizeGeoxAuthorityExport(value) {
     || boundary.field_actionability_authorized !== false
     || boundary.dispatch_authorized !== false
     || boundary.production_correspondence_claimed !== false) {
-    fail('GEOX_TARGET_CORRESPONDENCE_AUTHORITY_PROMOTION_FORBIDDEN', 'consumer authority export may not promote correspondence into identity/action/execution authority');
+    fail(
+      'GEOX_TARGET_CORRESPONDENCE_AUTHORITY_PROMOTION_FORBIDDEN',
+      'consumer authority export may not promote correspondence into identity/action/execution authority'
+    );
   }
 
   return Object.freeze({
@@ -203,19 +321,26 @@ function normalizeGeoxAuthorityExport(value) {
   });
 }
 
-function normalizeResolutionReceipt(value, geoxAuthority, rawAuthority) {
+function normalizeResolutionReceipt(value, geoxAuthority, rawAuthority, profile) {
   if (value === undefined || value === null) {
     if (geoxAuthority.contract_version === GEOX_TARGET_AUTHORITY_EXPORT_VERSION) {
-      fail('GEOX_TARGET_CORRESPONDENCE_RESOLUTION_RECEIPT_REQUIRED', 'resolver-produced authority export requires its exact replay receipt');
+      fail(
+        'GEOX_TARGET_CORRESPONDENCE_RESOLUTION_RECEIPT_REQUIRED',
+        'resolver-produced authority export requires its exact replay receipt'
+      );
     }
     return Object.freeze({
       classification: 'PINNED_CONSUMER_AUTHORITY_EXPORT_QUALIFICATION_ONLY',
       receipt: null
     });
   }
-  if (geoxAuthority.contract_version !== GEOX_TARGET_AUTHORITY_EXPORT_VERSION) {
-    fail('GEOX_TARGET_CORRESPONDENCE_RESOLUTION_RECEIPT_INVALID', 'replay receipt requires resolver-produced authority export');
+  if (geoxAuthority.contract_version !== GEOX_TARGET_AUTHORITY_EXPORT_VERSION || !profile.replayableResolverSupported) {
+    fail(
+      'GEOX_TARGET_CORRESPONDENCE_RESOLUTION_RECEIPT_INVALID',
+      'replay receipt requires a qualified resolver-produced authority export'
+    );
   }
+
   const receipt = object(value, 'geoxTargetAuthorityResolutionReceipt');
   exactKeys(receipt, 'geoxTargetAuthorityResolutionReceipt', new Set([
     'contract_version', 'resolution_class', 'transport_class', 'source_repository',
@@ -241,7 +366,9 @@ function normalizeResolutionReceipt(value, geoxAuthority, rawAuthority) {
     || canonicalJsonHash(rawAuthority) !== receipt.authority_export_hash) {
     fail('GEOX_TARGET_CORRESPONDENCE_RESOLUTION_RECEIPT_HASH_MISMATCH', 'replay receipt does not bind exact GEOX authority export');
   }
-  if (!Array.isArray(receipt.authority_sources) || receipt.authority_sources.length !== EXPECTED_GEOX_AUTHORITY_PATHS.length) {
+
+  const expectedPaths = profile.authorityPaths;
+  if (!Array.isArray(receipt.authority_sources) || receipt.authority_sources.length !== expectedPaths.length) {
     fail('GEOX_TARGET_CORRESPONDENCE_RESOLUTION_RECEIPT_INVALID', 'replay receipt requires exact GEOX source set');
   }
   const receiptByPath = new Map();
@@ -251,7 +378,7 @@ function normalizeResolutionReceipt(value, geoxAuthority, rawAuthority) {
     const path = text(source.path, `receipt.authority_sources[${index}].path`);
     const blobSha = text(source.blob_sha, `receipt.authority_sources[${index}].blob_sha`);
     const contentHash = text(source.content_hash, `receipt.authority_sources[${index}].content_hash`);
-    if (!EXPECTED_GEOX_AUTHORITY_PATHS.includes(path)
+    if (!expectedPaths.includes(path)
       || receiptByPath.has(path)
       || !GIT_SHA_RE.test(blobSha)
       || !HASH_RE.test(contentHash)
@@ -260,7 +387,7 @@ function normalizeResolutionReceipt(value, geoxAuthority, rawAuthority) {
     }
     receiptByPath.set(path, Object.freeze({ path, blob_sha: blobSha, content_hash: contentHash }));
   }
-  const canonicalSources = EXPECTED_GEOX_AUTHORITY_PATHS.map((path) => receiptByPath.get(path));
+  const canonicalSources = expectedPaths.map((path) => receiptByPath.get(path));
   if (canonicalSources.some((source) => !source)
     || canonicalJsonHash(canonicalSources) !== receipt.snapshot_manifest_hash) {
     fail('GEOX_TARGET_CORRESPONDENCE_RESOLUTION_RECEIPT_HASH_MISMATCH', 'replay receipt source manifest is not reproducible');
@@ -295,7 +422,10 @@ export function consumeAdrTargetCorrespondenceForGeox({
     || input.role !== 'RESULT_SINK'
     || INTEGRATION_ROLES.RESULT_SINK.status !== 'ACTIVE_PILOT'
     || input.message_type !== GEOX_TARGET_CORRESPONDENCE_MESSAGE_TYPE) {
-    fail('INVALID_GEOX_TARGET_CORRESPONDENCE_MESSAGE', `expected active RESULT_SINK ${GEOX_TARGET_CORRESPONDENCE_MESSAGE_TYPE} message`);
+    fail(
+      'INVALID_GEOX_TARGET_CORRESPONDENCE_MESSAGE',
+      `expected active RESULT_SINK ${GEOX_TARGET_CORRESPONDENCE_MESSAGE_TYPE} message`
+    );
   }
 
   const scope = object(consumerScope, 'consumerScope');
@@ -309,10 +439,10 @@ export function consumeAdrTargetCorrespondenceForGeox({
   const adrAuthority = normalizeAdrAuthorityRefs(input.authority_refs);
   const payload = object(input.payload, 'message.payload');
   exactKeys(payload, 'message.payload', new Set(['provider_target', 'relation_candidate', 'authority_nonclaims']));
+  const relation = text(payload.relation_candidate, 'message.payload.relation_candidate');
+  const profile = profileForRelation(relation);
   const adrProviderTarget = normalizeProviderTarget(payload.provider_target, 'message.payload.provider_target');
-  if (payload.relation_candidate !== GEOX_TARGET_CORRESPONDENCE_RELATION) {
-    fail('GEOX_TARGET_CORRESPONDENCE_RELATION_INVALID', 'only the exact T4/R1 correspondence relation is qualified by v1');
-  }
+
   if (!Array.isArray(payload.authority_nonclaims)
     || !payload.authority_nonclaims.includes('NO_ADR_FIELD_ID_CREATED')
     || !payload.authority_nonclaims.includes('NO_GEOMETRY_REPUBLISHED')
@@ -321,20 +451,24 @@ export function consumeAdrTargetCorrespondenceForGeox({
     fail('GEOX_TARGET_CORRESPONDENCE_NONCLAIMS_REQUIRED', 'ADR provider target nonclaims are required');
   }
 
-  const geoxAuthority = normalizeGeoxAuthorityExport(geoxTargetAuthority);
+  const geoxAuthority = normalizeGeoxAuthorityExport(geoxTargetAuthority, profile);
   const resolution = normalizeResolutionReceipt(
     geoxTargetAuthorityResolutionReceipt,
     geoxAuthority,
-    geoxTargetAuthority
+    geoxTargetAuthority,
+    profile
   );
   if (!sameProviderTarget(adrProviderTarget, geoxAuthority.provider_target)) {
-    fail('GEOX_TARGET_CORRESPONDENCE_PROVIDER_TARGET_MISMATCH', 'ADR and GEOX do not independently resolve to the same provider target components');
+    fail(
+      'GEOX_TARGET_CORRESPONDENCE_PROVIDER_TARGET_MISMATCH',
+      'ADR and GEOX do not independently resolve to the same provider target components'
+    );
   }
 
   return Object.freeze({
     contract_version: GEOX_TARGET_CORRESPONDENCE_VERSION,
     status: GEOX_TARGET_CORRESPONDENCE_STATUS,
-    relation: GEOX_TARGET_CORRESPONDENCE_RELATION,
+    relation,
     routing_scope: routingScope,
     adr_target_authority: adrAuthority,
     provider_target: adrProviderTarget,

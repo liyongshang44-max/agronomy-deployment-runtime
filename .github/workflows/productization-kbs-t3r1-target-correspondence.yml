@@ -1,0 +1,42 @@
+name: ADR Productization — KBS T3R1 Target Correspondence
+
+on:
+  push:
+    branches:
+      - 'main'
+      - 'test/productization-kbs-t3r1-target-correspondence-*'
+    paths:
+      - 'adapters/geox/src/target-correspondence.mjs'
+      - 'acceptance/real-kbs-t3r1-target-correspondence/**'
+      - 'sdks/typescript/src/**'
+      - '.github/workflows/productization-kbs-t3r1-target-correspondence.yml'
+  pull_request:
+    paths:
+      - 'adapters/geox/src/target-correspondence.mjs'
+      - 'acceptance/real-kbs-t3r1-target-correspondence/**'
+      - 'sdks/typescript/src/**'
+      - '.github/workflows/productization-kbs-t3r1-target-correspondence.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  kbs_t3r1_target_correspondence:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Report runtime
+        run: node --version
+      - name: Existing KBS T4R1 correspondence regression
+        run: |
+          node acceptance/real-kbs-t4r1-target-correspondence/run.mjs
+          node acceptance/real-kbs-t4r1-target-correspondence/integrity.mjs
+      - name: Real KBS T3R1 independent target correspondence proof
+        run: node acceptance/real-kbs-t3r1-target-correspondence/run.mjs
+      - name: KBS T3R1 correspondence fail-closed integrity
+        run: node acceptance/real-kbs-t3r1-target-correspondence/integrity.mjs
