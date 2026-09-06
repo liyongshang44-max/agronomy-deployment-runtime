@@ -65,13 +65,31 @@ assert.deepEqual(
 assert.equal(inventory.sources[1].semanticPreconditions.find((entry) => entry.semanticId === 'crop.stage')?.value, 'early vegetative growth stage');
 assert.equal(inventory.sources[1].semanticPreconditions.find((entry) => entry.semanticId === 'water.metric')?.value, 'soil water deficit percent');
 
+assert.equal(inventory.geoxExactEvidence.telemetryMetricCatalog.canonicalMetric, 'soil_moisture');
+assert.equal(inventory.geoxExactEvidence.telemetryMetricCatalog.canonicalUnit, '%VWC');
+assert.equal(inventory.geoxExactEvidence.telemetryMetricCatalog.governedVwcSemanticsEstablished, true);
+assert.equal(inventory.geoxExactEvidence.stage1InputMapping.canonicalMetric, 'soil_moisture');
+assert.equal(inventory.geoxExactEvidence.caller.governedUpstreamSemantic, '%VWC');
+assert.ok(inventory.geoxExactEvidence.caller.normalizationDoesNotEstablish.includes(
+  'vwc_to_soil_water_depletion_transformation'
+));
+assert.ok(!inventory.geoxExactEvidence.caller.normalizationDoesNotEstablish.includes(
+  'volumetric_water_content_semantics'
+));
+
 assert.equal(inventory.comparabilityAdjudication.status, 'METRIC_SEMANTICS_NOT_EQUIVALENT');
 assert.equal(inventory.comparabilityAdjudication.metricSemanticMatch, false);
 assert.equal(inventory.comparabilityAdjudication.targetMatch, false);
 assert.equal(inventory.comparabilityAdjudication.unitMatch, false);
 assert.equal(inventory.comparabilityAdjudication.cropStageMatch, false);
+assert.ok(inventory.comparabilityAdjudication.positiveCorrespondence.includes(
+  'GEOX_CANONICAL_SOIL_MOISTURE_IS_GOVERNED_PERCENT_VWC'
+));
 assert.ok(inventory.comparabilityAdjudication.reasonCodes.includes(
-  'GEOX_INPUT_IS_LATEST_NORMALIZED_SOIL_MOISTURE_VALUE_NOT_GOVERNED_SOIL_WATER_DEPLETION'
+  'GEOX_GOVERNED_VWC_IS_NOT_GOVERNED_SOIL_WATER_DEPLETION_OR_MAD'
+));
+assert.ok(inventory.comparabilityAdjudication.reasonCodes.includes(
+  'VWC_TO_SOIL_WATER_DEPLETION_TRANSFORMATION_NOT_ESTABLISHED'
 ));
 assert.ok(inventory.comparabilityAdjudication.reasonCodes.includes(
   'MAD_OR_EQUIVALENT_ALLOWABLE_DEPLETION_NOT_BOUND_TO_SELECTED_DECISION_INPUT'
@@ -418,8 +436,9 @@ assert.ok(sourceAssertions.includes('management allowable depletion'));
 assert.ok(sourceAssertions.includes('60-65 percent'));
 
 // The acquisition intentionally stops before A08/R01/R03/D01 for the selected GEOX subject.
-// Exact-source GEOX evidence does not establish the same measurement semantic required by the
-// qualified guidance, so manufacturing a compatible target context here would be authority laundering.
+// GEOX establishes canonical %VWC, but current exact evidence does not establish the governed
+// VWC -> soil-water-depletion/MAD transformation and target context required by the qualified
+// guidance, so manufacturing a compatible target context here would be authority laundering.
 const snapshot = ledger.exportSnapshot();
 assert.equal(snapshot.records.some((record) => record.ref.kind === 'ApplicabilityAssessment'), false);
 assert.equal(snapshot.records.some((record) => record.ref.kind === 'RuntimePlan'), false);
@@ -434,6 +453,7 @@ console.log(JSON.stringify({
   selectedMigrationSubject: inventory.selectedMigrationSubject,
   scientificAuthorityCandidate: 'ACQUIRED_AND_TEST_QUALIFIED',
   qualifiedKnowledgeRefs: qualified.map((entry) => entry.knowledge.ref),
+  geoxCanonicalSoilMoistureSemantic: inventory.geoxExactEvidence.telemetryMetricCatalog.canonicalUnit,
   comparabilityStatus: inventory.comparabilityAdjudication.status,
   sameDecisionAuthority: inventory.terminalState.sameDecisionAuthorityForSelectedGeoxSubject,
   blockingClass: inventory.terminalState.blockingClass,
