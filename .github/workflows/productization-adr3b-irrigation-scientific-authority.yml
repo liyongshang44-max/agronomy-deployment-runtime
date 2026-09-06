@@ -1,0 +1,31 @@
+name: ADR Productization — ADR-3B Irrigation Scientific Authority
+
+on:
+  push:
+    branches:
+      - 'test/adr3b-irrigation-scientific-authority*'
+    paths:
+      - 'acceptance/adr3b-irrigation-scientific-authority/**'
+      - '.github/workflows/productization-adr3b-irrigation-scientific-authority.yml'
+  pull_request:
+    paths:
+      - 'acceptance/adr3b-irrigation-scientific-authority/**'
+      - '.github/workflows/productization-adr3b-irrigation-scientific-authority.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  adr3b_irrigation_scientific_authority:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Report runtime
+        run: node --version
+      - name: Qualify ADR-3B irrigation scientific authority candidate
+        run: node acceptance/adr3b-irrigation-scientific-authority/run.mjs

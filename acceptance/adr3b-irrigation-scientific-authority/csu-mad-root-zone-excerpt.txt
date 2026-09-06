@@ -1,0 +1,1 @@
+Management Allowable Depletion (MAD), which is the amount of water allowed to be depleted from the root zone before irrigation is scheduled.
