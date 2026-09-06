@@ -22,6 +22,7 @@ assert.deepEqual(projection.entry_decision_result_ref, receipt.expectedDecisionR
 assert.equal(projection.consumer_disposition, GEOX_HISTORICAL_DECISION_BASIS_PROJECTION_CONSUMER_DISPOSITION);
 assert.equal(projection.field_actionable, false);
 assert.equal(projection.dispatch_authorized, false);
+assert.equal(projection.decision_result_semantic_hash_verified, true);
 assert.equal(projection.authority_claim, GEOX_HISTORICAL_DECISION_BASIS_PROJECTION_AUTHORITY_CLAIM);
 assert.equal(
   projection.transport_verification,
@@ -44,6 +45,7 @@ console.log(JSON.stringify({
   basisDigest: projection.basis_digest,
   entryDecisionResultRef: projection.entry_decision_result_ref,
   authorityGraphRefCount: projection.historical_basis.authorityGraph.allAuthorityRefs.length,
+  decisionResultSemanticHashVerified: projection.decision_result_semantic_hash_verified,
   consumerDisposition: projection.consumer_disposition,
   fieldActionable: projection.field_actionable,
   dispatchAuthorized: projection.dispatch_authorized,

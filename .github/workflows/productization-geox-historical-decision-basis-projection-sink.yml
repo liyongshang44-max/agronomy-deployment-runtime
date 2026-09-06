@@ -5,6 +5,7 @@ on:
     branches:
       - 'main'
       - 'feat/blueprint-historical-decision-basis-geox-projection-sink-*'
+      - 'feat/blueprint-historical-decision-basis-d06-semantics-*'
     paths:
       - 'adapters/geox/src/historical-decision-basis-projection-sink.mjs'
       - 'adapters/geox/src/decision-result-sink.mjs'
@@ -61,6 +62,10 @@ jobs:
           echo "qualified source commit: $ADR_HISTORICAL_BASIS_SINK_SOURCE_COMMIT"
       - name: Historical Decision Basis projection sink integrity invariants
         run: node acceptance/geox-historical-decision-basis-projection-sink/integrity.mjs
+      - name: Exact D06 decision semantics across ACT WAIT ASK ABSTAIN
+        run: |
+          set -o pipefail
+          node acceptance/geox-historical-decision-basis-projection-sink/decision-semantics.mjs | tee "$RUNNER_TEMP/geox-historical-decision-basis-d06-semantics.json"
       - name: Real World P historical basis clean-consumer projection transport proof
         run: |
           set -o pipefail
@@ -69,7 +74,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: geox-historical-decision-basis-projection-sink-${{ env.ADR_HISTORICAL_BASIS_SINK_SOURCE_COMMIT }}
-          path: ${{ runner.temp }}/geox-historical-decision-basis-projection-sink.json
+          path: |
+            ${{ runner.temp }}/geox-historical-decision-basis-projection-sink.json
+            ${{ runner.temp }}/geox-historical-decision-basis-d06-semantics.json
           if-no-files-found: error
           retention-days: 7
           compression-level: 0

@@ -15,6 +15,30 @@ const EXPECTED_READ_MODEL_VERSION = 'adr.historical-decision-basis.read-model.v1
 const EXPECTED_READ_MODEL_AUTHORITY_CLASS = 'NONE_NON_AUTHORITY_RECONSTRUCTION_READ_MODEL';
 const EXPECTED_BASIS_DIGEST_AUTHORITY = 'NONE_DIGEST_IS_REPRODUCIBILITY_EVIDENCE_NOT_AUTHORITY_REF';
 const EXPECTED_GRAPH_CLASS = 'NONE_NON_AUTHORITY_EXACT_REF_GRAPH_PROJECTION';
+const EXPECTED_DECISION_SEMANTICS_CLASS = 'NONE_NON_AUTHORITY_EXACT_DECISION_RESULT_SEMANTICS_PROJECTION';
+const EXPECTED_DECISION_RESULT_CONTRACT_VERSION = 'adr.decision-result.v1';
+const EXPECTED_DECISION_RESULT_AUTHORITY_CLASS = 'STRUCTURED_DECISION_AUTHORITY';
+const EXPECTED_DECISION_RESULT_HUMAN_APPROVAL_AUTHORITY = 'NONE_DECISION_RESULT_IS_NOT_HUMAN_APPROVAL_AUTHORITY';
+const EXPECTED_DECISION_RESULT_MACHINE_EXECUTION_AUTHORITY = 'NONE_DECISION_RESULT_IS_NOT_MACHINE_EXECUTION_AUTHORITY';
+const EXPECTED_DECISION_RESULT_KEYS = Object.freeze([
+  'contractVersion',
+  'authorityClass',
+  'decisionProblemRef',
+  'decisionAuthority',
+  'decisionDisposition',
+  'structuredAction',
+  'waitSemantics',
+  'informationRequirementRefs',
+  'abstentionReasonAuthority',
+  'humanGate',
+  'policyResultRefs',
+  'decisionRobustnessRef',
+  'runtimeAlternativeSetRef',
+  'runtimeBindingRefs',
+  'decidedAt',
+  'humanApprovalAuthority',
+  'machineExecutionAuthority'
+]);
 const EXPECTED_NONCLAIMS = Object.freeze([
   'humanApprovalAuthority',
   'dispatchAuthority',
@@ -62,6 +86,16 @@ function exactKeys(value, name, allowed) {
   }
 }
 
+function exactFieldSet(value, name, expected) {
+  const allowed = new Set(expected);
+  exactKeys(value, name, allowed);
+  for (const key of expected) {
+    if (!(key in value)) {
+      fail('GEOX_HISTORICAL_BASIS_DECISION_SEMANTICS_INVALID', `${name}.${key} is required by the frozen D06 semantic payload`);
+    }
+  }
+}
+
 function canonical(value) {
   if (Array.isArray(value)) return value.map(canonical);
   if (value && typeof value === 'object') {
@@ -70,8 +104,21 @@ function canonical(value) {
   return value;
 }
 
+function canonicalJson(value) {
+  return JSON.stringify(canonical(value));
+}
+
+function sameCanonical(left, right) {
+  return canonicalJson(left) === canonicalJson(right);
+}
+
 function sha256Json(value) {
-  return `sha256:${createHash('sha256').update(Buffer.from(JSON.stringify(canonical(value)), 'utf8')).digest('hex')}`;
+  return `sha256:${createHash('sha256').update(Buffer.from(canonicalJson(value), 'utf8')).digest('hex')}`;
+}
+
+function adrSemanticHash(kind, value) {
+  const preimage = `adr-semantic-hash-v1\nkind:${kind}\n${canonicalJson(value)}`;
+  return `sha256:${createHash('sha256').update(preimage, 'utf8').digest('hex')}`;
 }
 
 function canonicalSha256(value, name) {
@@ -111,6 +158,84 @@ function normalizeConsumerScope(value) {
   });
 }
 
+function normalizeDecisionSemantics(basis, decisionResultRef) {
+  const decisionSemantics = object(basis.decisionSemantics, 'historicalBasis.decisionSemantics');
+  exactFieldSet(
+    decisionSemantics,
+    'historicalBasis.decisionSemantics',
+    ['projectionClass', 'decisionResultRef', 'semanticPayload']
+  );
+  if (decisionSemantics.projectionClass !== EXPECTED_DECISION_SEMANTICS_CLASS) {
+    fail(
+      'GEOX_HISTORICAL_BASIS_DECISION_SEMANTICS_CLASS_REQUIRED',
+      'decisionSemantics must remain a non-authority exact DecisionResult semantics projection'
+    );
+  }
+  const semanticRef = nativeAuthorityRef(
+    decisionSemantics.decisionResultRef,
+    'historicalBasis.decisionSemantics.decisionResultRef'
+  );
+  if (!sameNativeRef(semanticRef, decisionResultRef)) {
+    fail(
+      'GEOX_HISTORICAL_BASIS_DECISION_SEMANTICS_REF_MISMATCH',
+      'decisionSemantics must bind the same exact DecisionResult entry ref'
+    );
+  }
+
+  const semanticPayload = object(
+    decisionSemantics.semanticPayload,
+    'historicalBasis.decisionSemantics.semanticPayload'
+  );
+  exactFieldSet(
+    semanticPayload,
+    'historicalBasis.decisionSemantics.semanticPayload',
+    EXPECTED_DECISION_RESULT_KEYS
+  );
+  if (semanticPayload.contractVersion !== EXPECTED_DECISION_RESULT_CONTRACT_VERSION
+    || semanticPayload.authorityClass !== EXPECTED_DECISION_RESULT_AUTHORITY_CLASS) {
+    fail(
+      'GEOX_HISTORICAL_BASIS_DECISION_SEMANTICS_INVALID',
+      'decisionSemantics must carry the exact frozen D06 DecisionResult contract and authority class'
+    );
+  }
+  if (semanticPayload.humanApprovalAuthority !== EXPECTED_DECISION_RESULT_HUMAN_APPROVAL_AUTHORITY
+    || semanticPayload.machineExecutionAuthority !== EXPECTED_DECISION_RESULT_MACHINE_EXECUTION_AUTHORITY) {
+    fail(
+      'GEOX_HISTORICAL_BASIS_AUTHORITY_PROMOTION_FORBIDDEN',
+      'DecisionResult semantics may not create human approval or machine execution authority'
+    );
+  }
+  if (adrSemanticHash('DecisionResult', semanticPayload) !== decisionResultRef.semanticHash) {
+    fail(
+      'GEOX_HISTORICAL_BASIS_DECISION_SEMANTIC_HASH_MISMATCH',
+      'exact DecisionResult ref semanticHash does not bind the transported D06 semantic payload'
+    );
+  }
+
+  const semanticDecisionProblemRef = nativeAuthorityRef(
+    semanticPayload.decisionProblemRef,
+    'historicalBasis.decisionSemantics.semanticPayload.decisionProblemRef'
+  );
+  const basisDecisionProblemRef = nativeAuthorityRef(
+    basis.decisionProblemRef,
+    'historicalBasis.decisionProblemRef'
+  );
+  if (!sameNativeRef(semanticDecisionProblemRef, basisDecisionProblemRef)
+    || !sameCanonical(semanticPayload.decisionAuthority, basis.decisionAuthority)
+    || semanticPayload.decisionDisposition !== basis.decisionDisposition
+    || !sameCanonical(semanticPayload.structuredAction, basis.structuredAction)
+    || semanticPayload.decidedAt !== basis.decidedAt
+    || semanticPayload.humanApprovalAuthority !== basis.humanApprovalAuthority
+    || semanticPayload.machineExecutionAuthority !== basis.machineExecutionAuthority) {
+    fail(
+      'GEOX_HISTORICAL_BASIS_DECISION_SEMANTICS_MISMATCH',
+      'transported exact D06 semantics conflict with the legacy v1 historical basis summary fields'
+    );
+  }
+
+  return Object.freeze(clone(decisionSemantics));
+}
+
 function normalizeHistoricalBasis(value) {
   const basis = object(value, 'historicalBasis');
   if (basis.readModelVersion !== EXPECTED_READ_MODEL_VERSION) {
@@ -128,6 +253,7 @@ function normalizeHistoricalBasis(value) {
   if (decisionResultRef.kind !== 'DecisionResult') {
     fail('GEOX_HISTORICAL_BASIS_ENTRY_REF_REQUIRED', 'historical basis entry ref must be DecisionResult');
   }
+  normalizeDecisionSemantics(basis, decisionResultRef);
 
   const nonclaims = object(basis.nonclaims, 'historicalBasis.nonclaims');
   exactKeys(nonclaims, 'historicalBasis.nonclaims', new Set(EXPECTED_NONCLAIMS));
@@ -218,6 +344,7 @@ export function consumeAdrHistoricalDecisionBasisProjectionForGeox({ event, cons
     consumer_disposition: GEOX_HISTORICAL_DECISION_BASIS_PROJECTION_CONSUMER_DISPOSITION,
     field_actionable: false,
     dispatch_authorized: false,
+    decision_result_semantic_hash_verified: true,
     transport_verification: 'PROJECTION_HASH_INTEGRITY_ONLY_UPSTREAM_AUTHORITY_REPLAY_NOT_REPERFORMED',
     authority_claim: GEOX_HISTORICAL_DECISION_BASIS_PROJECTION_AUTHORITY_CLAIM
   });

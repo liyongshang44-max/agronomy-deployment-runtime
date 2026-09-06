@@ -77,13 +77,19 @@ assert.equal(sourceProjection.basis_digest, historicalBasis.basisDigest);
 assert.deepEqual(sourceProjection.historical_basis, historicalBasis);
 assert.equal(sourceProjection.field_actionable, false);
 assert.equal(sourceProjection.dispatch_authorized, false);
+assert.equal(sourceProjection.decision_result_semantic_hash_verified, true);
 assert.equal(
   sourceProjection.transport_verification,
   'PROJECTION_HASH_INTEGRITY_ONLY_UPSTREAM_AUTHORITY_REPLAY_NOT_REPERFORMED'
 );
 
+// Keep this probe isolated to transport-integrity semantics. decisionDisposition is now
+// cross-checked against exact D06 semantics and would correctly fail before the projection
+// hash gate. A syntactically valid but altered basisDigest changes the transport payload
+// without triggering a different semantic-consistency boundary first.
 const tamperedEvent = clone(event);
-tamperedEvent.payload.historical_basis.decisionDisposition = 'ABSTAIN';
+tamperedEvent.payload.historical_basis.basisDigest = `sha256:${'0'.repeat(64)}`;
+assert.notEqual(tamperedEvent.payload.historical_basis.basisDigest, historicalBasis.basisDigest);
 assert.throws(
   () => consumeAdrHistoricalDecisionBasisProjectionForGeox({ event: tamperedEvent, consumerScope }),
   (error) => error?.code === 'GEOX_HISTORICAL_BASIS_PROJECTION_HASH_MISMATCH'
@@ -233,6 +239,7 @@ try {
     independentConsumerRuntime: 'CLEAN_TEMP_PROJECT_NPM_OFFLINE',
     authorityRefUsedAsTransportIdentity: false,
     projectionHashIntegrityVerified: true,
+    decisionResultSemanticHashVerified: true,
     tamperedProjectionRejected: true,
     authorityPromotionRejected: true,
     authorityIdentitySmugglingRejected: true,
