@@ -7,6 +7,7 @@
   "source_files": [
     "decision-result-sink.mjs",
     "durable-target-authority-store.mjs",
+    "historical-decision-basis-projection-sink.mjs",
     "index.mjs",
     "target-authority-resolver.mjs",
     "target-correspondence-profile-registry.mjs",
@@ -17,6 +18,7 @@
     ".": "./src/index.mjs",
     "./decision-result-sink": "./src/decision-result-sink.mjs",
     "./durable-target-authority-store": "./src/durable-target-authority-store.mjs",
+    "./historical-decision-basis-projection-sink": "./src/historical-decision-basis-projection-sink.mjs",
     "./target-authority-resolver": "./src/target-authority-resolver.mjs",
     "./target-correspondence-profile-registry": "./src/target-correspondence-profile-registry.mjs",
     "./target-correspondence": "./src/target-correspondence.mjs",
@@ -33,7 +35,7 @@
     "package_version": "0.1.0-development",
     "consumer_api_surface": {
       "contract_version": "adr.geox-consumer-api-surface.v1",
-      "surface_hash": "sha256:5e456b5604ed474b667663e39aec558d59df76da1b9fb8d6796f54779e01003c"
+      "surface_hash": "sha256:dd33c32ec969ff5557b42c139ff61454fe4042a2480e14fa624abcda54b1254e"
     },
     "target_correspondence_profile_registry": {
       "registry_version": "adr.geox-target-correspondence-profile-registry.v1",

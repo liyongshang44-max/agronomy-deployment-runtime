@@ -145,12 +145,12 @@ try {
   assert.equal(candidateA.descriptor.package_tarball_sha256, candidateB.descriptor.package_tarball_sha256,
     'historical A/B must retain the exact #199 identical-byte proof');
   assert.equal(candidateA.descriptor.consumer_api_surface_hash, candidateB.descriptor.consumer_api_surface_hash);
-  assert.equal(candidateB.descriptor.consumer_api_surface_hash, candidateC.descriptor.consumer_api_surface_hash,
-    'runtime support change must not masquerade as an API export change');
+  assert.notEqual(candidateB.descriptor.consumer_api_surface_hash, candidateC.descriptor.consumer_api_surface_hash,
+    'explicit public API surface addition must produce a distinct API compatibility identity');
   assert.equal(candidateB.descriptor.target_correspondence_profile_set_hash, candidateC.descriptor.target_correspondence_profile_set_hash,
-    'runtime support change must not alter correspondence profile authority');
+    'public API surface change must not alter correspondence profile authority');
   assert.notEqual(candidateB.descriptor.compatibility_envelope_hash, candidateC.descriptor.compatibility_envelope_hash,
-    'runtime-bound v2 envelope must produce a distinct compatibility identity');
+    'runtime-bound and API-surface changes must produce a distinct compatibility identity');
   assert.notEqual(candidateB.candidateId, candidateC.candidateId);
 
   requireKnownReleaseCandidate(candidateA.candidateId, [candidateA, candidateB, candidateC]);
@@ -185,7 +185,7 @@ try {
   const adoptionTransition = assessReleaseCandidateTransitionCompatibility({ predecessor: candidateB, successor: candidateC });
   assert.equal(adoptionTransition.decision.contract_version, 'adr.geox-release-candidate-transition-compatibility-decision.v2');
   assert.equal(adoptionTransition.decision.package_metadata_version, 'SAME_INFORMATIONAL_ONLY');
-  assert.equal(adoptionTransition.decision.consumer_api_surface, 'SAME');
+  assert.equal(adoptionTransition.decision.consumer_api_surface, 'CHANGED_REQUIRES_REVIEW');
   assert.equal(adoptionTransition.decision.target_correspondence_profile_set, 'SAME');
   assert.equal(adoptionTransition.decision.compatibility_contract, 'CHANGED_REQUIRES_REVIEW');
   assert.equal(adoptionTransition.decision.runtime_environment, 'CHANGED_OR_UNBOUND_REQUIRES_REVIEW');
@@ -270,7 +270,7 @@ try {
       historicalV1ReplayIdentityPreserved: true,
       v1ToV2RequiresReview: true,
       v2RuntimeEngineDriftRequiresReview: true,
-      apiSurfaceUnchanged: true,
+      apiSurfaceChangeRequiresReview: true,
       profileSetUnchanged: true,
       packageMetadataVersionStillInformational: true,
       automaticReplacementAuthorized: false,

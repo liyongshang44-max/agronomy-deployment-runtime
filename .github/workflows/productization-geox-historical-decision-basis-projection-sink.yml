@@ -1,0 +1,75 @@
+name: ADR Productization — GEOX Historical Decision Basis Projection Sink
+
+on:
+  push:
+    branches:
+      - 'main'
+      - 'feat/blueprint-historical-decision-basis-geox-projection-sink-*'
+    paths:
+      - 'adapters/geox/src/historical-decision-basis-projection-sink.mjs'
+      - 'adapters/geox/src/decision-result-sink.mjs'
+      - 'adapters/geox/consumer-artifact.manifest.json'
+      - 'adapters/geox/consumer-api-surface.v1.json'
+      - 'adapters/geox/release-bundle.manifest.json'
+      - 'adapters/geox/scripts/build-consumer-artifact.mjs'
+      - 'adapters/geox/scripts/build-consumer-release-bundle.mjs'
+      - 'adapters/geox/scripts/verify-consumer-release-bundle.mjs'
+      - 'sdks/typescript/src/integration-contracts.mjs'
+      - 'packages/historical-decision-basis/**'
+      - 'acceptance/real-kbs-soybean-planting-population-target/**'
+      - 'acceptance/geox-historical-decision-basis-projection-sink/**'
+      - 'docs/contracts/productization/geox-historical-decision-basis-projection-sink.v1.md'
+      - '.github/workflows/productization-geox-historical-decision-basis-projection-sink.yml'
+  pull_request:
+    paths:
+      - 'adapters/geox/src/historical-decision-basis-projection-sink.mjs'
+      - 'adapters/geox/src/decision-result-sink.mjs'
+      - 'adapters/geox/consumer-artifact.manifest.json'
+      - 'adapters/geox/consumer-api-surface.v1.json'
+      - 'adapters/geox/release-bundle.manifest.json'
+      - 'adapters/geox/scripts/build-consumer-artifact.mjs'
+      - 'adapters/geox/scripts/build-consumer-release-bundle.mjs'
+      - 'adapters/geox/scripts/verify-consumer-release-bundle.mjs'
+      - 'sdks/typescript/src/integration-contracts.mjs'
+      - 'packages/historical-decision-basis/**'
+      - 'acceptance/real-kbs-soybean-planting-population-target/**'
+      - 'acceptance/geox-historical-decision-basis-projection-sink/**'
+      - 'docs/contracts/productization/geox-historical-decision-basis-projection-sink.v1.md'
+      - '.github/workflows/productization-geox-historical-decision-basis-projection-sink.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  geox_historical_decision_basis_projection_sink:
+    runs-on: ubuntu-24.04
+    env:
+      ADR_HISTORICAL_BASIS_SINK_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.ADR_HISTORICAL_BASIS_SINK_SOURCE_COMMIT }}
+          fetch-depth: 1
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Prove exact candidate checkout
+        run: |
+          test "$(git rev-parse HEAD)" = "$ADR_HISTORICAL_BASIS_SINK_SOURCE_COMMIT"
+          echo "qualified source commit: $ADR_HISTORICAL_BASIS_SINK_SOURCE_COMMIT"
+      - name: Historical Decision Basis projection sink integrity invariants
+        run: node acceptance/geox-historical-decision-basis-projection-sink/integrity.mjs
+      - name: Real World P historical basis clean-consumer projection transport proof
+        run: |
+          set -o pipefail
+          node acceptance/geox-historical-decision-basis-projection-sink/run.mjs | tee "$RUNNER_TEMP/geox-historical-decision-basis-projection-sink.json"
+      - name: Upload historical basis projection sink evidence only
+        uses: actions/upload-artifact@v4
+        with:
+          name: geox-historical-decision-basis-projection-sink-${{ env.ADR_HISTORICAL_BASIS_SINK_SOURCE_COMMIT }}
+          path: ${{ runner.temp }}/geox-historical-decision-basis-projection-sink.json
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
