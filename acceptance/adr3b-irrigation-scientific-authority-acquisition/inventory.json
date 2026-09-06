@@ -1,0 +1,136 @@
+{
+  "contractVersion": "adr.adr3b-irrigation-scientific-authority-acquisition.v1",
+  "classification": "TEST_ONLY_SCIENTIFIC_AUTHORITY_ACQUISITION_AND_COMPARABILITY_EVIDENCE",
+  "authorityEffect": "TEST_ONLY_QUALIFIED_KNOWLEDGE_IN_ACCEPTANCE_LEDGER",
+  "cutoverAuthorized": false,
+  "shadowDualRunAuthorized": false,
+  "sourceHeads": {
+    "adr": "6001a1240c092fa0c1655d87cf027e46cc4cff56",
+    "geox": "f41dde8d44de95e71748e756e048e0166c1916b7"
+  },
+  "selectedMigrationSubject": "GEOX-COMMERCIAL-IRRIGATION-DEFICIT-V1",
+  "researchQuestion": "What independently source-supported irrigation-initiation science can be expressed for the same governed soil-water metric and target context as the selected GEOX deficit decision, without treating the legacy 0.22 constant as scientific authority?",
+  "sources": [
+    {
+      "sourceId": "UMN-SOIL-MOISTURE-SENSORS-IRRIGATION-SCHEDULING",
+      "institution": "University of Minnesota Extension",
+      "author": "Vasudha Sharma, Extension irrigation specialist",
+      "title": "Soil moisture sensors for irrigation scheduling",
+      "sourceType": "OTHER",
+      "sourceClass": "UNIVERSITY_EXTENSION_GUIDANCE",
+      "originLocator": "https://extension.umn.edu/natural-resources/conservation/agricultural-soil-and-water/irrigation/soil-moisture-sensors-for-irrigation-scheduling",
+      "reviewedLabel": "Reviewed in 2019",
+      "retrievedAt": "2026-09-06T08:36:00.000Z",
+      "retainedEvidenceText": "In general, most crops begin to experience stress when soil water depletion/deficit is 30-50% of available water holding capacity (AWC).",
+      "retainedEvidenceContentHash": "sha256:77e6d35df1c294ab7b6d7dfb4ea09cd98736c2a376b90b083191beaaaffd2322",
+      "sourceFaithfulClaim": "For most crops, water stress generally begins when soil-water depletion/deficit reaches 30-50% of available water holding capacity.",
+      "claimType": "BIOLOGICAL_PATTERN",
+      "qualificationTarget": "AGRONOMIC_POLICY_INPUT",
+      "semanticPreconditions": [
+        {
+          "semanticId": "water.metric",
+          "operator": "EQUALS",
+          "value": "soil_water_depletion_percent_of_available_water_holding_capacity"
+        }
+      ],
+      "limitations": [
+        {"code": "GENERAL_CROP_GUIDANCE_NOT_FIELD_SPECIFIC"},
+        {"code": "NOT_AN_ABSOLUTE_VWC_TRIGGER"}
+      ]
+    },
+    {
+      "sourceId": "UMN-IRRIGATION-MANAGEMENT-STRATEGIES-CORN",
+      "institution": "University of Minnesota Extension",
+      "authors": ["Vasudha Sharma", "Jerry Wright"],
+      "title": "Irrigation management strategies",
+      "sourceType": "OTHER",
+      "sourceClass": "UNIVERSITY_EXTENSION_GUIDANCE",
+      "originLocator": "https://extension.umn.edu/natural-resources/conservation/agricultural-soil-and-water/irrigation/irrigation-management-strategies",
+      "reviewedLabel": "Reviewed in 2019",
+      "retrievedAt": "2026-09-06T08:36:00.000Z",
+      "retainedEvidenceText": "For corn, experience shows that the soil water deficit can be as high as 60 to 65 percent in the early vegetative growth stage",
+      "retainedEvidenceContentHash": "sha256:e332fa5699c65c4869561443d3399d837a0eb12a70794c1ffb033258bdcc82d9",
+      "sourceFaithfulClaim": "For corn in the early vegetative growth stage, the guidance reports soil-water deficit can be as high as 60-65 percent.",
+      "claimType": "BOUNDARY_CONSTRAINT",
+      "qualificationTarget": "AGRONOMIC_POLICY_INPUT",
+      "semanticPreconditions": [
+        {"semanticId": "crop.code", "operator": "EQUALS", "value": "corn"},
+        {"semanticId": "crop.stage", "operator": "EQUALS", "value": "early_vegetative"}
+      ],
+      "limitations": [
+        {"code": "REGIONAL_EXTENSION_GUIDANCE_MINNESOTA"},
+        {"code": "SOIL_WATER_DEFICIT_SEMANTICS_MUST_BE_GOVERNED_AT_TARGET"}
+      ]
+    }
+  ],
+  "sourceSynthesis": {
+    "authorityCandidateAcquired": true,
+    "claim": "Defensible irrigation-initiation science is expressed in terms of soil-water depletion/deficit and crop-stage-dependent allowable depletion, not a context-free absolute soil-moisture fraction.",
+    "derivedFromQualifiedClaimsOnly": true,
+    "legacyConstantUsedAsSearchTarget": false,
+    "legacyConstantPromotedToAuthority": false,
+    "newGenericAuthorityObjectRequired": false
+  },
+  "geoxExactEvidence": {
+    "selectedSkill": {
+      "path": "apps/server/src/domain/agronomy/skills/irrigation/irrigation_deficit_skill_v1.ts",
+      "blobSha": "db229cf4931bc9d11fe7c0c40a12c1dc1e481359",
+      "trigger": "finite soil_moisture < 0.22",
+      "metricAtSkillBoundary": "dimensionless numeric soil_moisture; no field-capacity/AWC/root-zone semantics encoded in the skill",
+      "cropStageUsedByTrigger": false,
+      "rainUsedByTrigger": false
+    },
+    "caller": {
+      "path": "apps/server/src/routes/decision_engine_v1.ts",
+      "blobSha": "fc40ff003433177aaeabb5e810394c0dabc03aba",
+      "input": "current_context.field_sensing_overview_v1.data.soil_moisture_pct with raw SOIL_MOISTURE_PCT fallback",
+      "normalization": "if numeric value > 1 divide by 100; otherwise pass through",
+      "normalizationDoesNotEstablish": [
+        "volumetric_water_content_semantics",
+        "sensor_calibration",
+        "field_capacity",
+        "permanent_wilting_point",
+        "available_water_holding_capacity",
+        "root_zone_profile_aggregation",
+        "spatial_representativeness"
+      ]
+    },
+    "fieldSensingProjection": {
+      "path": "apps/server/src/projections/field_sensing_overview_v1.ts",
+      "selection": "latest candidate per metric ranked by observation time, confidence, device id",
+      "profileAggregation": false,
+      "scientificCoverageClaim": false
+    },
+    "stage1Contract": {
+      "path": "docs/STAGE1_FIELD_SENSING_SUMMARY_CONTRACT.md",
+      "unitBoundary": "soil_moisture_pct may be percent or source-native unit as documented by payload",
+      "coverageInferenceAllowed": false
+    }
+  },
+  "comparabilityAdjudication": {
+    "status": "METRIC_SEMANTICS_NOT_EQUIVALENT",
+    "scientificPropositionMatch": false,
+    "targetMatch": false,
+    "metricSemanticMatch": false,
+    "unitMatch": false,
+    "temporalMatch": false,
+    "cropStageMatch": false,
+    "reasonCodes": [
+      "GEOX_INPUT_IS_LATEST_NORMALIZED_SOIL_MOISTURE_VALUE_NOT_GOVERNED_SOIL_WATER_DEPLETION",
+      "FIELD_CAPACITY_AWC_OR_PWP_NOT_BOUND_TO_SELECTED_DECISION_INPUT",
+      "ROOT_ZONE_PROFILE_AGGREGATION_NOT_ESTABLISHED",
+      "CROP_AND_GROWTH_STAGE_NOT_MATERIAL_TO_SELECTED_TRIGGER",
+      "SOURCE_GUIDANCE_IS_CONTEXT_DEPENDENT_AND_NOT_A_UNIVERSAL_ABSOLUTE_VWC_THRESHOLD"
+    ]
+  },
+  "terminalState": {
+    "adr3bScientificAuthorityCandidate": "ACQUIRED_AND_TEST_QUALIFIABLE",
+    "sourceFaithfulClaims": "AVAILABLE",
+    "sameDecisionAuthorityForSelectedGeoxSubject": "NOT_ESTABLISHED",
+    "blockingClass": "METRIC_AND_TARGET_CONTEXT_SEMANTICS_INSUFFICIENT",
+    "architectureAdjudicationRequired": false,
+    "cutoverAuthorized": false,
+    "shadowDualRunAuthorized": false,
+    "nextRequiredWork": "GOVERNED_MEASUREMENT_AND_TARGET_CONTEXT_CORRESPONDENCE"
+  }
+}
