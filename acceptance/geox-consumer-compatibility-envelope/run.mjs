@@ -77,7 +77,7 @@ const expectedCompatibility = {
   authority_claim: 'NONE_COMPATIBILITY_METADATA_ONLY_NO_RUNTIME_OR_PUBLICATION_AUTHORITY'
 };
 
-assert.equal(apiBaseline.surface_hash, 'sha256:5e456b5604ed474b667663e39aec558d59df76da1b9fb8d6796f54779e01003c');
+assert.equal(apiBaseline.surface_hash, 'sha256:dd33c32ec969ff5557b42c139ff61454fe4042a2480e14fa624abcda54b1254e');
 assert.equal(apiSurfaceHash, apiBaseline.surface_hash);
 assert.equal(apiBaseline.node_engine, QUALIFIED_NODE_ENGINE);
 assert.equal(manifest.node_engine, QUALIFIED_NODE_ENGINE);

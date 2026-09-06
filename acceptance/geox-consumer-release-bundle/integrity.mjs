@@ -100,7 +100,7 @@ try {
   const validVerification = verifyGeoxConsumerReleaseBundle({ bundleDir: valid.bundleDir, expectedSourceCommit: sourceCommit });
   assert.ok(validVerification.evidenceHash);
   assert.equal(validVerification.packedArtifactClosure.contractVersion, 'adr.geox-consumer-packed-artifact-closure.v1');
-  assert.equal(validVerification.packedArtifactClosure.fileCount, 9);
+  assert.equal(validVerification.packedArtifactClosure.fileCount, 10);
 
   const tamperedTarball = join(root, 'tampered-tarball');
   cpSync(valid.bundleDir, tamperedTarball, { recursive: true });

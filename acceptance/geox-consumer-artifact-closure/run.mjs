@@ -27,7 +27,7 @@ try {
 
   assert.equal(verifiedA.packageTarballHash, verifiedB.packageTarballHash);
   assert.equal(verifiedA.packedArtifactClosure.contractVersion, 'adr.geox-consumer-packed-artifact-closure.v1');
-  assert.equal(verifiedA.packedArtifactClosure.fileCount, 9);
+  assert.equal(verifiedA.packedArtifactClosure.fileCount, 10);
   assert.equal(verifiedA.packedArtifactClosure.fileSetHash, verifiedB.packedArtifactClosure.fileSetHash);
   assert.equal(verifiedA.packedArtifactClosure.contentClosureHash, verifiedB.packedArtifactClosure.contentClosureHash);
   assert.deepEqual(verifiedA.packedArtifactClosure.contentHashes, verifiedB.packedArtifactClosure.contentHashes);
@@ -37,6 +37,7 @@ try {
     'package/package.json',
     'package/src/decision-result-sink.mjs',
     'package/src/durable-target-authority-store.mjs',
+    'package/src/historical-decision-basis-projection-sink.mjs',
     'package/src/index.mjs',
     'package/src/integration-contracts.mjs',
     'package/src/target-authority-resolver.mjs',
@@ -60,7 +61,7 @@ try {
     packedFileSetHash: verifiedA.packedArtifactClosure.fileSetHash,
     packedContentClosureHash: verifiedA.packedArtifactClosure.contentClosureHash,
     exactPackageJsonBytesVerified: true,
-    transformedAdapterSourceBytesVerified: 7,
+    transformedAdapterSourceBytesVerified: 8,
     bundledSdkBytesVerified: true,
     builderSourceHashSelfAssertionTrustedAsArtifactProof: false,
     releaseStatusChanged: false,

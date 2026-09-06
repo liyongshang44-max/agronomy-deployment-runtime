@@ -35,7 +35,7 @@ try {
   assert.equal(buildA.tarballHash, buildB.tarballHash, 'identical source must build byte-identical tarballs');
   assert.equal(buildA.bundledDependency.contentHash, buildB.bundledDependency.contentHash);
   assert.ok(buildA.rewriteCount >= 4, 'all repository-internal SDK imports must be rewritten in artifact staging');
-  assert.equal(Object.keys(buildA.sourceHashes).length, 7, 'standalone artifact must carry the complete seven-file GEOX source closure');
+  assert.equal(Object.keys(buildA.sourceHashes).length, 8, 'standalone artifact must carry the complete eight-file GEOX source closure');
   assert.ok(
     buildA.sourceHashes['adapters/geox/src/target-correspondence-profile-registry.mjs'],
     'standalone artifact must include the closed correspondence profile registry imported by target-correspondence'

@@ -110,11 +110,11 @@ assert.equal(
 );
 
 const expectedSurface = normalizeSurface(baseline.modules, 'baseline.modules');
-assert.equal(Object.keys(expectedSurface).length, 7, 'v1 public API baseline must contain exactly seven public module paths');
+assert.equal(Object.keys(expectedSurface).length, 8, 'v1 public API baseline must contain exactly eight public module paths');
 assert.equal(
   Object.values(expectedSurface).reduce((count, exports) => count + exports.length, 0),
-  52,
-  'v1 public API baseline must contain exactly 52 exported symbols'
+  60,
+  'v1 public API baseline must contain exactly 60 exported symbols'
 );
 assert.equal(sha256Json(expectedSurface), baseline.surface_hash, 'baseline surface hash must be reproducible');
 
