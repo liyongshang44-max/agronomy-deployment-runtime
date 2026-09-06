@@ -228,7 +228,9 @@ function test(name, fn) { tests.push({ name, fn }); }
 
 test('K04 exact vertical interval support precondition yields A08 MATCH and structurally complete R01 only for exact support', () => {
   const world = createSupportWorld('exact-match');
-  assert.deepEqual(world.knowledge.semanticPayload.semanticPreconditions, [supportPrecondition()]);
+  assert.equal(world.knowledge.semanticPayload.semanticPreconditions.length, 1);
+  assert.deepEqual(world.knowledge.semanticPayload.semanticPreconditions[0].qualificationDecisionRef, world.qualificationDecision.ref);
+  assert.deepEqual(world.knowledge.semanticPayload.semanticPreconditions[0].value, supportPrecondition());
   assert.equal(world.assessment.semanticPayload.transportStatus, 'DIRECTLY_APPLICABLE');
   assert.equal(world.assessment.semanticPayload.runtimeUse, 'ALLOWED');
   const condition = world.assessment.semanticPayload.conditionResults[0];
