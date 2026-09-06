@@ -6,6 +6,7 @@ import {
 } from '../../canonicalization/src/index.mjs';
 import { sameAuthorityRef } from '../../contracts/src/authority.mjs';
 import { validateApplicabilityAssessment } from '../../applicability/src/index.mjs';
+import { validateContextManifestAuthority } from '../../context-manifest/src/index.mjs';
 import { validateDecisionResult } from '../../decision-result/src/index.mjs';
 import { validateDeploymentAuthority } from '../../deployment/src/index.mjs';
 import { validateImplementationConformanceHistorical } from '../../implementation-conformance/src/index.mjs';
@@ -262,7 +263,19 @@ export function reconstructHistoricalDecisionBasis(input = {}) {
   const bindingPayloads = runtimeWorlds.map((world) => ledger.resolve(world.ref).semanticPayload);
   const applicabilityPayloads = applicabilityWorlds.map((world) => ledger.resolve(world.ref).semanticPayload);
   const contextWorlds = contextManifestRefs.map((contextManifestRef) => {
-    const payload = ledger.resolve(contextManifestRef).semanticPayload;
+    const validated = validateContextManifestAuthority({ ledger, contextManifestRef, snapshotStore });
+    const payload = validated.semanticPayload;
+    const referenceResolutionWorlds = validated.receipts.map((resolved) => ({
+      resolvedReferenceReceiptRef: resolved.receipt.ref,
+      authorizedContextReferenceRef: resolved.reference.record.ref,
+      resolvedContextDatumRef: resolved.contextDatum.record.ref,
+      replayClass: resolved.receipt.semanticPayload.replayClass,
+      retentionMode: resolved.receipt.semanticPayload.retention.mode,
+      providerResponseHash: resolved.receipt.semanticPayload.providerResponseHash
+    })).sort((left, right) => compareUtf16(
+      refKey(left.resolvedReferenceReceiptRef),
+      refKey(right.resolvedReferenceReceiptRef)
+    ));
     return {
       contextManifestRef,
       targetRef: payload.targetRef,
@@ -270,7 +283,8 @@ export function reconstructHistoricalDecisionBasis(input = {}) {
       evidenceCutoff: payload.evidenceCutoff,
       replayClass: payload.replayClass,
       datumRefs: uniqueRefs(payload.datumRefs ?? []),
-      resolvedReferenceReceiptRefs: uniqueRefs(payload.resolvedReferenceReceiptRefs ?? [])
+      resolvedReferenceReceiptRefs: uniqueRefs(payload.resolvedReferenceReceiptRefs ?? []),
+      referenceResolutionWorlds
     };
   });
   const applicabilityInspectionWorlds = applicabilityWorlds.map((world, index) => ({
@@ -303,10 +317,18 @@ export function reconstructHistoricalDecisionBasis(input = {}) {
     ...runtimeWorlds.map((world) => world.deploymentRef),
     ...runtimeWorlds.map((world) => world.runtimeProfileRef)
   ]);
+  const resolvedReferenceReceiptRefs = uniqueRefs(
+    contextWorlds.flatMap((world) => world.referenceResolutionWorlds.map((item) => item.resolvedReferenceReceiptRef))
+  );
+  const authorizedContextReferenceRefs = uniqueRefs(
+    contextWorlds.flatMap((world) => world.referenceResolutionWorlds.map((item) => item.authorizedContextReferenceRef))
+  );
   const contextRefs = uniqueRefs([
     ...contextManifestRefs,
     ...contextWorlds.flatMap((world) => world.datumRefs),
-    ...contextWorlds.flatMap((world) => world.resolvedReferenceReceiptRefs)
+    ...resolvedReferenceReceiptRefs,
+    ...authorizedContextReferenceRefs,
+    ...contextWorlds.flatMap((world) => world.referenceResolutionWorlds.map((item) => item.resolvedContextDatumRef))
   ]);
   const knowledgeAuthorityRefs = uniqueRefs([
     ...knowledgeRefs,
@@ -342,6 +364,8 @@ export function reconstructHistoricalDecisionBasis(input = {}) {
     decisionRefs,
     runtimeRefs,
     contextRefs,
+    resolvedReferenceReceiptRefs,
+    authorizedContextReferenceRefs,
     knowledgeRefs: knowledgeAuthorityRefs,
     specificationRefs,
     implementationRefs,
