@@ -5,12 +5,15 @@ on:
     branches:
       - 'test/real-world-heterogeneity-planting-*'
       - 'test/blueprint-historical-decision-basis-reconstruction-*'
+      - 'feat/blueprint-historical-decision-basis-*'
     paths:
       - 'acceptance/real-kbs-soybean-planting-population-target/**'
+      - 'packages/historical-decision-basis/**'
       - '.github/workflows/real-world-heterogeneity-planting.yml'
   pull_request:
     paths:
       - 'acceptance/real-kbs-soybean-planting-population-target/**'
+      - 'packages/historical-decision-basis/**'
       - '.github/workflows/real-world-heterogeneity-planting.yml'
   workflow_dispatch:
 
@@ -36,3 +39,5 @@ jobs:
         run: node acceptance/real-kbs-soybean-planting-population-target/run-decision-result-v1.mjs
       - name: Blueprint Phase 1 historical DecisionResult basis reconstruction proof
         run: node acceptance/real-kbs-soybean-planting-population-target/run-historical-decision-basis-reconstruction-v1.mjs
+      - name: Blueprint ADR-2 historical Decision Basis product read-model interface
+        run: node acceptance/real-kbs-soybean-planting-population-target/run-historical-decision-basis-product-interface-v1.mjs
