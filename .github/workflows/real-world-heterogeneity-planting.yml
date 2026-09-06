@@ -41,3 +41,5 @@ jobs:
         run: node acceptance/real-kbs-soybean-planting-population-target/run-historical-decision-basis-reconstruction-v1.mjs
       - name: Blueprint ADR-2 historical Decision Basis product read-model interface
         run: node acceptance/real-kbs-soybean-planting-population-target/run-historical-decision-basis-product-interface-v1.mjs
+      - name: Blueprint ADR-2 cross-world composition fail-closed proof
+        run: node acceptance/real-kbs-soybean-planting-population-target/run-historical-decision-basis-cross-world-fail-closed-v1.mjs
