@@ -73,26 +73,44 @@
     "newGenericAuthorityObjectRequired": false
   },
   "geoxExactEvidence": {
+    "telemetryMetricCatalog": {
+      "path": "packages/contracts/src/schema/telemetry_metric_catalog_v1.ts",
+      "blobSha": "65b002949375d0b8fd308473a0e1a882fbeb542e",
+      "canonicalMetric": "soil_moisture",
+      "canonicalUnit": "%VWC",
+      "acceptedAliases": ["%", "VWC%"],
+      "description": "Volumetric soil moisture percentage",
+      "governedVwcSemanticsEstablished": true
+    },
+    "stage1InputMapping": {
+      "path": "apps/server/src/domain/sensing/stage1_sensing_input_mapping_v1.ts",
+      "blobSha": "85bf912aa8bca524af392233bfb2316d3a9e4167",
+      "canonicalMetric": "soil_moisture",
+      "mappedObservationFields": ["soil_moisture", "soil_moisture_pct"],
+      "pipelineAggregateField": "soil_moisture_pct"
+    },
     "selectedSkill": {
       "path": "apps/server/src/domain/agronomy/skills/irrigation/irrigation_deficit_skill_v1.ts",
       "blobSha": "db229cf4931bc9d11fe7c0c40a12c1dc1e481359",
       "trigger": "finite soil_moisture < 0.22",
-      "metricAtSkillBoundary": "dimensionless numeric soil_moisture; no field-capacity/AWC/root-zone semantics encoded in the skill",
+      "metricAtSkillBoundary": "dimensionless fraction derived by caller from a soil-moisture value; canonical Stage-1 telemetry establishes %VWC upstream, but the skill itself does not bind field-capacity/AWC/PWP/MAD/root-zone semantics",
       "cropStageUsedByTrigger": false,
       "rainUsedByTrigger": false
     },
     "caller": {
       "path": "apps/server/src/routes/decision_engine_v1.ts",
       "blobSha": "fc40ff003433177aaeabb5e810394c0dabc03aba",
-      "input": "current_context.field_sensing_overview_v1.data.soil_moisture_pct with raw SOIL_MOISTURE_PCT fallback",
-      "normalization": "if numeric value > 1 divide by 100; otherwise pass through",
+      "input": "field_sensing_overview_v1 soil-moisture value",
+      "normalization": "if numeric value > 1 divide by 100; otherwise pass through, converting percent-form canonical VWC to fraction-form numeric input without converting VWC into depletion",
+      "governedUpstreamSemantic": "%VWC",
       "normalizationDoesNotEstablish": [
-        "volumetric_water_content_semantics",
-        "sensor_calibration",
         "field_capacity",
         "permanent_wilting_point",
         "available_water_holding_capacity",
+        "management_allowable_depletion",
+        "vwc_to_soil_water_depletion_transformation",
         "root_zone_profile_aggregation",
+        "crop_stage_specific_allowable_depletion",
         "spatial_representativeness"
       ]
     },
@@ -103,9 +121,10 @@
       "scientificCoverageClaim": false
     },
     "stage1Contract": {
-      "path": "docs/STAGE1_FIELD_SENSING_SUMMARY_CONTRACT.md",
-      "unitBoundary": "soil_moisture_pct may be percent or source-native unit as documented by payload",
-      "coverageInferenceAllowed": false
+      "path": "apps/server/src/domain/sensing/stage1_sensing_contract_v1.ts",
+      "blobSha": "67703b0bc0a024aed1e4fa9dcdab282e03b9d089",
+      "sourceOfTruthLayer": "official_pipeline_input_whitelist",
+      "summarySoilMetricsAreDisplaySubset": true
     }
   },
   "comparabilityAdjudication": {
@@ -116,10 +135,15 @@
     "unitMatch": false,
     "temporalMatch": false,
     "cropStageMatch": false,
+    "positiveCorrespondence": [
+      "GEOX_CANONICAL_SOIL_MOISTURE_IS_GOVERNED_PERCENT_VWC",
+      "GEOX_CALLER_CONVERTS_PERCENT_FORM_VWC_TO_FRACTION_FORM_NUMERIC_INPUT"
+    ],
     "reasonCodes": [
-      "GEOX_INPUT_IS_LATEST_NORMALIZED_SOIL_MOISTURE_VALUE_NOT_GOVERNED_SOIL_WATER_DEPLETION",
+      "GEOX_GOVERNED_VWC_IS_NOT_GOVERNED_SOIL_WATER_DEPLETION_OR_MAD",
       "MAD_OR_EQUIVALENT_ALLOWABLE_DEPLETION_NOT_BOUND_TO_SELECTED_DECISION_INPUT",
       "FIELD_CAPACITY_AWC_OR_PWP_NOT_BOUND_TO_SELECTED_DECISION_INPUT",
+      "VWC_TO_SOIL_WATER_DEPLETION_TRANSFORMATION_NOT_ESTABLISHED",
       "ROOT_ZONE_PROFILE_AGGREGATION_NOT_ESTABLISHED",
       "CROP_AND_GROWTH_STAGE_NOT_MATERIAL_TO_SELECTED_TRIGGER",
       "SOURCE_GUIDANCE_IS_CONTEXT_DEPENDENT_AND_NOT_A_UNIVERSAL_ABSOLUTE_VWC_THRESHOLD"
