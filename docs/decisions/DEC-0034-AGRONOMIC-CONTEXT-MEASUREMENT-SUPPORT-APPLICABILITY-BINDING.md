@@ -1,6 +1,6 @@
 # DEC-0034 — Agronomic Context Measurement-Support Applicability Binding
 
-Status: **PROPOSED — REQUIRES EXPLICIT USER ACCEPTANCE**
+Status: **ACCEPTED**
 
 Date: 2026-09-06
 
