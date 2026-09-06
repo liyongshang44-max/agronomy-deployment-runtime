@@ -19,7 +19,7 @@ import {
 import { consumeAdrDecisionResultForGeox } from '../../adapters/geox/src/decision-result-sink.mjs';
 import { buildGeoxConsumerReleaseBundle } from '../../adapters/geox/scripts/build-consumer-release-bundle.mjs';
 import { verifyGeoxConsumerReleaseBundle } from '../../adapters/geox/scripts/verify-consumer-release-bundle.mjs';
-import { reconstructHistoricalDecisionBasis } from '../../packages/historical-decision-basis/src/index.mjs';
+import { reconstructHistoricalDecisionBasisWithPublicationAudit } from '../../packages/historical-decision-basis/src/publication-audit.mjs';
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, { encoding: 'utf8', ...options });
@@ -51,12 +51,18 @@ const decisionResults = ledger.exportSnapshot().records.filter((record) => recor
 assert.equal(decisionResults.length, 1, 'qualified World P must expose exactly one historical DecisionResult');
 
 const beforeReadCount = ledger.exportSnapshot().records.length;
-const historicalBasis = reconstructHistoricalDecisionBasis({
+const historicalBasis = reconstructHistoricalDecisionBasisWithPublicationAudit({
   ledger,
   snapshotStore,
   decisionResultRef: decisionResults[0].ref
 });
 assert.equal(ledger.exportSnapshot().records.length, beforeReadCount, 'projection source reconstruction must remain read-only');
+assert.equal(
+  historicalBasis.publicationAuditClosure.projectionClass,
+  'NONE_NON_AUTHORITY_EXACT_DECISION_RESULT_PUBLICATION_AUDIT_PROJECTION'
+);
+assert.deepEqual(historicalBasis.publicationAuditClosure.decisionResultRef, historicalBasis.decisionResultRef);
+assert.equal(historicalBasis.publicationAuditClosure.auditEvent.action, 'PUBLISH_DECISION_RESULT');
 
 const event = createAdrHistoricalDecisionBasisProjectionEventForGeox({
   eventId: 'geox-historical-decision-basis-world-p-1',
@@ -78,6 +84,7 @@ assert.deepEqual(sourceProjection.historical_basis, historicalBasis);
 assert.equal(sourceProjection.field_actionable, false);
 assert.equal(sourceProjection.dispatch_authorized, false);
 assert.equal(sourceProjection.decision_result_semantic_hash_verified, true);
+assert.equal(sourceProjection.runtime_alternative_provenance_verified, true);
 assert.equal(
   sourceProjection.transport_verification,
   'PROJECTION_HASH_INTEGRITY_ONLY_UPSTREAM_AUTHORITY_REPLAY_NOT_REPERFORMED'
@@ -170,6 +177,7 @@ try {
     expectedProjectionHash: event.projection_hash,
     expectedBasisDigest: historicalBasis.basisDigest,
     expectedDecisionResultRef: historicalBasis.decisionResultRef,
+    expectedPublicationAuditEventHash: historicalBasis.publicationAuditClosure.auditEvent.eventHash,
     consumerScope
   }, null, 2)}\n`);
 
@@ -219,6 +227,9 @@ try {
   assert.equal(consumerEvidence.basisDigest, historicalBasis.basisDigest);
   assert.deepEqual(consumerEvidence.entryDecisionResultRef, historicalBasis.decisionResultRef);
   assert.equal(consumerEvidence.authorityGraphRefCount, historicalBasis.authorityGraph.allAuthorityRefs.length);
+  assert.equal(consumerEvidence.publicationAuditEventHash, historicalBasis.publicationAuditClosure.auditEvent.eventHash);
+  assert.equal(consumerEvidence.publicationAuditHashVerified, true);
+  assert.equal(consumerEvidence.publicationAuditD06RefClosureVerified, true);
   assert.equal(consumerEvidence.fieldActionable, false);
   assert.equal(consumerEvidence.dispatchAuthorized, false);
 
@@ -230,6 +241,7 @@ try {
     basisDigest: historicalBasis.basisDigest,
     projectionHash: event.projection_hash,
     authorityGraphRefCount: historicalBasis.authorityGraph.allAuthorityRefs.length,
+    publicationAuditEventHash: historicalBasis.publicationAuditClosure.auditEvent.eventHash,
     packageName: release.packageName,
     packageVersion: release.packageVersion,
     packageTarballHash: release.packageTarballHash,
@@ -240,6 +252,9 @@ try {
     authorityRefUsedAsTransportIdentity: false,
     projectionHashIntegrityVerified: true,
     decisionResultSemanticHashVerified: true,
+    runtimeAlternativeProvenanceVerified: true,
+    decisionResultPublicationAuditHashVerifiedByIndependentConsumer: true,
+    decisionResultPublicationAuditD06RefClosureVerifiedByIndependentConsumer: true,
     tamperedProjectionRejected: true,
     authorityPromotionRejected: true,
     authorityIdentitySmugglingRejected: true,
