@@ -1,0 +1,62 @@
+name: ADR Productization — ADR-3D-PRE Field-State Authority Consumption Contract
+
+on:
+  push:
+    branches:
+      - 'test/adr3d-pre-field-state-authority-consumption-contract*'
+    paths:
+      - 'acceptance/adr3d-pre-field-state-authority-consumption-contract/**'
+      - '.github/workflows/productization-adr3d-pre-field-state-authority-consumption-contract.yml'
+  pull_request:
+    paths:
+      - 'acceptance/adr3d-pre-field-state-authority-consumption-contract/**'
+      - '.github/workflows/productization-adr3d-pre-field-state-authority-consumption-contract.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  adr3d_pre_field_state_authority_consumption_contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Report runtime
+        run: node --version
+      - name: Enforce bounded ADR-3D-PRE consumer-contract package
+        env:
+          EXPECTED_BASE: fbbe41756fe88af9ac9d149a8f35a2933e3889cf
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only "$EXPECTED_BASE" HEAD | sort)"
+          printf '%s\n' "$changed"
+          count="$(printf '%s\n' "$changed" | sed '/^$/d' | wc -l | tr -d ' ')"
+          test "$count" = "3"
+          while IFS= read -r path; do
+            case "$path" in
+              .github/workflows/productization-adr3d-pre-field-state-authority-consumption-contract.yml|acceptance/adr3d-pre-field-state-authority-consumption-contract/contract.json|acceptance/adr3d-pre-field-state-authority-consumption-contract/run.mjs)
+                ;;
+              '')
+                ;;
+              *)
+                echo "ADR3D_PRE_UNBOUNDED_WRITE:$path" >&2
+                exit 1
+                ;;
+            esac
+          done <<< "$changed"
+          if printf '%s\n' "$changed" | grep -E '^(adapters/|packages/|sdks/|scripts/|docs/)' >/dev/null; then
+            echo 'ADR3D_PRE_RUNTIME_PROVIDER_SCHEMA_OR_ARCHITECTURE_WRITE_FORBIDDEN' >&2
+            exit 1
+          fi
+      - name: Preserve accepted ContextDatum contract
+        run: npm run test:context-datum
+      - name: Preserve ADR-3C Path-B predecessor
+        run: node acceptance/adr3c-target-parameter-authority-admissibility/run.mjs
+      - name: Qualify ADR-3D-PRE consumer contract predicates
+        run: node acceptance/adr3d-pre-field-state-authority-consumption-contract/run.mjs
