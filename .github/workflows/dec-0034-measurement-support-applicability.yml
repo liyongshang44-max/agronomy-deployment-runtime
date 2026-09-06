@@ -1,0 +1,39 @@
+name: ADR DEC-0034 — Measurement-Support Applicability
+
+on:
+  push:
+    branches:
+      - 'feat/dec-0034-measurement-support-applicability-binding*'
+    paths:
+      - 'packages/applicability/**'
+      - 'acceptance/dec-0034-measurement-support/**'
+      - '.github/workflows/dec-0034-measurement-support-applicability.yml'
+  pull_request:
+    paths:
+      - 'packages/applicability/**'
+      - 'acceptance/dec-0034-measurement-support/**'
+      - '.github/workflows/dec-0034-measurement-support-applicability.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dec_0034_measurement_support:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Report runtime
+        run: node --version
+      - name: Preserve existing A08 behavior
+        run: npm run test:applicability
+      - name: Preserve existing R01 behavior
+        run: npm run test:runtime-plan
+      - name: Preserve existing R02 behavior
+        run: npm run test:information-requirement
+      - name: Qualify DEC-0034 K04 to A08 to R01/R02 measurement-support path
+        run: node acceptance/dec-0034-measurement-support/run.mjs

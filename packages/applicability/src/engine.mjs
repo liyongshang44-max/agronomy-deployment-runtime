@@ -3,6 +3,11 @@ import { ApplicabilityError, APPLICABILITY_ASSESSMENT_CONTRACT_VERSION, APPLICAB
 
 const SUPPORTED_TRANSPORT_CONSTRAINTS = new Set(['DECISION_TYPE_IN', 'CALIBRATION_REQUIRED', 'BOUNDED_EXTRAPOLATION']);
 const SUPPORTED_MISMATCH_DISPOSITIONS = new Set(['CONFLICT', 'CALIBRATION_REQUIRED', 'BOUNDED_EXTRAPOLATION']);
+const SUPPORT_OPERATOR = 'CONTEXT_DATUM_SUPPORT_MATCH';
+const SUPPORT_DIMENSION = 'VERTICAL_INTERVAL';
+const SUPPORT_RELATION = 'EXACT_INTERVAL_MATCH';
+const SUPPORT_BASIS_KINDS = new Set(['EXACT_INTERVAL', 'CONTEXT_SEMANTIC_INTERVAL']);
+const DECIMAL_RE = /^(?:0|-?[1-9]\d*)(?:\.\d+)?$/;
 
 function text(value, name) {
   if (typeof value !== 'string' || value.trim().length === 0) throw new ApplicabilityError('INVALID_APPLICABILITY_INPUT', `${name} must be a non-empty string`);
@@ -51,16 +56,113 @@ function targetIndex(manifestAuthority) {
   return map;
 }
 
+function exactKeys(value, allowed) {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    && Object.keys(value).every((key) => allowed.has(key));
+}
+
+function canonicalDecimal(value) {
+  if (typeof value !== 'string' || !DECIMAL_RE.test(value)) return null;
+  const negative = value.startsWith('-');
+  const unsigned = negative ? value.slice(1) : value;
+  const [integer, rawFraction = ''] = unsigned.split('.');
+  const fraction = rawFraction.replace(/0+$/, '');
+  const normalized = fraction ? `${integer}.${fraction}` : integer;
+  if (normalized === '0') return '0';
+  return negative ? `-${normalized}` : normalized;
+}
+
+function compareDecimal(left, right) {
+  const a = canonicalDecimal(left);
+  const b = canonicalDecimal(right);
+  if (a === null || b === null) return null;
+  const split = (value) => {
+    const negative = value.startsWith('-');
+    const unsigned = negative ? value.slice(1) : value;
+    const [integer, fraction = ''] = unsigned.split('.');
+    return { negative, integer, fraction };
+  };
+  const ap = split(a);
+  const bp = split(b);
+  const scale = Math.max(ap.fraction.length, bp.fraction.length);
+  const ai = BigInt(`${ap.negative ? '-' : ''}${ap.integer}${ap.fraction.padEnd(scale, '0')}`);
+  const bi = BigInt(`${bp.negative ? '-' : ''}${bp.integer}${bp.fraction.padEnd(scale, '0')}`);
+  return ai < bi ? -1 : ai > bi ? 1 : 0;
+}
+
+function normalizeSupportBasis(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw) || typeof raw.kind !== 'string') {
+    return { valid: false, code: 'SEMANTIC_PRECONDITION_SUPPORT_BASIS_INVALID' };
+  }
+  if (!SUPPORT_BASIS_KINDS.has(raw.kind)) {
+    return { valid: false, code: 'SEMANTIC_PRECONDITION_UNSUPPORTED_SUPPORT_BASIS' };
+  }
+  if (raw.kind === 'EXACT_INTERVAL') {
+    if (!exactKeys(raw, new Set(['kind', 'fromMm', 'toMm']))) {
+      return { valid: false, code: 'SEMANTIC_PRECONDITION_SUPPORT_BASIS_INVALID' };
+    }
+    const fromMm = canonicalDecimal(raw.fromMm);
+    const toMm = canonicalDecimal(raw.toMm);
+    if (fromMm === null || toMm === null || compareDecimal(fromMm, toMm) > 0) {
+      return { valid: false, code: 'SEMANTIC_PRECONDITION_SUPPORT_INTERVAL_INVALID' };
+    }
+    return { valid: true, basis: deepFreeze({ kind: 'EXACT_INTERVAL', fromMm, toMm }) };
+  }
+  if (!exactKeys(raw, new Set(['kind', 'semanticId', 'unit']))) {
+    return { valid: false, code: 'SEMANTIC_PRECONDITION_SUPPORT_BASIS_INVALID' };
+  }
+  let semanticId;
+  let unit;
+  try {
+    semanticId = text(raw.semanticId, 'SEMANTIC_PRECONDITION.expectedSupportBasis.semanticId');
+    unit = text(raw.unit, 'SEMANTIC_PRECONDITION.expectedSupportBasis.unit');
+  } catch {
+    return { valid: false, code: 'SEMANTIC_PRECONDITION_SUPPORT_BASIS_INVALID' };
+  }
+  if (unit !== 'mm') {
+    return { valid: false, code: 'SEMANTIC_PRECONDITION_UNSUPPORTED_SUPPORT_BASIS_UNIT' };
+  }
+  return { valid: true, basis: deepFreeze({ kind: 'CONTEXT_SEMANTIC_INTERVAL', semanticId, unit }) };
+}
+
 function normalizePredicate(raw, source) {
   const value = raw;
   if (!value || typeof value !== 'object' || Array.isArray(value)) return { valid: false, code: `${source}_INVALID_OBJECT` };
+  const operator = value.operator;
+  const isSupport = operator === SUPPORT_OPERATOR;
   const allowed = source === 'EFFECT_MODIFIER'
     ? new Set(['semanticId', 'operator', 'value', 'unit', 'mismatchDisposition', 'code'])
-    : new Set(['semanticId', 'operator', 'value', 'unit']);
+    : (isSupport
+      ? new Set(['semanticId', 'operator', 'supportDimension', 'requiredRelation', 'expectedSupportBasis'])
+      : new Set(['semanticId', 'operator', 'value', 'unit']));
   if (Object.keys(value).some((key) => !allowed.has(key))) return { valid: false, code: `${source}_UNSUPPORTED_SHAPE` };
-  if (typeof value.semanticId !== 'string' || value.semanticId.trim() === '' || value.operator !== 'EQUALS') {
+  if (typeof value.semanticId !== 'string' || value.semanticId.trim() === '') {
     return { valid: false, code: `${source}_UNSUPPORTED_PREDICATE` };
   }
+  if (isSupport) {
+    if (source !== 'SEMANTIC_PRECONDITION') return { valid: false, code: `${source}_UNSUPPORTED_PREDICATE` };
+    if (value.supportDimension !== SUPPORT_DIMENSION) {
+      return { valid: false, code: 'SEMANTIC_PRECONDITION_UNSUPPORTED_SUPPORT_DIMENSION' };
+    }
+    if (value.requiredRelation !== SUPPORT_RELATION) {
+      return { valid: false, code: 'SEMANTIC_PRECONDITION_UNSUPPORTED_SUPPORT_RELATION' };
+    }
+    const supportBasis = normalizeSupportBasis(value.expectedSupportBasis);
+    if (!supportBasis.valid) return supportBasis;
+    return {
+      valid: true,
+      predicate: deepFreeze({
+        source,
+        semanticId: value.semanticId.trim(),
+        operator: SUPPORT_OPERATOR,
+        supportDimension: SUPPORT_DIMENSION,
+        requiredRelation: SUPPORT_RELATION,
+        expectedSupportBasis: supportBasis.basis,
+        mismatchDisposition: 'CONFLICT'
+      })
+    };
+  }
+  if (operator !== 'EQUALS') return { valid: false, code: `${source}_UNSUPPORTED_PREDICATE` };
   if (source === 'EFFECT_MODIFIER' && !SUPPORTED_MISMATCH_DISPOSITIONS.has(value.mismatchDisposition)) {
     return { valid: false, code: 'EFFECT_MODIFIER_MISMATCH_DISPOSITION_REQUIRED' };
   }
@@ -78,7 +180,153 @@ function normalizePredicate(raw, source) {
   };
 }
 
+function supportExpectedDescriptor(predicate, resolvedSupport) {
+  return deepFreeze({
+    supportDimension: predicate.supportDimension,
+    requiredRelation: predicate.requiredRelation,
+    expectedSupportBasis: cloneCanonicalValue(predicate.expectedSupportBasis),
+    ...(resolvedSupport ? { resolvedSupport: cloneCanonicalValue(resolvedSupport) } : {})
+  });
+}
+
+function supportResult(predicate, { expected, target, status, disposition }) {
+  return deepFreeze({
+    source: predicate.source,
+    semanticId: predicate.semanticId,
+    operator: predicate.operator,
+    expected,
+    ...(target !== undefined ? { target } : {}),
+    status,
+    disposition
+  });
+}
+
+function resolveSupportBasis(predicate, targets) {
+  const basis = predicate.expectedSupportBasis;
+  if (basis.kind === 'EXACT_INTERVAL') {
+    return { support: deepFreeze({ fromMm: basis.fromMm, toMm: basis.toMm }) };
+  }
+  const candidates = targets.get(basis.semanticId) ?? [];
+  if (candidates.length === 0) return { missing: basis.semanticId };
+  if (candidates.length !== 1) return { unsupported: 'MEASUREMENT_SUPPORT_BASIS_AMBIGUOUS' };
+  const datum = candidates[0];
+  if (datum.unit !== basis.unit) {
+    return {
+      conflict: {
+        code: 'MEASUREMENT_SUPPORT_BASIS_UNIT_MISMATCH',
+        semanticId: basis.semanticId,
+        expectedUnit: basis.unit,
+        targetUnit: datum.unit
+      }
+    };
+  }
+  const value = datum.value;
+  if (!value || value.type !== 'INTERVAL'
+    || value.lower?.type !== 'DECIMAL' || value.upper?.type !== 'DECIMAL') {
+    return {
+      conflict: {
+        code: 'MEASUREMENT_SUPPORT_BASIS_VALUE_INVALID',
+        semanticId: basis.semanticId,
+        expectedValueType: 'INTERVAL<DECIMAL>'
+      }
+    };
+  }
+  return {
+    support: deepFreeze({ fromMm: value.lower.decimal, toMm: value.upper.decimal })
+  };
+}
+
+function evaluateSupportPredicate(predicate, targets) {
+  const targetCandidates = targets.get(predicate.semanticId) ?? [];
+  const unresolvedExpected = supportExpectedDescriptor(predicate);
+  if (targetCandidates.length === 0) {
+    return {
+      result: supportResult(predicate, {
+        expected: unresolvedExpected,
+        status: 'UNKNOWN',
+        disposition: 'UNRESOLVED'
+      }),
+      disposition: 'UNRESOLVED',
+      missing: predicate.semanticId
+    };
+  }
+  if (targetCandidates.length !== 1) {
+    return {
+      result: supportResult(predicate, {
+        expected: unresolvedExpected,
+        status: 'AMBIGUOUS',
+        disposition: 'UNRESOLVED'
+      }),
+      disposition: 'UNRESOLVED',
+      unsupported: 'MEASUREMENT_SUPPORT_TARGET_AMBIGUOUS'
+    };
+  }
+
+  const target = targetCandidates[0];
+  const basis = resolveSupportBasis(predicate, targets);
+  if (basis.missing) {
+    return {
+      result: supportResult(predicate, {
+        expected: unresolvedExpected,
+        target: { verticalSupport: cloneCanonicalValue(target.verticalSupport) },
+        status: 'UNKNOWN',
+        disposition: 'UNRESOLVED'
+      }),
+      disposition: 'UNRESOLVED',
+      missing: basis.missing
+    };
+  }
+  if (basis.unsupported) {
+    return {
+      result: supportResult(predicate, {
+        expected: unresolvedExpected,
+        target: { verticalSupport: cloneCanonicalValue(target.verticalSupport) },
+        status: 'AMBIGUOUS',
+        disposition: 'UNRESOLVED'
+      }),
+      disposition: 'UNRESOLVED',
+      unsupported: basis.unsupported
+    };
+  }
+  if (basis.conflict) {
+    return {
+      result: supportResult(predicate, {
+        expected: unresolvedExpected,
+        target: { verticalSupport: cloneCanonicalValue(target.verticalSupport) },
+        status: 'INVALID',
+        disposition: 'CONFLICT'
+      }),
+      disposition: 'CONFLICT',
+      conflict: basis.conflict
+    };
+  }
+
+  const expected = supportExpectedDescriptor(predicate, basis.support);
+  const observed = { verticalSupport: cloneCanonicalValue(target.verticalSupport) };
+  const matches = target.verticalSupport !== null
+    && target.verticalSupport !== undefined
+    && canonicalEqual(target.verticalSupport, basis.support);
+  return {
+    result: supportResult(predicate, {
+      expected,
+      target: observed,
+      status: matches ? 'MATCH' : 'MISMATCH',
+      disposition: matches ? 'MATCH' : 'CONFLICT'
+    }),
+    disposition: matches ? 'MATCH' : 'CONFLICT',
+    ...(matches ? {} : {
+      conflict: {
+        code: 'MEASUREMENT_SUPPORT_MISMATCH',
+        semanticId: predicate.semanticId,
+        expectedVerticalSupport: cloneCanonicalValue(basis.support),
+        targetVerticalSupport: cloneCanonicalValue(target.verticalSupport)
+      }
+    })
+  };
+}
+
 function evaluatePredicate(predicate, targets) {
+  if (predicate.operator === SUPPORT_OPERATOR) return evaluateSupportPredicate(predicate, targets);
   const candidates = targets.get(predicate.semanticId) ?? [];
   if (candidates.length === 0) {
     return {
@@ -247,6 +495,7 @@ export function buildApplicabilityAssessment({
     dispositions.push(evaluated.disposition);
     if (evaluated.missing) missing.push(evaluated.missing);
     if (evaluated.conflict) conflicts.push(evaluated.conflict);
+    if (evaluated.unsupported) unsupported.push(evaluated.unsupported);
   }
   for (const raw of unwrapAggregated(effectModifiers)) {
     const normalized = normalizePredicate(raw, 'EFFECT_MODIFIER');
@@ -260,6 +509,7 @@ export function buildApplicabilityAssessment({
     dispositions.push(evaluated.disposition);
     if (evaluated.missing) missing.push(evaluated.missing);
     if (evaluated.conflict) conflicts.push(evaluated.conflict);
+    if (evaluated.unsupported) unsupported.push(evaluated.unsupported);
     if (evaluated.disposition === 'CALIBRATION_REQUIRED') {
       predicateCalibrationCodes.push(normalized.predicate.code ?? `EFFECT_MODIFIER_CALIBRATION:${normalized.predicate.semanticId}`);
     }
