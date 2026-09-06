@@ -55,6 +55,16 @@ for (const source of inventory.sources) {
   assert.equal(sourceContentHash(bytes), source.retainedEvidenceContentHash);
 }
 
+assert.equal(inventory.sources[0].claimType, 'OPERATIONAL_RECOMMENDATION');
+assert.equal(inventory.sources[0].semanticPreconditions[0].value, 'soil water depletion relative to management allowable depletion');
+assert.equal(inventory.sources[1].semanticPreconditions.length, 3);
+assert.deepEqual(
+  inventory.sources[1].semanticPreconditions.map((entry) => entry.semanticId).sort(),
+  ['crop.code', 'crop.stage', 'water.metric']
+);
+assert.equal(inventory.sources[1].semanticPreconditions.find((entry) => entry.semanticId === 'crop.stage')?.value, 'early vegetative growth stage');
+assert.equal(inventory.sources[1].semanticPreconditions.find((entry) => entry.semanticId === 'water.metric')?.value, 'soil water deficit percent');
+
 assert.equal(inventory.comparabilityAdjudication.status, 'METRIC_SEMANTICS_NOT_EQUIVALENT');
 assert.equal(inventory.comparabilityAdjudication.metricSemanticMatch, false);
 assert.equal(inventory.comparabilityAdjudication.targetMatch, false);
@@ -62,6 +72,9 @@ assert.equal(inventory.comparabilityAdjudication.unitMatch, false);
 assert.equal(inventory.comparabilityAdjudication.cropStageMatch, false);
 assert.ok(inventory.comparabilityAdjudication.reasonCodes.includes(
   'GEOX_INPUT_IS_LATEST_NORMALIZED_SOIL_MOISTURE_VALUE_NOT_GOVERNED_SOIL_WATER_DEPLETION'
+));
+assert.ok(inventory.comparabilityAdjudication.reasonCodes.includes(
+  'MAD_OR_EQUIVALENT_ALLOWABLE_DEPLETION_NOT_BOUND_TO_SELECTED_DECISION_INPUT'
 ));
 assert.ok(inventory.comparabilityAdjudication.reasonCodes.includes(
   'ROOT_ZONE_PROFILE_AGGREGATION_NOT_ESTABLISHED'
@@ -122,14 +135,23 @@ function blankContext() {
 const sourceSpecs = [
   {
     inventory: inventory.sources[0],
-    slug: 'umn-soil-depletion-stress',
+    slug: 'umn-irrigation-trigger-mad',
     context() {
       const families = blankContext();
       families.MEASUREMENT = {
         status: 'REPORTED',
         dimensions: [{
           semanticHint: 'water.metric',
-          valueCandidate: 'soil_water_depletion_percent_of_available_water_holding_capacity',
+          valueCandidate: 'soil water depletion relative to management allowable depletion',
+          supportClass: 'EXPLICIT_SOURCE',
+          sourceLocator: { kind: 'WHOLE_ARTIFACT' }
+        }]
+      };
+      families.OPERATIONAL = {
+        status: 'REPORTED',
+        dimensions: [{
+          semanticHint: 'decision.domain',
+          valueCandidate: 'irrigation trigger',
           supportClass: 'EXPLICIT_SOURCE',
           sourceLocator: { kind: 'WHOLE_ARTIFACT' }
         }]
@@ -137,8 +159,9 @@ const sourceSpecs = [
       return families;
     },
     contextAdjudication: {
-      BIOLOGICAL: [], ENVIRONMENTAL: [], MANAGEMENT: [], OPERATIONAL: [],
-      MEASUREMENT: [{ semanticId: 'water.metric', valueType: 'CATEGORY' }],
+      BIOLOGICAL: [], ENVIRONMENTAL: [], MANAGEMENT: [],
+      OPERATIONAL: [{ semanticId: 'decision.domain', valueType: 'STRING' }],
+      MEASUREMENT: [{ semanticId: 'water.metric', valueType: 'STRING' }],
       JURISDICTION_ECONOMIC: []
     }
   },
@@ -375,6 +398,13 @@ for (let index = 0; index < sourceSpecs.length; index += 1) {
   assert.equal(knowledge.semanticPayload.qualificationDecisionRefs.length, 1);
   assert.equal(knowledge.semanticPayload.semanticPreconditions.length, item.semanticPreconditions.length);
   assert.ok(knowledge.semanticPayload.limitations.length >= item.limitations.length);
+  const frozenPreconditions = knowledge.semanticPayload.semanticPreconditions.map((entry) => entry.value);
+  for (const expected of item.semanticPreconditions) {
+    assert.ok(frozenPreconditions.some((entry) =>
+      entry.semanticId === expected.semanticId
+        && entry.operator === expected.operator
+        && entry.value === expected.value));
+  }
   qualified.push({ source, artifact, reviewed, decision, knowledge });
 }
 
@@ -384,7 +414,7 @@ assert.equal(qualified.every((entry) => entry.knowledge.ref.kind === 'QualifiedK
 
 const sourceAssertions = qualified.map((entry) => entry.reviewed.claim.semanticPayload.assertion).join('\n');
 assert.ok(!sourceAssertions.includes('0.22'));
-assert.ok(sourceAssertions.includes('30-50%'));
+assert.ok(sourceAssertions.includes('management allowable depletion'));
 assert.ok(sourceAssertions.includes('60-65 percent'));
 
 // The acquisition intentionally stops before A08/R01/R03/D01 for the selected GEOX subject.
