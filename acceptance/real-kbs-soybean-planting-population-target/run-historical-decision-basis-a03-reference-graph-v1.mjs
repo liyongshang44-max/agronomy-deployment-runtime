@@ -22,7 +22,9 @@ import {
   publishResolvedPair
 } from '../context-manifest/fixtures.mjs';
 
-const base = policyDecisionWorld('blueprint-adr2-a03-reference-graph');
+const baseLabel = 'blueprint-adr2-a03-reference-graph';
+const receiptLabel = `${baseLabel}-receipt-backed`;
+const base = policyDecisionWorld(baseLabel);
 const { ledger } = base.env;
 
 // Replace the inline soil datum in an otherwise-valid D06 world with a retained-snapshot
@@ -33,14 +35,14 @@ const preservedDatumRefs = base.manifest.semanticPayload.datumRefs.filter((ref) 
 assert.ok(preservedDatumRefs.length > 0, 'receipt-backed world must preserve the crop context datum');
 
 const resolvedPair = publishResolvedPair(ledger, {
-  suffix: 'blueprint-adr2-a03-reference-graph',
+  suffix: receiptLabel,
   retainSnapshot: true
 });
 assert.equal(resolvedPair.receipt.semanticPayload.replayClass, 'EXACT');
 assert.equal(resolvedPair.receipt.semanticPayload.retention.mode, 'SNAPSHOT_RETAINED');
 
 const manifest = publishManifest(ledger, {
-  logicalId: 'manifest.d06.blueprint-adr2-a03-reference-graph.receipt-backed',
+  logicalId: `manifest.d06.${receiptLabel}`,
   decisionProblem: base.decision,
   datumRefs: [...preservedDatumRefs, resolvedPair.datum.ref],
   receiptRefs: [resolvedPair.receipt.ref],
@@ -52,13 +54,13 @@ assert.equal(manifest.semanticPayload.replayClass, 'EXACT');
 
 const assessment = assessKnowledgeApplicability({
   ledger,
-  logicalId: 'applicability.d06.blueprint-adr2-a03-reference-graph.receipt-backed',
+  logicalId: `applicability.d06.${receiptLabel}`,
   version: '1',
   knowledgeRetrievalResultRef: base.retrieval.ref,
   knowledgeRef: base.retrieval.semanticPayload.candidateRefs[0],
   contextManifestRef: manifest.ref,
   snapshotStore: resolvedPair.snapshotStore,
-  audit: applicabilityAudit(base.env.runtimePrincipal, 'blueprint-adr2-a03-reference-graph')
+  audit: applicabilityAudit(base.env.runtimePrincipal, receiptLabel)
 });
 assert.equal(assessment.semanticPayload.runtimeUse, 'ALLOWED');
 
@@ -74,11 +76,11 @@ const runtimePlan = compileRuntimePlan({
 });
 const eligibility = publishRuntimeEligibility({
   ledger,
-  logicalId: 'runtime-eligibility.d06.blueprint-adr2-a03-reference-graph',
+  logicalId: `runtime-eligibility.d06.${receiptLabel}`,
   version: '1',
   runtimePlan,
   snapshotStore: resolvedPair.snapshotStore,
-  audit: decisionAudit(base.env.runtimePrincipal, 'eligibility-a03-reference-graph')
+  audit: decisionAudit(base.env.runtimePrincipal, 'eligibility-a03-reference-graph-receipt-backed')
 });
 assert.ok(
   ['RUNTIME_ELIGIBLE', 'RUNTIME_ELIGIBLE_WITH_LIMITATIONS'].includes(eligibility.semanticPayload.runtimeEligibility),
@@ -90,7 +92,7 @@ assert.ok(legalPath, 'receipt-backed world requires one exact legal RuntimeEligi
 
 const binding = publishRuntimeBinding({
   ledger,
-  logicalId: 'runtime-binding.d06.blueprint-adr2-a03-reference-graph',
+  logicalId: `runtime-binding.d06.${receiptLabel}`,
   version: '1',
   runtimeEligibilityRef: eligibility.ref,
   selectedAlternativePathId: legalPath.pathId,
@@ -101,15 +103,15 @@ const binding = publishRuntimeBinding({
     implementationConformanceRef: base.conformance.ref,
     availableCapabilities: ['DETERMINISTIC_DECIMAL_V1']
   },
-  audit: decisionAudit(base.env.runtimePrincipal, 'binding-a03-reference-graph')
+  audit: decisionAudit(base.env.runtimePrincipal, 'binding-a03-reference-graph-receipt-backed')
 });
 const alternativeSet = publishRuntimeAlternativeSet({
   ledger,
-  logicalId: 'runtime-alternative-set.d06.blueprint-adr2-a03-reference-graph',
+  logicalId: `runtime-alternative-set.d06.${receiptLabel}`,
   version: '1',
   runtimeEligibilityRef: eligibility.ref,
   includedRuntimeBindingRefs: [binding.ref],
-  audit: decisionAudit(base.env.runtimePrincipal, 'alternative-set-a03-reference-graph')
+  audit: decisionAudit(base.env.runtimePrincipal, 'alternative-set-a03-reference-graph-receipt-backed')
 });
 
 const receiptDecisionWorld = {
@@ -124,12 +126,12 @@ const receiptDecisionWorld = {
   snapshotStore: resolvedPair.snapshotStore
 };
 const robustness = publishRobustness(receiptDecisionWorld, {
-  label: 'blueprint-adr2-a03-reference-graph'
+  label: receiptLabel
 });
 const decisionResult = publishResult(
   receiptDecisionWorld,
   robustness,
-  'blueprint-adr2-a03-reference-graph'
+  receiptLabel
 );
 
 const recordCountBeforeRead = ledger.exportSnapshot().records.length;
