@@ -1,0 +1,185 @@
+{
+  "classification": "NON_AUTHORITY_ADR_CONSUMER_PRECONDITION_CONTRACT",
+  "contractId": "ADR-3D-PRE-FIELD-STATE-AUTHORITY-CONSUMPTION-CONTRACT-V1",
+  "version": 1,
+  "status": "CONSUMER_CONTRACT_ONLY_PROVIDER_NOT_IMPLEMENTED",
+  "baselines": {
+    "adrProtectedMain": "fbbe41756fe88af9ac9d149a8f35a2933e3889cf",
+    "geoxObservedProtectedMain": "ca56d60e3d927ccda5d1f28255e195575bf7a487"
+  },
+  "ownership": {
+    "producerAuthorityOwner": "MCFT_FIELD_STATE",
+    "consumer": "ADR",
+    "consumerMayDefineProducerPersistenceSchema": false,
+    "consumerMayCreatePhysicalTargetTruth": false
+  },
+  "target": {
+    "semanticId": "soil.root_zone_deficit",
+    "sourceObjectType": "twin_state_estimate_v1",
+    "sourceField": "depletion_from_field_capacity_mm",
+    "unit": "mm",
+    "transformation": "NONE"
+  },
+  "providerPreconditions": {
+    "TARGET_ROOT_ZONE_DEPTH_AUTHORITY": "ADMISSIBLE",
+    "TARGET_FIELD_CAPACITY_AUTHORITY": "ADMISSIBLE",
+    "REQUIRED_HYDRAULIC_AUTHORITY": "ADMISSIBLE",
+    "TWIN_STATE_PARAMETER_BINDING": "EXACT",
+    "TARGET_SCOPE_BINDING": "EXACT",
+    "TEMPORAL_BINDING": "EXACT",
+    "VERTICAL_SUPPORT": "ADMISSIBLE",
+    "PROVENANCE": "COMPLETE",
+    "PROVIDER_CONDITIONS_PASS": true
+  },
+  "normalizedConsumerView": {
+    "classification": "ADR_CONSUMER_NORMALIZED_VIEW_NOT_PRODUCER_SCHEMA",
+    "requiredTopLevelFields": [
+      "producerAuthorityOwner",
+      "consumer",
+      "targetRequest",
+      "rootZoneDepthAuthority",
+      "fieldCapacityAuthority",
+      "requiredHydraulicAuthority",
+      "twinState",
+      "projection"
+    ],
+    "targetRequestRequiredFields": [
+      "subjectIdentity",
+      "fieldId",
+      "zoneId",
+      "crop",
+      "seasonId",
+      "effectiveInterval",
+      "verticalSupport"
+    ],
+    "requiredAuthorityFields": [
+      "admissibility",
+      "authorityId",
+      "authorityHash",
+      "subjectIdentity",
+      "fieldId",
+      "zoneId",
+      "crop",
+      "seasonId",
+      "effectiveInterval",
+      "availableAt",
+      "verticalSupport",
+      "method",
+      "provenance",
+      "uncertainty",
+      "confidence"
+    ],
+    "twinStateRequiredFields": [
+      "objectType",
+      "authorityId",
+      "authorityHash",
+      "subjectIdentity",
+      "fieldId",
+      "zoneId",
+      "crop",
+      "seasonId",
+      "effectiveInterval",
+      "availableAt",
+      "verticalSupport",
+      "method",
+      "provenance",
+      "uncertainty",
+      "confidence",
+      "sourceField",
+      "parameterAuthorityBindings"
+    ],
+    "projectionRequiredFields": [
+      "semanticId",
+      "unit",
+      "sourceObjectType",
+      "sourceField",
+      "sourceAuthorityId",
+      "sourceAuthorityHash",
+      "effectiveInterval",
+      "availableAt",
+      "verticalSupport",
+      "uncertainty",
+      "confidence",
+      "transformation",
+      "consumerSideTruthInvention",
+      "recalculatesRootZoneDeficit",
+      "legacy022Used",
+      "qualifiedTransformationUsed",
+      "mtlS01Used",
+      "a09Used"
+    ]
+  },
+  "crossAuthorityCompositionPredicates": {
+    "producerAuthorityOwnerExact": true,
+    "consumerExact": true,
+    "exactSubjectIdentityMatches": true,
+    "exactTargetScopeMatches": true,
+    "authorityEffectiveIntervalsCoverTwinStateInterval": true,
+    "authorityAvailableAtNotAfterTwinStateAvailableAt": true,
+    "twinStateEffectiveIntervalEqualsProjectedEffectiveInterval": true,
+    "twinStateAvailableAtEqualsProjectedAvailableAt": true,
+    "verticalSupportExplicitAndExactAcrossAuthoritiesStateTargetAndProjection": true,
+    "authorityIdHashPairsRequired": true,
+    "twinStateParameterAuthorityBindingsExact": true,
+    "methodPresent": true,
+    "provenanceCompleteAndPreserved": true,
+    "uncertaintyNotDropped": true,
+    "confidenceNotDropped": true,
+    "sourceAuthorityRefHashPreserved": true,
+    "consumerSideTruthInvention": false
+  },
+  "temporalSemantics": {
+    "exactDoesNotRequireLiteralEqualityBetweenParameterAuthorityAndTwinStateIntervals": true,
+    "parameterAuthorityIntervalMustCoverTwinStateInterval": true,
+    "parameterAuthorityMustBeVisibleNoLaterThanTwinStateAvailableAt": true,
+    "projectedEffectiveIntervalMustEqualTwinStateEffectiveInterval": true,
+    "projectedAvailableAtMustEqualTwinStateAvailableAt": true,
+    "authorityVersionChangeInsideStateIntervalRequiresExactStateLineageBinding": true
+  },
+  "verticalSupportSemantics": {
+    "rootZoneSupportMustBeExplicit": true,
+    "rootZoneDepthMayDependOnFieldZoneCropSeasonEffectiveIntervalAndBiologicalStageWhereUpstreamAuthorityRequires": true,
+    "adrMayAssumePermanentFieldConstant": false,
+    "pointOrLayeredToRootZoneAggregationOwnedByAdr": false,
+    "upstreamQualifiedAggregateStateMayBeConsumedWithoutAdrTransformation": true
+  },
+  "projectionSemantics": {
+    "sourceValue": "twin_state_estimate_v1.depletion_from_field_capacity_mm",
+    "transformation": "NONE",
+    "syntheticActionTranslation": "NONE",
+    "legacy022": "NOT_USED",
+    "mtlS01": "NOT_USED",
+    "a09": "NOT_USED",
+    "recalculateRootZoneDeficit": false,
+    "contextDatumSchemaChangeRequiredByThisContract": false,
+    "contextDatumSourceRefMustResolveToExactTwinStateAuthority": true,
+    "twinStateLineageMustPreserveExactParameterAuthorityBindings": true
+  },
+  "forbidden": [
+    "MODIFY_GEOX_OR_MCFT_RUNTIME_CONFIG",
+    "INVENT_ROOT_ZONE_DEPTH",
+    "INVENT_FIELD_CAPACITY",
+    "RELABEL_SYNTHETIC_PARAMETERS_AS_REAL",
+    "CREATE_QUALIFIED_TRANSFORMATION",
+    "ACTIVATE_MTL_S01",
+    "ACTIVATE_A09",
+    "REVIVE_LEGACY_0_22",
+    "IMPLEMENT_PROVISIONAL_ROOT_ZONE_DEFICIT_PROVIDER",
+    "ADR_POINT_TO_ROOT_ZONE_AGGREGATION",
+    "ADR_LAYERED_TO_ROOT_ZONE_AGGREGATION",
+    "ADR_ROOT_ZONE_DEFICIT_RECALCULATION"
+  ],
+  "activationGate": {
+    "currentProviderState": "NOT_IMPLEMENTED",
+    "currentBlockerOwner": "MCFT_FIELD_STATE",
+    "futureProcedure": [
+      "READ_LATEST_GEOX_PROTECTED_MAIN",
+      "READ_LATEST_MCFT_AUTHORITY_REFS",
+      "READ_LATEST_ADR_PROTECTED_MAIN",
+      "RUN_PROVIDER_PRECONDITION_ADJUDICATION",
+      "REQUIRE_ALL_PROVIDER_PRECONDITIONS_PASS"
+    ],
+    "providerFrontierIfPass": "ADR-3D_GEOX_ROOT_ZONE_DEFICIT_PROVIDER_PLUS_DEC0034_A08_QUALIFICATION",
+    "providerFrontierIfFail": "REMAIN_BLOCKED_NO_PROVIDER_IMPLEMENTATION"
+  }
+}
