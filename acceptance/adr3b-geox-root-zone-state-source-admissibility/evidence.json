@@ -1,0 +1,77 @@
+{
+  "classification": "NON_AUTHORITY_CROSS_REPO_SOURCE_CONTRACT_EVIDENCE",
+  "auditedAt": "2026-09-06",
+  "geox": {
+    "repository": "liyongshang44-max/GEOX",
+    "protectedMain": "ca2a96d131bc1d3b2935e7b7460752bdbf79f9bd"
+  },
+  "sources": {
+    "rootZoneStateBuilder": {
+      "path": "apps/server/src/domain/soil_water/root_zone_soil_water_state_builder_v1.ts",
+      "blobSha": "5ea6f2e585957b33087a3610e9e5950e823b8372",
+      "modelVersion": "root_zone_soil_water_state_v1",
+      "rootZoneDepthField": "root_zone_depth_cm",
+      "outputs": [
+        "weighted_matric_potential_kpa",
+        "root_zone_available_water_fraction",
+        "root_zone_water_potential_class",
+        "worst_layer_class",
+        "stress_layer_count",
+        "limited_layer_count"
+      ],
+      "lineageFields": [
+        "layer_estimate_refs",
+        "calculation_inputs",
+        "derivation",
+        "computed_at",
+        "determinism_hash"
+      ],
+      "statusField": "input_status",
+      "directRootZoneDeficitField": null
+    },
+    "rootZoneStateProjection": {
+      "path": "apps/server/src/projections/root_zone_soil_water_state_v1.ts",
+      "blobSha": "01092ae1889e5ab36964cce58e284104728bad1d",
+      "objectType": "root_zone_soil_water_state_v1",
+      "table": "root_zone_soil_water_state_index_v1",
+      "sourceFactField": "source_fact_id",
+      "computedAtField": "computed_at",
+      "boundary": "projection table helper only; no domain calculation, routes, forecasts, scenarios, or customer exposure"
+    },
+    "vanGenuchtenModel": {
+      "path": "apps/server/src/domain/soil_water/van_genuchten_v1.ts",
+      "blobSha": "52c58454f670350dadd360eaf2ea5762cf855b88",
+      "effectiveSaturationFormula": "(theta - theta_r) / (theta_s - theta_r)",
+      "availableWaterFractionDefinition": "effective_saturation",
+      "directRootZoneDeficitSemantic": false,
+      "faoTawDepletionSemantic": false
+    },
+    "legacyIrrigationRequirement": {
+      "path": "apps/server/src/domain/agronomy/skills/irrigation/irrigation_requirement_skill_v1.ts",
+      "blobSha": "64f74e0d62d7eae6332c026725625593e7f53276",
+      "defaultTargetSoilMoisture": 0.22,
+      "defaultRootZoneDepthMm": 300,
+      "deficitFormula": "max(0, target_soil_moisture - soil_moisture) * root_zone_depth_mm",
+      "outputField": "soil_water_deficit_mm"
+    },
+    "adrGeoxAdapter": {
+      "adrPath": "adapters/geox/src/index.mjs",
+      "adrBlobSha": "8e665517a6e88435ee1bea055e8dd537a755b4a2",
+      "compatibilityBaseline": "6e7b1ac08ca8f79d65d5c6ec0a57e0cbabb8e5c9",
+      "supportedSourceContracts": [
+        "crop_context_v1@1",
+        "device_observation_index_v1"
+      ],
+      "rootZoneStateSourceContract": null,
+      "deviceObservationSemantic": "soil.volumetric_water_content",
+      "deviceObservationExplicitExclusion": "soil_moisture -> root-zone state"
+    }
+  },
+  "acceptedAdrConstraints": {
+    "dec0034Main": "b8d1bf5908b9946e2236e2e53182885065eace25",
+    "requiredKnowledgeTargetSemantic": "soil.root_zone_deficit",
+    "legacyThresholdAuthority": "PROHIBITED",
+    "qualifiedTransformationAvailable": false,
+    "mtlS01A09Authorized": false
+  }
+}
