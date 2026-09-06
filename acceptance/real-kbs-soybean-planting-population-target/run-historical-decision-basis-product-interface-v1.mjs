@@ -9,6 +9,7 @@ import {
 import {
   HISTORICAL_DECISION_BASIS_AUTHORITY_CLASS,
   HISTORICAL_DECISION_BASIS_DIGEST_AUTHORITY,
+  HISTORICAL_DECISION_BASIS_GRAPH_CLASS,
   HISTORICAL_DECISION_BASIS_READ_MODEL_VERSION,
   reconstructHistoricalDecisionBasis
 } from '../../packages/historical-decision-basis/src/index.mjs';
@@ -62,6 +63,56 @@ assert.deepEqual(beforeLaterEvidence.nonclaims, {
 });
 assert.equal(Object.isFrozen(beforeLaterEvidence), true);
 assert.equal(Object.isFrozen(beforeLaterEvidence.runtimeWorlds), true);
+
+const graph = beforeLaterEvidence.authorityGraph;
+assert.equal(graph.projectionClass, HISTORICAL_DECISION_BASIS_GRAPH_CLASS);
+assert.equal(sameAuthorityRef(graph.entryRef, historicalDecisionResultRef), true);
+assert.ok(graph.decisionRefs.length >= 4, 'decision graph must expose D06/D05/D04/DecisionProblem exact refs');
+assert.ok(graph.runtimeRefs.length >= 4, 'runtime graph must expose binding/eligibility/deployment/profile exact refs');
+assert.ok(graph.contextRefs.some((ref) => ref.kind === 'ContextManifest'));
+assert.ok(graph.contextRefs.some((ref) => ref.kind === 'ContextDatum'));
+assert.ok(graph.knowledgeRefs.some((ref) => ref.kind === 'KnowledgeRetrievalResult'));
+assert.ok(graph.knowledgeRefs.some((ref) => ref.kind === 'ApplicabilityAssessment'));
+assert.ok(graph.specificationRefs.some((ref) => ref.kind === 'Policy'));
+assert.ok(graph.implementationRefs.some((ref) => ref.kind === 'Implementation'));
+assert.ok(graph.implementationRefs.some((ref) => ref.kind === 'ImplementationConformance'));
+assert.equal(graph.contextWorlds.length, 1);
+assert.equal(graph.contextWorlds[0].datumRefs.length > 0, true);
+assert.equal(graph.applicabilityWorlds.length, 1);
+assert.equal(
+  graph.allAuthorityRefs.every((ref) => ledger.has(ref)),
+  true,
+  'authorityGraph may expose only exact refs resolvable in the governed historical ledger'
+);
+
+// A missing exact historical predecessor must fail closed. The proxy simulates a damaged
+// governed store while preserving all other ledger behavior; reconstruction may not fall
+// back to another version or silently omit the missing D05 predecessor.
+const missingPredecessorRef = beforeLaterEvidence.decisionRobustnessRef;
+const missingPredecessorLedger = new Proxy(ledger, {
+  get(target, property) {
+    if (property === 'resolve') {
+      return (ref) => {
+        if (sameAuthorityRef(ref, missingPredecessorRef)) {
+          const error = new Error('simulated missing exact historical predecessor');
+          error.code = 'AUTHORITY_NOT_FOUND';
+          throw error;
+        }
+        return target.resolve(ref);
+      };
+    }
+    const value = Reflect.get(target, property, target);
+    return typeof value === 'function' ? value.bind(target) : value;
+  }
+});
+assert.throws(
+  () => reconstructHistoricalDecisionBasis({
+    ledger: missingPredecessorLedger,
+    snapshotStore,
+    decisionResultRef: historicalDecisionResultRef
+  }),
+  (error) => error?.code === 'AUTHORITY_NOT_FOUND'
+);
 
 // Exact identity is mandatory. A forged semantic hash cannot fall back to another version.
 assert.throws(() => reconstructHistoricalDecisionBasis({
@@ -181,7 +232,7 @@ assert.equal(
 assert.equal(
   canonicalizeSemanticJson(afterLaterEvidence),
   canonicalizeSemanticJson(beforeLaterEvidence),
-  'later valid evidence and later versions must not rewrite the historical basis'
+  'later valid evidence and later versions must not rewrite the historical basis or inspection graph'
 );
 assert.equal(afterLaterEvidence.basisDigest, beforeLaterEvidence.basisDigest);
 
@@ -205,7 +256,9 @@ console.log(JSON.stringify({
     basisDigest: afterLaterEvidence.basisDigest,
     basisDigestAuthority: afterLaterEvidence.basisDigestAuthority,
     deterministicAfterLaterEvidence: true,
-    authorityRecordsWrittenByReconstruction: 0
+    missingPredecessorFailsClosed: true,
+    authorityRecordsWrittenByReconstruction: 0,
+    authorityGraphRefCount: afterLaterEvidence.authorityGraph.allAuthorityRefs.length
   },
   nonclaims: afterLaterEvidence.nonclaims
 }, null, 2));
