@@ -49,7 +49,7 @@
       "reviewedLabel": "Reviewed in 2019",
       "retrievedAt": "2026-09-06T08:36:00.000Z",
       "retainedEvidenceText": "For corn, experience shows that the soil water deficit can be as high as 60 to 65 percent in the early vegetative growth stage",
-      "retainedEvidenceContentHash": "sha256:e332fa5699c65c4869561443d3399d837a0eb12a70794c1ffb033258bdcc82d9",
+      "retainedEvidenceContentHash": "sha256:976bc4b16a130bbb398354558521e893216c6cfac3add37d7fb6864b69eb1fc6",
       "sourceFaithfulClaim": "For corn in the early vegetative growth stage, the guidance reports soil-water deficit can be as high as 60-65 percent.",
       "claimType": "BOUNDARY_CONSTRAINT",
       "qualificationTarget": "AGRONOMIC_POLICY_INPUT",
