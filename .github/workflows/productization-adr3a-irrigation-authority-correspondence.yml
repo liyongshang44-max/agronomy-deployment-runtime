@@ -1,0 +1,31 @@
+name: ADR Productization — ADR-3A Irrigation Authority Correspondence
+
+on:
+  push:
+    branches:
+      - 'analysis/adr3a-irrigation-correspondence-*'
+    paths:
+      - 'acceptance/adr3a-irrigation-authority-correspondence/**'
+      - '.github/workflows/productization-adr3a-irrigation-authority-correspondence.yml'
+  pull_request:
+    paths:
+      - 'acceptance/adr3a-irrigation-authority-correspondence/**'
+      - '.github/workflows/productization-adr3a-irrigation-authority-correspondence.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  adr3a_irrigation_authority_correspondence:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Report runtime
+        run: node --version
+      - name: Qualify ADR-3A irrigation migration inventory and authority correspondence
+        run: node acceptance/adr3a-irrigation-authority-correspondence/run.mjs
