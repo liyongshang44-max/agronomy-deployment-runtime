@@ -20,6 +20,9 @@ export const HISTORICAL_DECISION_BASIS_DIGEST_AUTHORITY = 'NONE_DIGEST_IS_REPROD
 export const HISTORICAL_DECISION_BASIS_GRAPH_CLASS = 'NONE_NON_AUTHORITY_EXACT_REF_GRAPH_PROJECTION';
 export const HISTORICAL_DECISION_BASIS_DECISION_SEMANTICS_CLASS = 'NONE_NON_AUTHORITY_EXACT_DECISION_RESULT_SEMANTICS_PROJECTION';
 
+const HISTORICAL_DECISION_BASIS_RUNTIME_ALTERNATIVE_PROVENANCE_CLASS =
+  'NONE_NON_AUTHORITY_EXACT_RUNTIME_ALTERNATIVE_PROVENANCE_PROJECTION';
+
 export class HistoricalDecisionBasisError extends Error {
   constructor(code, message) {
     super(message);
@@ -63,6 +66,20 @@ function requireSameRef(actual, expected, message) {
   }
 }
 
+function requireSameCanonical(actual, expected, message) {
+  if (canonicalizeSemanticJson(actual) !== canonicalizeSemanticJson(expected)) {
+    throw new HistoricalDecisionBasisError('HISTORICAL_BASIS_SEMANTIC_MISMATCH', message);
+  }
+}
+
+function requireSameRefSet(actual, expected, message) {
+  const left = uniqueRefs(actual).map(refKey);
+  const right = uniqueRefs(expected).map(refKey);
+  if (left.length !== right.length || left.some((value, index) => value !== right[index])) {
+    throw new HistoricalDecisionBasisError('HISTORICAL_BASIS_REF_SET_MISMATCH', message);
+  }
+}
+
 export function reconstructHistoricalDecisionBasis(input = {}) {
   const ledger = requireObject(input.ledger, 'ledger');
   const snapshotStore = requireObject(input.snapshotStore, 'snapshotStore');
@@ -93,6 +110,149 @@ export function reconstructHistoricalDecisionBasis(input = {}) {
     projectionClass: HISTORICAL_DECISION_BASIS_DECISION_SEMANTICS_CLASS,
     decisionResultRef: decisionResult.record.ref,
     semanticPayload: cloneCanonicalValue(resultPayload)
+  };
+
+  // D04 is the exact frozen path-universe authority even when D06 has no RuntimeBinding.
+  // Reconstruct its R03 predecessor directly so ASK / no-binding historical decisions do not
+  // lose runtime-plan, context, knowledge or applicability provenance in the inspection graph.
+  const alternativePayload = alternativeSet.semanticPayload;
+  const alternativeEligibility = validateRuntimeEligibility({
+    ledger,
+    runtimeEligibilityRef: alternativePayload.runtimeEligibilityRef,
+    snapshotStore
+  });
+  const alternativeDeployment = validateDeploymentAuthority({
+    ledger,
+    deploymentRef: alternativePayload.deploymentRef,
+    allowHistorical: true
+  });
+  const alternativeProfile = validateRuntimeProfileAuthority({
+    ledger,
+    runtimeProfileRef: alternativePayload.runtimeProfileRef,
+    allowHistorical: true
+  });
+  const alternativeContext = validateContextManifestAuthority({
+    ledger,
+    contextManifestRef: alternativePayload.contextManifestRef,
+    snapshotStore
+  });
+
+  requireSameRef(alternativePayload.decisionProblemRef, resultPayload.decisionProblemRef, 'D04 and D06 must retain the same exact DecisionProblem');
+  requireSameRef(alternativePayload.runtimeEligibilityRef, alternativeEligibility.record.ref, 'D04 must retain exact R03 authority');
+  requireSameRef(alternativePayload.deploymentRef, alternativeEligibility.semanticPayload.deploymentRef, 'D04 and R03 must retain the same exact Deployment');
+  requireSameRef(alternativePayload.runtimeProfileRef, alternativeEligibility.semanticPayload.runtimeProfileRef, 'D04 and R03 must retain the same exact RuntimeProfile');
+  requireSameRef(alternativePayload.contextManifestRef, alternativeEligibility.semanticPayload.contextManifestRef, 'D04 and R03 must retain the same exact ContextManifest');
+  requireSameRef(alternativeDeployment.record.ref, alternativePayload.deploymentRef, 'D04 must resolve exact historical Deployment authority');
+  requireSameRef(alternativeProfile.record.ref, alternativePayload.runtimeProfileRef, 'D04 must resolve exact historical RuntimeProfile authority');
+  requireSameRef(alternativeContext.record.ref, alternativePayload.contextManifestRef, 'D04 must resolve exact historical ContextManifest authority');
+  requireSameCanonical(alternativePayload.runtimePlanRef, alternativeEligibility.semanticPayload.planRef, 'D04 and R03 must retain the same frozen RuntimePlan identity');
+  if (alternativePayload.generationMethod.runtimePlanCompilerVersion !== alternativeEligibility.semanticPayload.planRef.compilerVersion) {
+    throw new HistoricalDecisionBasisError(
+      'HISTORICAL_BASIS_RUNTIME_PLAN_COMPILER_MISMATCH',
+      'D04 generation method must retain the exact R03 RuntimePlan compiler identity'
+    );
+  }
+  requireSameRefSet(
+    alternativePayload.includedBindings.map((item) => item.runtimeBindingRef),
+    resultPayload.runtimeBindingRefs,
+    'D04 included RuntimeBinding set must equal exact D06 runtimeBindingRefs'
+  );
+
+  const alternativeCandidates = [
+    ...alternativePayload.includedBindings.map((item) => ({
+      pathId: item.pathId,
+      pathClass: 'INCLUDED_RUNTIME_BINDING',
+      runtimeBindingRef: item.runtimeBindingRef,
+      knowledgeRef: item.knowledgeRef,
+      applicabilityAssessmentRef: item.applicabilityAssessmentRef,
+      exclusionReasonCodes: []
+    })),
+    ...alternativePayload.excludedCandidates.map((item) => ({
+      pathId: item.pathId,
+      pathClass: 'EXCLUDED_RUNTIME_PATH',
+      runtimeBindingRef: null,
+      knowledgeRef: item.knowledgeRef,
+      applicabilityAssessmentRef: item.applicabilityAssessmentRef,
+      exclusionReasonCodes: item.exclusionReasonCodes,
+      sourceReasonCodes: item.sourceReasonCodes
+    }))
+  ].sort((left, right) => compareUtf16(left.pathId, right.pathId));
+
+  const alternativePathWorldsWithReplay = alternativeCandidates.map((candidate) => {
+    const evaluation = alternativeEligibility.semanticPayload.alternativeEvaluations.find((item) => item.pathId === candidate.pathId);
+    if (!evaluation) {
+      throw new HistoricalDecisionBasisError(
+        'HISTORICAL_BASIS_RUNTIME_ALTERNATIVE_PATH_MISSING',
+        `D04 path ${candidate.pathId} must exist in exact R03 alternative evaluations`
+      );
+    }
+    requireSameRef(evaluation.knowledgeRef, candidate.knowledgeRef, 'D04 path knowledge authority must equal exact R03 path knowledge authority');
+    requireSameRef(
+      evaluation.applicabilityAssessmentRef,
+      candidate.applicabilityAssessmentRef,
+      'D04 path applicability authority must equal exact R03 path applicability authority'
+    );
+    const applicability = validateApplicabilityAssessment({
+      ledger,
+      applicabilityAssessmentRef: candidate.applicabilityAssessmentRef,
+      snapshotStore,
+      allowHistorical: true
+    });
+    requireSameRef(applicability.record.ref, candidate.applicabilityAssessmentRef, 'D04 path must resolve exact A08 authority');
+    requireSameRef(applicability.knowledgeAuthority.ref, candidate.knowledgeRef, 'D04 path must resolve exact knowledge authority');
+    requireSameRef(
+      applicability.contextManifestAuthority.record.ref,
+      alternativePayload.contextManifestRef,
+      'D04 path A08 replay must retain exact historical ContextManifest'
+    );
+    requireSameRef(
+      applicability.retrievalAuthority.record.ref,
+      alternativeEligibility.semanticPayload.knowledgeRetrievalResultRef,
+      'D04 path A08 and R03 must retain the same exact KnowledgeRetrievalResult'
+    );
+    requireSameRef(
+      applicability.retrievalAuthority.decisionAuthority.record.ref,
+      resultPayload.decisionProblemRef,
+      'D04 path retrieval/applicability and D06 must retain the same exact DecisionProblem'
+    );
+    const applicabilityWorld = {
+      ref: applicability.record.ref,
+      knowledgeRef: applicability.knowledgeAuthority.ref,
+      knowledgeKind: applicability.knowledgeAuthority.ref.kind,
+      retrievalRef: applicability.retrievalAuthority.record.ref,
+      knowledgeReleaseRef: applicability.retrievalAuthority.semanticPayload.knowledgeReleaseRef,
+      contextManifestRef: applicability.contextManifestAuthority.record.ref,
+      contextReplayClass: applicability.contextManifestAuthority.semanticPayload.replayClass,
+      evidenceCutoff: applicability.contextManifestAuthority.semanticPayload.evidenceCutoff,
+      logicalTime: applicability.contextManifestAuthority.semanticPayload.logicalTime,
+      scientificUseStatus: applicability.semanticPayload.scientificUseStatus,
+      transportStatus: applicability.semanticPayload.transportStatus,
+      runtimeUse: applicability.semanticPayload.runtimeUse
+    };
+    return {
+      pathWorld: {
+        pathId: candidate.pathId,
+        pathClass: candidate.pathClass,
+        pathDisposition: evaluation.disposition,
+        runtimeBindingRef: candidate.runtimeBindingRef,
+        knowledgeRef: candidate.knowledgeRef,
+        applicabilityAssessmentRef: candidate.applicabilityAssessmentRef,
+        exclusionReasonCodes: [...candidate.exclusionReasonCodes],
+        sourceReasonCodes: [...(candidate.sourceReasonCodes ?? evaluation.reasonCodes ?? [])]
+      },
+      applicabilityWorld
+    };
+  });
+
+  const runtimeAlternativeProvenance = {
+    projectionClass: HISTORICAL_DECISION_BASIS_RUNTIME_ALTERNATIVE_PROVENANCE_CLASS,
+    runtimeAlternativeSetRef: alternativeSet.record.ref,
+    runtimeAlternativeSetSemanticPayload: cloneCanonicalValue(alternativePayload),
+    runtimeEligibilityRef: alternativeEligibility.record.ref,
+    runtimeEligibilitySemanticPayload: cloneCanonicalValue(alternativeEligibility.semanticPayload),
+    runtimePlanCompilerVersion: alternativeEligibility.semanticPayload.planRef.compilerVersion,
+    runtimeAlternativeSetReplayMode: alternativeSet.replayMode,
+    pathWorlds: alternativePathWorldsWithReplay.map((item) => item.pathWorld)
   };
 
   const runtimeWorlds = resultPayload.runtimeBindingRefs.map((runtimeBindingRef) => {
@@ -234,8 +394,7 @@ export function reconstructHistoricalDecisionBasis(input = {}) {
   const knowledgeRefs = uniqueRefs(applicabilityWorlds.map((world) => world.knowledgeRef));
 
   // Keep the v1 digest basis semantically compatible with the first product slice.
-  // authorityGraph and decisionSemantics below are derived inspection projections and
-  // are intentionally outside basisDigest.
+  // All later inspection projections are intentionally outside basisDigest.
   const basis = {
     readModelVersion: HISTORICAL_DECISION_BASIS_READ_MODEL_VERSION,
     authorityClass: HISTORICAL_DECISION_BASIS_AUTHORITY_CLASS,
@@ -272,8 +431,17 @@ export function reconstructHistoricalDecisionBasis(input = {}) {
   };
 
   const bindingPayloads = runtimeWorlds.map((world) => ledger.resolve(world.ref).semanticPayload);
-  const applicabilityPayloads = applicabilityWorlds.map((world) => ledger.resolve(world.ref).semanticPayload);
-  const contextWorlds = contextManifestRefs.map((contextManifestRef) => {
+  const graphApplicabilityWorlds = uniqueByRef([
+    ...applicabilityWorlds,
+    ...alternativePathWorldsWithReplay.map((item) => item.applicabilityWorld)
+  ]);
+  const graphApplicabilityPayloads = graphApplicabilityWorlds.map((world) => ledger.resolve(world.ref).semanticPayload);
+  const graphContextManifestRefs = uniqueRefs([
+    ...contextManifestRefs,
+    alternativeContext.record.ref,
+    ...graphApplicabilityWorlds.map((world) => world.contextManifestRef)
+  ]);
+  const contextWorlds = graphContextManifestRefs.map((contextManifestRef) => {
     const validated = validateContextManifestAuthority({ ledger, contextManifestRef, snapshotStore });
     const payload = validated.semanticPayload;
     const referenceResolutionWorlds = validated.receipts.map((resolved) => ({
@@ -298,21 +466,21 @@ export function reconstructHistoricalDecisionBasis(input = {}) {
       referenceResolutionWorlds
     };
   });
-  const applicabilityInspectionWorlds = applicabilityWorlds.map((world, index) => ({
+  const applicabilityInspectionWorlds = graphApplicabilityWorlds.map((world, index) => ({
     applicabilityAssessmentRef: world.ref,
-    decisionProblemRef: applicabilityPayloads[index].decisionProblemRef,
-    knowledgeRetrievalResultRef: applicabilityPayloads[index].knowledgeRetrievalResultRef,
-    knowledgeRef: applicabilityPayloads[index].knowledgeRef,
-    knowledgeOriginContextRefs: uniqueRefs(applicabilityPayloads[index].knowledgeOriginContextRefs ?? []),
-    contextManifestRef: applicabilityPayloads[index].contextManifestRef,
-    transportStatus: applicabilityPayloads[index].transportStatus,
-    scientificUseStatus: applicabilityPayloads[index].scientificUseStatus,
-    decisionRelevance: applicabilityPayloads[index].decisionRelevance,
-    runtimeUse: applicabilityPayloads[index].runtimeUse,
-    limitations: applicabilityPayloads[index].limitations,
-    conflicts: applicabilityPayloads[index].conflicts,
-    missingContextSemanticIds: applicabilityPayloads[index].missingContextSemanticIds,
-    unsupportedConstraintCodes: applicabilityPayloads[index].unsupportedConstraintCodes
+    decisionProblemRef: graphApplicabilityPayloads[index].decisionProblemRef,
+    knowledgeRetrievalResultRef: graphApplicabilityPayloads[index].knowledgeRetrievalResultRef,
+    knowledgeRef: graphApplicabilityPayloads[index].knowledgeRef,
+    knowledgeOriginContextRefs: uniqueRefs(graphApplicabilityPayloads[index].knowledgeOriginContextRefs ?? []),
+    contextManifestRef: graphApplicabilityPayloads[index].contextManifestRef,
+    transportStatus: graphApplicabilityPayloads[index].transportStatus,
+    scientificUseStatus: graphApplicabilityPayloads[index].scientificUseStatus,
+    decisionRelevance: graphApplicabilityPayloads[index].decisionRelevance,
+    runtimeUse: graphApplicabilityPayloads[index].runtimeUse,
+    limitations: graphApplicabilityPayloads[index].limitations,
+    conflicts: graphApplicabilityPayloads[index].conflicts,
+    missingContextSemanticIds: graphApplicabilityPayloads[index].missingContextSemanticIds,
+    unsupportedConstraintCodes: graphApplicabilityPayloads[index].unsupportedConstraintCodes
   }));
 
   const decisionRefs = uniqueRefs([
@@ -323,6 +491,9 @@ export function reconstructHistoricalDecisionBasis(input = {}) {
     resultPayload.decisionAuthority?.authorityRef
   ]);
   const runtimeRefs = uniqueRefs([
+    alternativeEligibility.record.ref,
+    alternativeDeployment.record.ref,
+    alternativeProfile.record.ref,
     ...runtimeWorlds.map((world) => world.ref),
     ...runtimeWorlds.map((world) => world.runtimeEligibilityRef),
     ...runtimeWorlds.map((world) => world.deploymentRef),
@@ -335,7 +506,7 @@ export function reconstructHistoricalDecisionBasis(input = {}) {
     contextWorlds.flatMap((world) => world.referenceResolutionWorlds.map((item) => item.authorizedContextReferenceRef))
   );
   const contextRefs = uniqueRefs([
-    ...contextManifestRefs,
+    ...graphContextManifestRefs,
     ...contextWorlds.flatMap((world) => world.datumRefs),
     ...resolvedReferenceReceiptRefs,
     ...authorizedContextReferenceRefs,
@@ -343,10 +514,11 @@ export function reconstructHistoricalDecisionBasis(input = {}) {
   ]);
   const knowledgeAuthorityRefs = uniqueRefs([
     ...knowledgeRefs,
-    ...applicabilityWorlds.map((world) => world.retrievalRef),
-    ...applicabilityWorlds.map((world) => world.ref),
-    ...applicabilityWorlds.map((world) => world.knowledgeReleaseRef),
-    ...applicabilityPayloads.flatMap((payload) => payload.knowledgeOriginContextRefs ?? [])
+    ...graphApplicabilityWorlds.map((world) => world.knowledgeRef),
+    ...graphApplicabilityWorlds.map((world) => world.retrievalRef),
+    ...graphApplicabilityWorlds.map((world) => world.ref),
+    ...graphApplicabilityWorlds.map((world) => world.knowledgeReleaseRef),
+    ...graphApplicabilityPayloads.flatMap((payload) => payload.knowledgeOriginContextRefs ?? [])
   ]);
   const specificationRefs = uniqueRefs([
     ...bindingPayloads.flatMap((payload) => payload.transformationBindings ?? []),
@@ -390,6 +562,7 @@ export function reconstructHistoricalDecisionBasis(input = {}) {
     basisDigest: semanticHash('HistoricalDecisionBasisReadModel', basis),
     basisDigestAuthority: HISTORICAL_DECISION_BASIS_DIGEST_AUTHORITY,
     decisionSemantics: cloneCanonicalValue(decisionSemantics),
+    runtimeAlternativeProvenance: cloneCanonicalValue(runtimeAlternativeProvenance),
     authorityGraph: cloneCanonicalValue(authorityGraph)
   };
   return deepFreeze(output);

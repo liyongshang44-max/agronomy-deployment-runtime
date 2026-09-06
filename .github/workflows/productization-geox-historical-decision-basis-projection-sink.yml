@@ -6,6 +6,7 @@ on:
       - 'main'
       - 'feat/blueprint-historical-decision-basis-geox-projection-sink-*'
       - 'feat/blueprint-historical-decision-basis-d06-semantics-*'
+      - 'feat/blueprint-historical-decision-basis-non-act-provenance-*'
     paths:
       - 'adapters/geox/src/historical-decision-basis-projection-sink.mjs'
       - 'adapters/geox/src/decision-result-sink.mjs'
@@ -62,7 +63,7 @@ jobs:
           echo "qualified source commit: $ADR_HISTORICAL_BASIS_SINK_SOURCE_COMMIT"
       - name: Historical Decision Basis projection sink integrity invariants
         run: node acceptance/geox-historical-decision-basis-projection-sink/integrity.mjs
-      - name: Exact D06 decision semantics across ACT WAIT ASK ABSTAIN
+      - name: Exact D06 semantics and D04 R03 provenance across ACT WAIT ASK ABSTAIN
         run: |
           set -o pipefail
           node acceptance/geox-historical-decision-basis-projection-sink/decision-semantics.mjs | tee "$RUNNER_TEMP/geox-historical-decision-basis-d06-semantics.json"

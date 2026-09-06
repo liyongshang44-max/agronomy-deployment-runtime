@@ -23,6 +23,7 @@ assert.equal(projection.consumer_disposition, GEOX_HISTORICAL_DECISION_BASIS_PRO
 assert.equal(projection.field_actionable, false);
 assert.equal(projection.dispatch_authorized, false);
 assert.equal(projection.decision_result_semantic_hash_verified, true);
+assert.equal(projection.runtime_alternative_provenance_verified, true);
 assert.equal(projection.authority_claim, GEOX_HISTORICAL_DECISION_BASIS_PROJECTION_AUTHORITY_CLAIM);
 assert.equal(
   projection.transport_verification,
@@ -36,6 +37,10 @@ assert.deepEqual(projection.historical_basis.nonclaims, {
   outcomeAuthority: false,
   causalAttributionAuthority: false
 });
+assert.equal(
+  projection.historical_basis.runtimeAlternativeProvenance.projectionClass,
+  'NONE_NON_AUTHORITY_EXACT_RUNTIME_ALTERNATIVE_PROVENANCE_PROJECTION'
+);
 
 console.log(JSON.stringify({
   ok: true,
@@ -45,7 +50,10 @@ console.log(JSON.stringify({
   basisDigest: projection.basis_digest,
   entryDecisionResultRef: projection.entry_decision_result_ref,
   authorityGraphRefCount: projection.historical_basis.authorityGraph.allAuthorityRefs.length,
+  runtimeAlternativePathCount: projection.historical_basis.runtimeAlternativeProvenance.pathWorlds.length,
+  runtimePlanCompilerVersion: projection.historical_basis.runtimeAlternativeProvenance.runtimePlanCompilerVersion,
   decisionResultSemanticHashVerified: projection.decision_result_semantic_hash_verified,
+  runtimeAlternativeProvenanceVerified: projection.runtime_alternative_provenance_verified,
   consumerDisposition: projection.consumer_disposition,
   fieldActionable: projection.field_actionable,
   dispatchAuthorized: projection.dispatch_authorized,

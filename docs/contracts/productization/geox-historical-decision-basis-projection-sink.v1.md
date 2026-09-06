@@ -4,7 +4,12 @@ Status: productization transport contract; not architecture authority.
 
 ## Purpose
 
-Expose ADR-2 Historical Decision Basis reconstruction to a GEOX-compatible downstream consumer without inventing a new authority object or relabeling `DecisionResult`, `basisDigest`, or the derived `authorityGraph` as authority.
+Expose ADR-2 Historical Decision Basis reconstruction to a GEOX-compatible downstream consumer without inventing a new authority object or relabeling `DecisionResult`, `basisDigest`, or the derived inspection projections as authority.
+
+The projection preserves both:
+
+- exact D06 decision semantics across ACT / WAIT / ASK / ABSTAIN; and
+- exact D04 / R03 historical runtime-alternative provenance even when a non-ACT decision has zero `RuntimeBinding` authorities.
 
 Public consumer subpath:
 
@@ -36,7 +41,9 @@ authority_claim    = NONE_HISTORICAL_DECISION_BASIS_IS_NON_AUTHORITY_REPRODUCIBI
 
 The historical read model retains its exact `DecisionResult.ref`, predecessor authority refs, frozen `basisDigest`, and non-authority `authorityGraph` for inspection. Those embedded refs remain references to already-governed ADR authorities; they do not become the transport identity.
 
-The read model also carries a derived, non-authoritative exact D06 semantics projection:
+## Exact D06 decision-semantics projection
+
+The read model carries a derived, non-authoritative exact D06 semantics projection:
 
 ```text
 decisionSemantics.projectionClass =
@@ -46,7 +53,54 @@ decisionSemantics.decisionResultRef = exact historical DecisionResult.ref
 decisionSemantics.semanticPayload   = exact validated adr.decision-result.v1 payload
 ```
 
+This preserves material D06 semantics including:
+
+- `waitSemantics`;
+- `informationRequirementRefs`;
+- `abstentionReasonAuthority`;
+- `humanGate`;
+- `policyResultRefs`.
+
 `decisionSemantics` is intentionally outside the frozen `basisDigest`. Adding it does not rewrite the original HistoricalDecisionBasisReadModel digest identity.
+
+## Exact D04 / R03 runtime-alternative provenance projection
+
+A non-ACT D06 result can legitimately contain:
+
+```text
+runtimeBindingRefs = []
+```
+
+That does not mean the historical runtime world had no governed provenance. D04 `RuntimeAlternativeSet` still freezes the path universe and binds the exact R03 `RuntimeEligibility`, which in turn binds the frozen RuntimePlan identity, DecisionProblem, Deployment, RuntimeProfile, ContextManifest, KnowledgeRetrievalResult, and ApplicabilityAssessment authorities.
+
+The read model therefore also carries a derived, non-authoritative projection:
+
+```text
+runtimeAlternativeProvenance.projectionClass =
+  NONE_NON_AUTHORITY_EXACT_RUNTIME_ALTERNATIVE_PROVENANCE_PROJECTION
+
+runtimeAlternativeProvenance.runtimeAlternativeSetRef
+runtimeAlternativeProvenance.runtimeAlternativeSetSemanticPayload
+runtimeAlternativeProvenance.runtimeEligibilityRef
+runtimeAlternativeProvenance.runtimeEligibilitySemanticPayload
+runtimeAlternativeProvenance.runtimePlanCompilerVersion
+runtimeAlternativeProvenance.runtimeAlternativeSetReplayMode
+runtimeAlternativeProvenance.pathWorlds
+```
+
+The projection is reconstructed only after ADR validates the exact D04 and R03 authorities and their historical predecessors. It preserves both included and excluded D04 paths. An excluded non-ACT path retains its exact `knowledgeRef`, `applicabilityAssessmentRef`, R03 path disposition, and exclusion/reason semantics without fabricating a `RuntimeBinding`.
+
+The projection requires:
+
+- D04 `runtimeAlternativeSetRef` to equal the exact D06 `runtimeAlternativeSetRef`;
+- D04 `runtimeEligibilityRef` to resolve the exact R03 authority;
+- D04 and R03 DecisionProblem / Deployment / RuntimeProfile / ContextManifest refs to match exactly;
+- D04 `runtimePlanRef` to equal the exact R03 `planRef`;
+- D04 generation compiler version to equal the R03 RuntimePlan compiler version;
+- D04 included `RuntimeBinding` refs to equal the exact D06 `runtimeBindingRefs` set;
+- every D04 included or excluded path to correspond to the exact R03 alternative evaluation and retain the same knowledge/applicability lineage.
+
+`runtimeAlternativeProvenance` is also intentionally outside the frozen `basisDigest`. The original v1 digest basis remains binding-driven and byte-for-byte compatible. The derived `authorityGraph` may contain additional exact refs needed to make non-ACT provenance inspectable; this graph remains a non-authority projection.
 
 ## Verification boundary
 
@@ -61,24 +115,31 @@ The sink verifies:
 - non-authority graph class;
 - all frozen nonclaims remain false;
 - `decisionSemantics` remains a non-authority exact-D06 projection;
-- the complete frozen D06 semantic field set is present, including `waitSemantics`, `informationRequirementRefs`, `abstentionReasonAuthority`, `humanGate`, and `policyResultRefs`;
+- the complete frozen D06 semantic field set is present;
 - the transported D06 payload recomputes the exact `DecisionResult.ref.semanticHash` using ADR semantic-hash v1 domain separation;
 - duplicated legacy basis summary fields and exact D06 semantics do not conflict;
-- DecisionResult still explicitly carries no human-approval or machine-execution authority.
+- DecisionResult still explicitly carries no human-approval or machine-execution authority;
+- `runtimeAlternativeProvenance` remains a non-authority exact D04/R03 projection;
+- the transported D04 payload recomputes the exact `RuntimeAlternativeSet.ref.semanticHash`;
+- the transported R03 payload recomputes the exact `RuntimeEligibility.ref.semanticHash`;
+- D04, R03, D06, RuntimePlan compiler identity, and included-binding sets remain mutually consistent;
+- every D04 path is accounted for exactly once against the R03 path universe;
+- the derived authority graph retains all exact AuthorityRefs required by the D04/R03 provenance projection.
 
-The sink does **not** possess an ADR ledger or snapshot store and therefore does not independently replay upstream authority history. Its legacy returned verification classification remains:
+The sink does **not** possess an ADR ledger or snapshot store and therefore does not independently replay upstream authority history. Its returned verification classification remains:
 
 ```text
 PROJECTION_HASH_INTEGRITY_ONLY_UPSTREAM_AUTHORITY_REPLAY_NOT_REPERFORMED
 ```
 
-A separate additive result fact:
+The additive result facts:
 
 ```text
-decision_result_semantic_hash_verified = true
+decision_result_semantic_hash_verified   = true
+runtime_alternative_provenance_verified = true
 ```
 
-means only that the clean consumer independently verified the exact D06 semantic payload against its transported `DecisionResult.ref.semanticHash`. It does not mean the consumer replayed D05/D04/R03/A08/A04 or acquired ADR authority.
+mean only that the clean consumer independently verified the transported semantic payloads against their exact D06/D04/R03 identities and checked their internal lineage consistency. They do not mean the consumer replayed publication audit history, provider snapshots, or acquired ADR authority.
 
 Authoritative historical reconstruction remains the responsibility of ADR's `reconstructHistoricalDecisionBasis(...)` read model before transport creation.
 
@@ -94,6 +155,7 @@ dispatch_authorized   = false
 
 It creates no:
 
+- synthetic `RuntimeBinding` for excluded or non-ACT paths;
 - human approval authority;
 - dispatch authority;
 - machine-execution authority;
@@ -103,8 +165,8 @@ It creates no:
 
 ## Compatibility boundary
 
-This subpath is an explicit public API surface addition to the private `@adr/geox-adapter` consumer artifact. Therefore `consumer-api-surface.v1.json`, its canonical surface hash, and `consumer-artifact.manifest.json` must move together under the existing exact compatibility review policy.
+This subpath is an explicit public API surface already present in the private `@adr/geox-adapter` consumer artifact. Its public module/export inventory remains governed by `consumer-api-surface.v1.json` and the existing exact compatibility review policy.
 
-This D06 semantics closure does not add or remove any public module path or exported symbol. It extends the transported historical basis with an exact non-authority projection and adds an output verification fact; the existing public surface inventory therefore remains unchanged.
+The D06 semantics and D04/R03 provenance closures do not add or remove any public module path or exported symbol. They extend the transported historical basis with derived non-authority inspection projections and additive consumer verification facts; the existing public surface inventory therefore remains unchanged.
 
 The existing `@adr/geox-adapter/decision-result-sink` remains unchanged and continues to require exact `DecisionResult` `authority_ref` identity. It must reject historical-basis `projection_hash` events.
