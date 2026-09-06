@@ -1,0 +1,2 @@
+TAW = 1000(q _{FC} - q _{WP}) Z_{r} (82)
+TAW the total available soil water in the root zone [mm]

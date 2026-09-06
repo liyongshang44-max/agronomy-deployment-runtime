@@ -1,0 +1,2 @@
+Irrigation Scheduling: The Water Balance Approach
+D_c is the soil water deficit (net irrigation requirement) in the root zone on the current day
