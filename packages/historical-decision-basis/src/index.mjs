@@ -18,6 +18,7 @@ export const HISTORICAL_DECISION_BASIS_READ_MODEL_VERSION = 'adr.historical-deci
 export const HISTORICAL_DECISION_BASIS_AUTHORITY_CLASS = 'NONE_NON_AUTHORITY_RECONSTRUCTION_READ_MODEL';
 export const HISTORICAL_DECISION_BASIS_DIGEST_AUTHORITY = 'NONE_DIGEST_IS_REPRODUCIBILITY_EVIDENCE_NOT_AUTHORITY_REF';
 export const HISTORICAL_DECISION_BASIS_GRAPH_CLASS = 'NONE_NON_AUTHORITY_EXACT_REF_GRAPH_PROJECTION';
+export const HISTORICAL_DECISION_BASIS_DECISION_SEMANTICS_CLASS = 'NONE_NON_AUTHORITY_EXACT_DECISION_RESULT_SEMANTICS_PROJECTION';
 
 export class HistoricalDecisionBasisError extends Error {
   constructor(code, message) {
@@ -84,6 +85,15 @@ export function reconstructHistoricalDecisionBasis(input = {}) {
     resultPayload.runtimeAlternativeSetRef,
     'D06/D05 must reconstruct the exact frozen D04 authority'
   );
+
+  // Exact D06 semantics are a derived inspection projection over the already-validated
+  // DecisionResult authority. Keep this outside the frozen basisDigest so ADR-2 can expose
+  // complete ACT/WAIT/ASK/ABSTAIN semantics without changing the v1 digest identity.
+  const decisionSemantics = {
+    projectionClass: HISTORICAL_DECISION_BASIS_DECISION_SEMANTICS_CLASS,
+    decisionResultRef: decisionResult.record.ref,
+    semanticPayload: cloneCanonicalValue(resultPayload)
+  };
 
   const runtimeWorlds = resultPayload.runtimeBindingRefs.map((runtimeBindingRef) => {
     const binding = validateRuntimeBinding({ ledger, runtimeBindingRef });
@@ -224,7 +234,8 @@ export function reconstructHistoricalDecisionBasis(input = {}) {
   const knowledgeRefs = uniqueRefs(applicabilityWorlds.map((world) => world.knowledgeRef));
 
   // Keep the v1 digest basis semantically compatible with the first product slice.
-  // authorityGraph below is a derived inspection projection and is intentionally outside basisDigest.
+  // authorityGraph and decisionSemantics below are derived inspection projections and
+  // are intentionally outside basisDigest.
   const basis = {
     readModelVersion: HISTORICAL_DECISION_BASIS_READ_MODEL_VERSION,
     authorityClass: HISTORICAL_DECISION_BASIS_AUTHORITY_CLASS,
@@ -378,6 +389,7 @@ export function reconstructHistoricalDecisionBasis(input = {}) {
     ...cloneCanonicalValue(basis),
     basisDigest: semanticHash('HistoricalDecisionBasisReadModel', basis),
     basisDigestAuthority: HISTORICAL_DECISION_BASIS_DIGEST_AUTHORITY,
+    decisionSemantics: cloneCanonicalValue(decisionSemantics),
     authorityGraph: cloneCanonicalValue(authorityGraph)
   };
   return deepFreeze(output);
