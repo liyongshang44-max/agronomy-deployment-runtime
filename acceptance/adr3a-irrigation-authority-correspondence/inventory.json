@@ -1,0 +1,373 @@
+{
+  "contractVersion": "adr.adr3a-irrigation-authority-correspondence.v1",
+  "classification": "NON_AUTHORITY_MIGRATION_QUALIFICATION_EVIDENCE",
+  "authorityEffect": "NONE",
+  "cutoverAuthorized": false,
+  "sourceHeads": {
+    "adr": "26a8e72b44ec39ce28b3275bbd367c5e403172fd",
+    "geox": "f41dde8d44de95e71748e756e048e0166c1916b7"
+  },
+  "reachabilityClasses": [
+    "ACTIVE_RUNTIME",
+    "COMMERCIAL_REACHABLE",
+    "SHADOW_ONLY",
+    "ACCEPTANCE_ONLY",
+    "DEMO_ONLY",
+    "LEGACY_UNREACHABLE"
+  ],
+  "comparabilityStatuses": [
+    "AUTHORITY_CANDIDATE_EXACTLY_COMPARABLE",
+    "AUTHORITY_CANDIDATE_COMPARABLE_WITH_EXPLICIT_LIMITATIONS",
+    "SAME_ACTION_DOMAIN_DIFFERENT_SCIENTIFIC_PROPOSITION",
+    "TARGET_CONTEXT_NOT_EQUIVALENT",
+    "METRIC_SEMANTICS_NOT_EQUIVALENT",
+    "MATERIAL_ACTION_NOT_EQUIVALENT",
+    "NOT_COMPARABLE",
+    "LEGACY_BEHAVIOR_WITH_NO_DEFENSIBLE_AUTHORITY_BASIS"
+  ],
+  "adrIrrigationAuthority": {
+    "reusableAuthorityInfrastructure": true,
+    "reusableScientificPropositionForSelectedGeoxLegacyRule": false,
+    "source": {
+      "ref": {"kind":"Source","logicalId":"source.real-kbs-rge-runtime-v1.protocol","version":"1"},
+      "originLocator": "current_agronomic_protocol.pdf#page=23",
+      "sourceType": "PROTOCOL",
+      "institution": "Kellogg Biological Station, Michigan State University"
+    },
+    "sourceArtifact": {
+      "ref": {"kind":"SourceArtifact","logicalId":"artifact.real-kbs-rge-runtime-v1.page23","version":"1"},
+      "contentHash": "sha256:8d18c0fcc5a2b536d675e9b1cdafc16fbeedb19204b67c11ae81f887844f71d9",
+      "materialization": "CURATED_PAGE_TRANSCRIPTION",
+      "originalPdfBytesRetained": false,
+      "exactTranscriptionBytesRetained": true
+    },
+    "claim": {
+      "ref": {"kind":"Claim","logicalId":"claim.real-kbs-rge-runtime-v1.two-day-trigger","version":"1"},
+      "sourceContextRef": {"kind":"SourceContext","logicalId":"source-context.real-kbs-rge-runtime-v1.two-day-trigger","version":"1"},
+      "assertion": "When a negative plant available water value is observed for two consecutive days, an irrigation event is scheduled for the next day.",
+      "crop": "soybean",
+      "experiment": "Resource Gradient Experiment (N-rate Study)",
+      "metric": "plant_available_water_mm",
+      "temporal": "negative for two consecutive P1D observations",
+      "action": "IRRIGATE next day"
+    },
+    "qualifiedKnowledge": {
+      "qualificationDecisionRef": {"kind":"ScientificQualificationDecision","logicalId":"qualification.real-kbs-rge-runtime-v1.two-day-trigger","version":"1"},
+      "ref": {"kind":"QualifiedKnowledge","logicalId":"knowledge.real-kbs-rge-runtime-v1.two-day-trigger","version":"1"},
+      "allowedUse": "AGRONOMIC_POLICY_INPUT",
+      "semanticPreconditions": [
+        {"semanticId":"crop.code","operator":"EQUALS","value":"soybean"},
+        {"semanticId":"experiment.name","operator":"EQUALS","value":"Resource Gradient Experiment (N-rate Study)"}
+      ]
+    },
+    "agronomicPolicyCompilation": {
+      "ref": {"kind":"AgronomicPolicyCompilation","logicalId":"agronomic-policy-compilation.gold.kbs-2015-rge-irrigation","version":"1"},
+      "coverage": "INCOMPLETE",
+      "ruleId": "kbs-2015-rge-negative-paw-two-day-irrigation-v1",
+      "actionAmountSemantics": "COPY previous_day_plant_available_water_deficit_mm",
+      "sourceLimitation": "full spreadsheet recurrence and initial state are not reported"
+    },
+    "runtimeComposition": {
+      "knowledgeReleaseRef": {"kind":"KnowledgeRelease","logicalId":"release.real-kbs-rge-runtime-v1","version":"1"},
+      "applicabilityAssessmentRef": {"kind":"ApplicabilityAssessment","logicalId":"applicability.real-kbs-rge-runtime-v1","version":"1"},
+      "runtimePlan": "R01 deterministic runtime plan; one STRUCTURALLY_COMPLETE alternative; exact id/hash produced by deterministic acceptance",
+      "runtimeEligibilityRef": {"kind":"RuntimeEligibility","logicalId":"runtime-eligibility.real-kbs-rge-runtime-v1","version":"1"},
+      "runtimeBindingRef": {"kind":"RuntimeBinding","logicalId":"runtime-binding.real-kbs-rge-runtime-v1","version":"1"},
+      "status": "A08_ALLOWED_R01_STRUCTURALLY_COMPLETE_R03_RUNTIME_ELIGIBLE_D01_BOUND",
+      "useClass": "TEST_ONLY",
+      "runtimeEnvironment": "STAGING",
+      "rolloutStage": "SHADOW"
+    },
+    "targetContext": {
+      "adapterContentHash": "sha256:d2d440c88e5f44ce04f1c89533aa480ca6084e899a8e23d4a6f0e30ceaaecdac",
+      "normalized": {
+        "crop.code": "soybean",
+        "experiment.name": "Resource Gradient Experiment (N-rate Study)"
+      },
+      "promotedFarmFieldZoneIdentity": false,
+      "livePlantAvailableWaterState": false,
+      "liveTwoDayTriggerState": false,
+      "executionAuthority": false
+    },
+    "rightsAndProvenance": {
+      "knowledgeReleaseAuthorized": true,
+      "deploymentClass": "TEST_ONLY_STAGING_SHADOW",
+      "planningProtocolNotExecutionEvidence": true,
+      "scientificCorrectnessProvenByBinding": false
+    }
+  },
+  "legacyInventory": [
+    {
+      "legacyDecisionId": "GEOX-COMMERCIAL-IRRIGATION-DEFICIT-V1",
+      "codeRefs": [
+        {"path":"apps/server/src/domain/agronomy/skills/irrigation/irrigation_deficit_skill_v1.ts","blobSha":"db229cf4931bc9d11fe7c0c40a12c1dc1e481359"},
+        {"path":"apps/server/src/routes/decision_engine_v1.ts","blobSha":"fc40ff003433177aaeabb5e810394c0dabc03aba"}
+      ],
+      "reachability": ["ACTIVE_RUNTIME","COMMERCIAL_REACHABLE"],
+      "callerOwner": "POST /api/v1/recommendations/generate / decision_engine_v1 route",
+      "decisionDomain": "irrigation deficit detection",
+      "cropTargetScope": "route field target; no crop-specific predicate in skill",
+      "requiredInputs": ["soil_moisture","rain_forecast_mm optional","crop_stage optional","evidence_refs optional"],
+      "inputUnitsNormalization": "route normalizes soil_moisture > 1 by /100; skill consumes dimensionless numeric fraction; rain mm",
+      "temporalSemantics": "instantaneous current input; rain does not alter deficit predicate",
+      "thresholds": ["deficit <0.22","HIGH <0.16","MEDIUM <0.20"],
+      "formula": "deficit_detected = finite(soil_moisture) && soil_moisture < 0.22",
+      "defaults": ["rain_forecast_mm=0","recommended_amount=25 L"],
+      "cropStageDependence": "none in trigger",
+      "rainEtDependence": "rain only confidence/reason metadata; no ET dependency",
+      "materialOutput": "deficit_detected gates commercial irrigation Recommendation conjunction",
+      "actionCode": "none inside skill; route promotes qualifying conjunction to irrigation Recommendation",
+      "actionParameters": ["skill fallback recommended_amount=25 L is not the route material mm amount"],
+      "writeSideEffects": "skill none; caller route can write recommendation facts",
+      "commercialReachability": true
+    },
+    {
+      "legacyDecisionId": "GEOX-COMMERCIAL-IRRIGATION-DIAGNOSIS-V1",
+      "codeRefs": ["apps/server/src/domain/agronomy/irrigation/irrigation_diagnosis_v1.ts","apps/server/src/routes/decision_engine_v1.ts"],
+      "reachability": ["ACTIVE_RUNTIME","COMMERCIAL_REACHABLE"],
+      "decisionDomain": "water deficit diagnosis",
+      "cropTargetScope": "route field target",
+      "requiredInputs": ["normalized soil moisture","threshold=0.22","rain context"],
+      "inputUnitsNormalization": "dimensionless fraction after route normalization",
+      "temporalSemantics": "instantaneous diagnosis",
+      "thresholds": ["soil moisture <0.22"],
+      "formula": "water_deficit = soil_moisture < threshold",
+      "defaults": [],
+      "cropStageDependence": "none",
+      "rainEtDependence": "rain explanatory only",
+      "materialOutput": "water_deficit participates in Recommendation gate",
+      "actionCode": "none",
+      "actionParameters": [],
+      "writeSideEffects": "none directly; caller can write Recommendation",
+      "commercialReachability": true
+    },
+    {
+      "legacyDecisionId": "GEOX-COMMERCIAL-IRRIGATION-REQUIREMENT-V1",
+      "codeRefs": ["apps/server/src/domain/agronomy/skills/irrigation/irrigation_requirement_skill_v1.ts","apps/server/src/routes/decision_engine_v1.ts"],
+      "reachability": ["ACTIVE_RUNTIME","COMMERCIAL_REACHABLE"],
+      "decisionDomain": "irrigation requirement and amount",
+      "cropTargetScope": "route field target",
+      "requiredInputs": ["soil moisture","target soil moisture","root-zone depth mm","72h rain mm","72h ET0 mm","application efficiency","crop stage"],
+      "inputUnitsNormalization": "soil moisture ratio; depth/rain/ET0 mm; efficiency ratio",
+      "temporalSemantics": "current soil state plus 72h rain/ET0 aggregates",
+      "thresholds": ["target=0.22","net requirement >0"],
+      "formula": "deficit=max(0,(target-soil)*rootDepth); rainCredit=min(rain,deficit); et0Adjustment=ET0*Kc(stage); net=max(0,deficit+et0Adjustment-rainCredit); gross=net/efficiency",
+      "defaults": ["target=0.22","rootDepth=300mm","rain=0","ET0=0","efficiency=0.85","stage=vegetative"],
+      "cropStageDependence": "Kc: flowering/reproductive 1.15; grain/fill 1.05; initial/seedling 0.7; maturity/senescence 0.8; otherwise 1.0",
+      "rainEtDependence": "material",
+      "materialOutput": "gross_irrigation_requirement_mm becomes suggested irrigation amount",
+      "actionCode": "IRRIGATION Recommendation via caller",
+      "actionParameters": ["suggested_amount_mm=gross_irrigation_requirement_mm"],
+      "writeSideEffects": "skill none; caller writes Recommendation",
+      "commercialReachability": true
+    },
+    {
+      "legacyDecisionId": "GEOX-COMMERCIAL-HARD-RULE-MOISTURE-DRY-V1",
+      "codeRefs": ["apps/server/src/domain/decision_engine_v1.ts","apps/server/src/domain/agronomy/fertility_precheck_constraints_v1.ts","packages/device-skills/src/fertility_inference_core_v1.ts","apps/server/src/routes/decision_engine_v1.ts"],
+      "reachability": ["ACTIVE_RUNTIME","COMMERCIAL_REACHABLE"],
+      "decisionDomain": "categorical moisture constraint to irrigation-first recommendation",
+      "cropTargetScope": "route field target",
+      "requiredInputs": ["fertility recommendation_bias/fertility_level or base moisture_constraint"],
+      "inputUnitsNormalization": "categorical dry; upstream fertility inference uses soil_moisture_pct",
+      "temporalSemantics": "instantaneous",
+      "thresholds": ["upstream moisture<22 pct can yield irrigate_first/low; dry maps to hard rule"],
+      "formula": "recommendation_bias=irrigate_first OR fertility_level=low => moisture_constraint=dry => irrigate_first hard rule",
+      "defaults": [],
+      "cropStageDependence": "none",
+      "rainEtDependence": "none",
+      "materialOutput": "high-priority irrigation Recommendation blueprint",
+      "actionCode": "IRRIGATION_RECOMMENDATION_ACTION",
+      "actionParameters": ["confidence=0.95","expected soil moisture effect=+8"],
+      "writeSideEffects": "caller can write Recommendation",
+      "commercialReachability": true
+    },
+    {
+      "legacyDecisionId": "GEOX-AGRONOMY-AGENT-CORN-WATER-BALANCE-V1",
+      "codeRefs": ["apps/server/src/domain/agronomy/skills/rules/corn/corn.water_balance.rule.ts","apps/server/src/domain/agronomy/rule_engine.ts","apps/server/src/jobs/agronomy_agent.ts"],
+      "reachability": ["ACTIVE_RUNTIME","COMMERCIAL_REACHABLE"],
+      "decisionDomain": "corn vegetative irrigation rule",
+      "cropTargetScope": "corn / vegetative",
+      "requiredInputs": ["raw numeric soil_moisture","crop_stage"],
+      "inputUnitsNormalization": "no normalization in rule path; metric/unit semantics not governed here",
+      "temporalSemantics": "instantaneous",
+      "thresholds": ["soil_moisture <20"],
+      "formula": "first-match rule hit",
+      "defaults": [],
+      "cropStageDependence": "vegetative only",
+      "rainEtDependence": "none",
+      "materialOutput": "IRRIGATE recommendation",
+      "actionCode": "IRRIGATE -> irrigation.start",
+      "actionParameters": ["expected_effect soil_moisture +10","mapped confidence 0.8"],
+      "writeSideEffects": "agronomy_agent writes recommendation_v1 and decision_recommendation_v1 when enabled",
+      "commercialReachability": true
+    },
+    {
+      "legacyDecisionId": "GEOX-AGRONOMY-AGENT-CORN-WATER-BALANCE-V2",
+      "codeRefs": ["apps/server/src/domain/agronomy/skills/rules/corn/corn.water_balance.v2.rule.ts","apps/server/src/domain/agronomy/rule_engine.ts","apps/server/src/jobs/agronomy_agent.ts"],
+      "reachability": ["ACTIVE_RUNTIME","COMMERCIAL_REACHABLE"],
+      "decisionDomain": "corn vegetative irrigation rule fallback after v1",
+      "cropTargetScope": "corn / vegetative",
+      "requiredInputs": ["raw numeric soil_moisture","crop_stage"],
+      "inputUnitsNormalization": "no normalization in rule path",
+      "temporalSemantics": "instantaneous",
+      "thresholds": ["rule predicate <25; effective first-match band is 20<=soil_moisture<25 because v1 precedes v2"],
+      "formula": "first-match rule hit",
+      "defaults": [],
+      "cropStageDependence": "vegetative only",
+      "rainEtDependence": "none",
+      "materialOutput": "IRRIGATE recommendation",
+      "actionCode": "IRRIGATE -> irrigation.start",
+      "actionParameters": ["expected_effect soil_moisture +15","mapped confidence 0.8"],
+      "writeSideEffects": "agronomy_agent writes recommendation_v1 and decision_recommendation_v1 when enabled",
+      "commercialReachability": true
+    },
+    {
+      "legacyDecisionId": "GEOX-JUDGE-V2-IRRIGATION-REQUIREMENT",
+      "codeRefs": ["apps/server/src/domain/judge/agronomy_judge_v2.ts","apps/server/src/routes/judge_v2.ts"],
+      "reachability": ["ACTIVE_RUNTIME","COMMERCIAL_REACHABLE"],
+      "decisionDomain": "agronomy judge water-deficit result",
+      "cropTargetScope": "judge request target",
+      "requiredInputs": ["same deficit/requirement scientific inputs"],
+      "inputUnitsNormalization": "same skill semantics",
+      "temporalSemantics": "request evaluation",
+      "thresholds": ["same deficit/requirement family"],
+      "formula": "WATER_DEFICIT iff requirement_detected, else PASS, subject to evidence freshness gates",
+      "defaults": [],
+      "cropStageDependence": "via requirement skill",
+      "rainEtDependence": "via requirement skill",
+      "materialOutput": "JudgeResultV2 WATER_DEFICIT/PASS plus net/gross amount",
+      "actionCode": "none",
+      "actionParameters": [],
+      "writeSideEffects": "writes JudgeResultV2, not Recommendation",
+      "commercialReachability": true
+    },
+    {
+      "legacyDecisionId": "GEOX-OLD-AGRONOMY-ENGINE-IRRIGATE",
+      "codeRefs": ["apps/server/src/domain/agronomy/agronomy_engine.ts","apps/server/src/domain/agronomy/crop_catalog.ts","apps/server/src/domain/decision_engine_v1.ts"],
+      "reachability": ["LEGACY_UNREACHABLE"],
+      "decisionDomain": "legacy corn moisture/heat-stress irrigation boolean",
+      "cropTargetScope": "corn catalog first stage",
+      "requiredInputs": ["soil_moisture","canopy_temp","stress_score"],
+      "inputUnitsNormalization": "legacy/raw",
+      "temporalSemantics": "instantaneous",
+      "thresholds": ["soil moisture <35 OR canopy_temp>=32 AND stress_score>=0.45"],
+      "formula": "boolean irrigate",
+      "defaults": ["crop.stages[0]"],
+      "cropStageDependence": "incorrectly fixed to first catalog stage",
+      "rainEtDependence": "none",
+      "materialOutput": "legacy IRRIGATE decision",
+      "actionCode": "IRRIGATE",
+      "actionParameters": [],
+      "writeSideEffects": "no active caller found",
+      "commercialReachability": false
+    },
+    {
+      "legacyDecisionId": "GEOX-WATER-STATE-ESTIMATE-V1",
+      "codeRefs": ["apps/server/src/projections/water_state_estimate_v1.ts"],
+      "reachability": ["LEGACY_UNREACHABLE"],
+      "decisionDomain": "water-state projection classification",
+      "cropTargetScope": "projection",
+      "requiredInputs": ["water state inputs"],
+      "inputUnitsNormalization": "legacy projection semantics",
+      "temporalSemantics": "projection",
+      "thresholds": ["contains legacy <20/15mm classification values"],
+      "formula": "projection only",
+      "defaults": [],
+      "cropStageDependence": "not migration-relevant",
+      "rainEtDependence": "not migration-relevant",
+      "materialOutput": "projection",
+      "actionCode": "none",
+      "actionParameters": [],
+      "writeSideEffects": "no runtime caller found",
+      "commercialReachability": false
+    }
+  ],
+  "excludedFromIrrigationMatrix": [
+    {"id":"tomato_fertilize","reason":"active agronomy-agent rule but fertilizer domain, not irrigation/moisture decision"},
+    {"id":"stage1_action_boundary_v1","reason":"active operational/hydraulic evidence boundary, not crop-water scientific authority"},
+    {"id":"water_flow_inference_v1","reason":"hydraulic effectiveness/leak inference, not agronomic irrigation scientific proposition"},
+    {"id":"AO/task/dispatch/receipt surfaces","reason":"execution/lifecycle authority, outside ADR scientific-decision migration scope"}
+  ],
+  "migrationMatrix": [
+    {
+      "legacyDecisionId":"GEOX-COMMERCIAL-IRRIGATION-DEFICIT-V1",
+      "candidateAdrAuthorityRefs":["knowledge.real-kbs-rge-runtime-v1.two-day-trigger@1","applicability.real-kbs-rge-runtime-v1@1","runtime-binding.real-kbs-rge-runtime-v1@1"],
+      "scientificPropositionMatch":false,
+      "targetMatch":false,
+      "metricSemanticMatch":false,
+      "unitMatch":false,
+      "temporalMatch":false,
+      "actionSemanticMatch":"same broad irrigation domain only",
+      "materialParameterMatch":false,
+      "comparabilityStatus":"SAME_ACTION_DOMAIN_DIFFERENT_SCIENTIFIC_PROPOSITION",
+      "remainingAuthorityGaps":["governed target crop/stage/soil context","source-defined GEOX soil-water metric semantics and units","scientifically defensible irrigation-initiation predicate for that metric/context","temporal persistence/timing semantics"]
+    },
+    {
+      "legacyDecisionId":"GEOX-COMMERCIAL-IRRIGATION-DIAGNOSIS-V1",
+      "candidateAdrAuthorityRefs":["knowledge.real-kbs-rge-runtime-v1.two-day-trigger@1"],
+      "scientificPropositionMatch":false,"targetMatch":false,"metricSemanticMatch":false,"unitMatch":false,"temporalMatch":false,"actionSemanticMatch":"no direct action","materialParameterMatch":false,
+      "comparabilityStatus":"METRIC_SEMANTICS_NOT_EQUIVALENT",
+      "remainingAuthorityGaps":["same governed water metric","target-specific diagnostic threshold authority"]
+    },
+    {
+      "legacyDecisionId":"GEOX-COMMERCIAL-IRRIGATION-REQUIREMENT-V1",
+      "candidateAdrAuthorityRefs":["agronomic-policy-compilation.gold.kbs-2015-rge-irrigation@1"],
+      "scientificPropositionMatch":false,"targetMatch":false,"metricSemanticMatch":false,"unitMatch":"only final irrigation depth uses mm in both worlds","temporalMatch":false,"actionSemanticMatch":"IRRIGATE domain overlap","materialParameterMatch":false,
+      "comparabilityStatus":"MATERIAL_ACTION_NOT_EQUIVALENT",
+      "remainingAuthorityGaps":["root-zone semantics","target soil-water goal","ET0/Kc semantics","rain-credit semantics","application-efficiency authority","gross amount formula authority"]
+    },
+    {
+      "legacyDecisionId":"GEOX-COMMERCIAL-HARD-RULE-MOISTURE-DRY-V1",
+      "candidateAdrAuthorityRefs":["knowledge.real-kbs-rge-runtime-v1.two-day-trigger@1"],
+      "scientificPropositionMatch":false,"targetMatch":false,"metricSemanticMatch":false,"unitMatch":false,"temporalMatch":false,"actionSemanticMatch":"irrigation domain only","materialParameterMatch":false,
+      "comparabilityStatus":"METRIC_SEMANTICS_NOT_EQUIVALENT",
+      "remainingAuthorityGaps":["categorical dry derivation authority","link from fertility-state inference to irrigation-first action"]
+    },
+    {
+      "legacyDecisionId":"GEOX-AGRONOMY-AGENT-CORN-WATER-BALANCE-V1",
+      "candidateAdrAuthorityRefs":["knowledge.real-kbs-rge-runtime-v1.two-day-trigger@1"],
+      "scientificPropositionMatch":false,"targetMatch":false,"metricSemanticMatch":false,"unitMatch":false,"temporalMatch":false,"actionSemanticMatch":"IRRIGATE only","materialParameterMatch":false,
+      "comparabilityStatus":"TARGET_CONTEXT_NOT_EQUIVALENT",
+      "remainingAuthorityGaps":["corn vegetative scientific authority","governed soil_moisture unit/metric semantics","instantaneous trigger authority"]
+    },
+    {
+      "legacyDecisionId":"GEOX-AGRONOMY-AGENT-CORN-WATER-BALANCE-V2",
+      "candidateAdrAuthorityRefs":["knowledge.real-kbs-rge-runtime-v1.two-day-trigger@1"],
+      "scientificPropositionMatch":false,"targetMatch":false,"metricSemanticMatch":false,"unitMatch":false,"temporalMatch":false,"actionSemanticMatch":"IRRIGATE only","materialParameterMatch":false,
+      "comparabilityStatus":"TARGET_CONTEXT_NOT_EQUIVALENT",
+      "remainingAuthorityGaps":["corn vegetative scientific authority","governed soil_moisture unit/metric semantics","effective 20-to-25 first-match semantics authority"]
+    },
+    {
+      "legacyDecisionId":"GEOX-JUDGE-V2-IRRIGATION-REQUIREMENT",
+      "candidateAdrAuthorityRefs":["knowledge.real-kbs-rge-runtime-v1.two-day-trigger@1"],
+      "scientificPropositionMatch":false,"targetMatch":false,"metricSemanticMatch":false,"unitMatch":false,"temporalMatch":false,"actionSemanticMatch":"judge output not irrigation action","materialParameterMatch":false,
+      "comparabilityStatus":"NOT_COMPARABLE",
+      "remainingAuthorityGaps":["judge-specific scientific proposition and evidence semantics"]
+    }
+  ],
+  "selectedMigrationSubject": {
+    "legacyDecisionId":"GEOX-COMMERCIAL-IRRIGATION-DEFICIT-V1",
+    "selectionRationale":["active runtime","commercially reachable","material Recommendation gate","input normalization explicit","decision boundary narrow and observable","source question independently researchable","current ADR model can express the question","does not require synthetic action translation"],
+    "currentDefensibleSameDecisionAuthority":"ABSENT",
+    "currentCandidateStatus":"SAME_ACTION_DOMAIN_DIFFERENT_SCIENTIFIC_PROPOSITION",
+    "exactScientificAuthorityGap":"For the exact governed GEOX field target and its crop/stage/soil/management context, establish a source-faithful irrigation-initiation criterion expressed in the same governed soil-water metric and unit semantics actually supplied to the deficit skill, including the criterion's temporal persistence/timing and its relationship to an irrigation action. The legacy numeric value 0.22 is comparison evidence only and MUST NOT be used as a literature-search target or copied into ADR authority absent independent source support.",
+    "architectureGap":false
+  },
+  "terminalAdjudication": "B",
+  "terminalState": {
+    "firstAdr3MigrationSubject":"SELECTED",
+    "currentDefensibleAuthority":"ABSENT",
+    "exactScientificAuthorityGap":"IDENTIFIED",
+    "architectureAdjudicationRequired":false,
+    "readyForShadowDualRunImplementationAuthorization":false
+  },
+  "writeCeilingPreserved": {
+    "geoxWrites":0,
+    "geoxRuntimeMutation":0,
+    "adrCoreAuthorityMutation":0,
+    "cutover":false,
+    "recommendationPromotion":false,
+    "approvalOperationTaskDispatchExecution":false,
+    "legacyHardcodeLaundering":false
+  }
+}
