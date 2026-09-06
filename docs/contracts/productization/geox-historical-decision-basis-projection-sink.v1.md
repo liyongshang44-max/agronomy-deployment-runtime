@@ -6,10 +6,11 @@ Status: productization transport contract; not architecture authority.
 
 Expose ADR-2 Historical Decision Basis reconstruction to a GEOX-compatible downstream consumer without inventing a new authority object or relabeling `DecisionResult`, `basisDigest`, or the derived inspection projections as authority.
 
-The projection preserves both:
+The projection preserves:
 
-- exact D06 decision semantics across ACT / WAIT / ASK / ABSTAIN; and
-- exact D04 / R03 historical runtime-alternative provenance even when a non-ACT decision has zero `RuntimeBinding` authorities.
+- exact D06 decision semantics across ACT / WAIT / ASK / ABSTAIN;
+- exact D04 / R03 historical runtime-alternative provenance even when a non-ACT decision has zero `RuntimeBinding` authorities; and
+- the exact hash-valid D06 publication AuditEvent that satisfied ADR's existing DecisionResult publication-authority validation.
 
 Public consumer subpath:
 
@@ -39,7 +40,7 @@ historical_basis   = adr.historical-decision-basis.read-model.v1
 authority_claim    = NONE_HISTORICAL_DECISION_BASIS_IS_NON_AUTHORITY_REPRODUCIBILITY_PROJECTION
 ```
 
-The historical read model retains its exact `DecisionResult.ref`, predecessor authority refs, frozen `basisDigest`, and non-authority `authorityGraph` for inspection. Those embedded refs remain references to already-governed ADR authorities; they do not become the transport identity.
+The historical read model retains its exact `DecisionResult.ref`, predecessor authority refs, frozen `basisDigest`, and non-authority inspection projections. Those embedded refs remain references to already-governed ADR authorities; they do not become the transport identity.
 
 ## Exact D06 decision-semantics projection
 
@@ -102,6 +103,47 @@ The projection requires:
 
 `runtimeAlternativeProvenance` is also intentionally outside the frozen `basisDigest`. The original v1 digest basis remains binding-driven and byte-for-byte compatible. The derived `authorityGraph` may contain additional exact refs needed to make non-ACT provenance inspectable; this graph remains a non-authority projection.
 
+## Exact DecisionResult publication audit closure projection
+
+D06 publication authority already requires an exact `PUBLISH_DECISION_RESULT` AuditEvent. The accepted D06 validator checks that the event closes over the exact DecisionResult, exact runtime principal, exact D06 predecessor refs, DecisionRobustness, RuntimeAlternativeSet, decision authority/disposition, InformationRequirement refs, Policy-result hashes, and the explicit nonclaims for human approval and machine execution.
+
+ADR-2 does not create a second publication authority. Instead the publication-aware reconstruction composes the existing read model with the exact event that already satisfies those D06 rules:
+
+```text
+publicationAuditClosure.projectionClass =
+  NONE_NON_AUTHORITY_EXACT_DECISION_RESULT_PUBLICATION_AUDIT_PROJECTION
+
+publicationAuditClosure.decisionResultRef = exact historical DecisionResult.ref
+publicationAuditClosure.auditEvent        = exact validated PUBLISH_DECISION_RESULT AuditEvent
+```
+
+The producer-side reconstruction:
+
+```text
+reconstructHistoricalDecisionBasisWithPublicationAudit(...)
+```
+
+first performs the existing historical basis reconstruction and D06 validation, then requires the selected AuditEvent to satisfy the same D06 publication closure and to reproduce:
+
+```text
+eventHash = semanticHash('AuditEvent', audit payload)
+```
+
+The projected event is evidence of the already-validated publication. `eventHash` is not an `AuthorityRef`, and `publicationAuditClosure` is not publication authority.
+
+The clean npm-offline GEOX consumer can independently verify, without an ADR ledger or snapshot store:
+
+- `AuditEvent.eventHash` from the transported event bytes using ADR semantic-hash v1 domain separation;
+- `AuditEvent.objectRef` equals the transported exact DecisionResult ref;
+- `action = PUBLISH_DECISION_RESULT`;
+- event actor identity equals the event's `decisionResultPrincipal` detail;
+- `inputRefs` equal the exact predecessor-ref set deterministically derived from the transported D06 payload;
+- DecisionRobustness, RuntimeAlternativeSet, decision authority/disposition, InformationRequirement refs, Policy-result hashes, and downstream nonauthority details match the transported D06 semantics.
+
+The clean consumer does **not** possess the D05 authority bytes needed to independently re-prove that the event actor is the historical DecisionRobustness runtime principal. That upstream principal check remains part of ADR's governed D06 validation before the projection is created. This distinction prevents audit-hash verification from being overstated as full upstream authority replay.
+
+`publicationAuditClosure` is intentionally outside the frozen `basisDigest`; adding it does not rewrite the original HistoricalDecisionBasisReadModel digest identity.
+
 ## Verification boundary
 
 The sink verifies:
@@ -126,22 +168,22 @@ The sink verifies:
 - every D04 path is accounted for exactly once against the R03 path universe;
 - the derived authority graph retains all exact AuthorityRefs required by the D04/R03 provenance projection.
 
+The sink's projection hash covers `publicationAuditClosure` when it is present. The clean independent consumer additionally performs the AuditEvent/D06 closure checks listed above. The public sink does not claim that this local hash/ref verification replays the upstream ADR publication authority graph.
+
 The sink does **not** possess an ADR ledger or snapshot store and therefore does not independently replay upstream authority history. Its returned verification classification remains:
 
 ```text
 PROJECTION_HASH_INTEGRITY_ONLY_UPSTREAM_AUTHORITY_REPLAY_NOT_REPERFORMED
 ```
 
-The additive result facts:
+The additive sink result facts:
 
 ```text
 decision_result_semantic_hash_verified   = true
-runtime_alternative_provenance_verified = true
+runtime_alternative_provenance_verified  = true
 ```
 
-mean only that the clean consumer independently verified the transported semantic payloads against their exact D06/D04/R03 identities and checked their internal lineage consistency. They do not mean the consumer replayed publication audit history, provider snapshots, or acquired ADR authority.
-
-Authoritative historical reconstruction remains the responsibility of ADR's `reconstructHistoricalDecisionBasis(...)` read model before transport creation.
+mean only that the transported D06/D04/R03 semantic payloads were verified against their exact identities and checked for internal lineage consistency. Separately, qualification requires the clean consumer to prove the publication AuditEvent hash and exact D06 ref closure. None of these checks means the consumer replayed provider snapshots, D05 publication-principal authority, or acquired ADR authority.
 
 ## GEOX consumer ceiling
 
@@ -167,6 +209,6 @@ It creates no:
 
 This subpath is an explicit public API surface already present in the private `@adr/geox-adapter` consumer artifact. Its public module/export inventory remains governed by `consumer-api-surface.v1.json` and the existing exact compatibility review policy.
 
-The D06 semantics and D04/R03 provenance closures do not add or remove any public module path or exported symbol. They extend the transported historical basis with derived non-authority inspection projections and additive consumer verification facts; the existing public surface inventory therefore remains unchanged.
+The D06 semantics, D04/R03 provenance, and publication-audit closures do not add or remove any public module path or exported symbol. They extend the transported historical basis with derived non-authority inspection evidence; the existing public surface inventory therefore remains unchanged.
 
 The existing `@adr/geox-adapter/decision-result-sink` remains unchanged and continues to require exact `DecisionResult` `authority_ref` identity. It must reject historical-basis `projection_hash` events.

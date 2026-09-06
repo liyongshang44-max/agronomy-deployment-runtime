@@ -7,6 +7,7 @@ on:
       - 'feat/blueprint-historical-decision-basis-geox-projection-sink-*'
       - 'feat/blueprint-historical-decision-basis-d06-semantics-*'
       - 'feat/blueprint-historical-decision-basis-non-act-provenance-*'
+      - 'feat/blueprint-historical-decision-basis-publication-audit-*'
     paths:
       - 'adapters/geox/src/historical-decision-basis-projection-sink.mjs'
       - 'adapters/geox/src/decision-result-sink.mjs'
@@ -67,6 +68,10 @@ jobs:
         run: |
           set -o pipefail
           node acceptance/geox-historical-decision-basis-projection-sink/decision-semantics.mjs | tee "$RUNNER_TEMP/geox-historical-decision-basis-d06-semantics.json"
+      - name: Exact DecisionResult publication audit closure across ACT WAIT ASK ABSTAIN
+        run: |
+          set -o pipefail
+          node acceptance/geox-historical-decision-basis-projection-sink/publication-audit.mjs | tee "$RUNNER_TEMP/geox-historical-decision-basis-publication-audit.json"
       - name: Real World P historical basis clean-consumer projection transport proof
         run: |
           set -o pipefail
@@ -78,6 +83,7 @@ jobs:
           path: |
             ${{ runner.temp }}/geox-historical-decision-basis-projection-sink.json
             ${{ runner.temp }}/geox-historical-decision-basis-d06-semantics.json
+            ${{ runner.temp }}/geox-historical-decision-basis-publication-audit.json
           if-no-files-found: error
           retention-days: 7
           compression-level: 0
