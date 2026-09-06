@@ -11,6 +11,8 @@ function classify(input) {
   const root = input.sources.rootZoneStateBuilder;
   const projection = input.sources.rootZoneStateProjection;
   const vanGenuchten = input.sources.vanGenuchtenModel;
+  const twin = input.sources.twinStateEstimateV2;
+  const config = input.sources.continuationRuntimeConfigV1;
   const legacy = input.sources.legacyIrrigationRequirement;
   const adapter = input.sources.adrGeoxAdapter;
   const adr = input.acceptedAdrConstraints;
@@ -25,20 +27,36 @@ function classify(input) {
     && projection.objectType === 'root_zone_soil_water_state_v1'
     && projection.sourceFactField === 'source_fact_id';
 
-  const rootZoneSupportFactPresent = internalRootZoneStatePresent
-    && root.rootZoneDepthField === 'root_zone_depth_cm';
+  const directDepletionFieldPresent =
+    twin.objectType === 'twin_state_estimate_v1'
+    && twin.directDepletionField === 'depletion_from_field_capacity_mm'
+    && twin.depletionFormula === 'max(0, field_capacity_storage_mm - posterior_storage_mm)'
+    && twin.lineageFields.includes('reality_binding_ref')
+    && twin.lineageFields.includes('evidence_window_ref')
+    && twin.lineageFields.includes('runtime_config_hash')
+    && twin.lineageFields.includes('determinism_hash');
 
-  const directDeficitSemanticPresent =
-    root.directRootZoneDeficitField !== null
-    || vanGenuchten.directRootZoneDeficitSemantic === true;
+  const targetHydraulicAuthorityReady =
+    config.parameterClass !== 'CONTROLLED_SYNTHETIC'
+    && config.fieldCalibrationStatus === 'FIELD_CALIBRATED'
+    && config.rootZonePolicyId !== 'GOVERNED_FIXED_ROOT_ZONE_300MM_V1'
+    && adr.targetSpecificRootDepthAuthorityRequired === true
+    && adr.targetSpecificFieldCapacityAuthorityRequired === true;
+
+  const targetDeficitAdmissible =
+    directDepletionFieldPresent
+    && targetHydraulicAuthorityReady
+    && twin.confidenceStatus !== 'NOT_ESTABLISHED'
+    && !twin.limitations.includes('CONTROLLED_SYNTHETIC')
+    && !twin.limitations.includes('NOT_FIELD_CALIBRATED');
 
   const availableWaterFractionIsDeficit =
     vanGenuchten.availableWaterFractionDefinition === 'root_zone_deficit'
     || vanGenuchten.faoTawDepletionSemantic === true;
 
-  const adapterCanPublishRootZoneState =
-    adapter.rootZoneStateSourceContract !== null
-    || adapter.supportedSourceContracts.includes('root_zone_soil_water_state_v1');
+  const adapterCanPublishTwinDeficit =
+    adapter.twinStateEstimateSourceContract !== null
+    || adapter.supportedSourceContracts.includes('twin_state_estimate_v1');
 
   const legacyPathAdmissible =
     legacy.defaultTargetSoilMoisture !== 0.22
@@ -50,28 +68,43 @@ function classify(input) {
     && adr.mtlS01A09Authorized === true;
 
   let terminalStatus;
-  if (!internalRootZoneStatePresent) {
-    terminalStatus = 'GEOX_ROOT_ZONE_STATE_SOURCE_ABSENT';
-  } else if (directDeficitSemanticPresent && adapterCanPublishRootZoneState) {
-    terminalStatus = 'GEOX_DIRECT_ROOT_ZONE_DEFICIT_SOURCE_CANDIDATE_PRESENT';
+  if (!directDepletionFieldPresent) {
+    terminalStatus = 'GEOX_ROOT_ZONE_DEFICIT_FIELD_ABSENT';
+  } else if (!targetHydraulicAuthorityReady) {
+    terminalStatus = 'ROOT_ZONE_DEFICIT_FIELD_PRESENT_REAL_TARGET_PARAMETER_AUTHORITY_AND_PROVIDER_GAP';
+  } else if (!adapterCanPublishTwinDeficit) {
+    terminalStatus = 'ROOT_ZONE_DEFICIT_TARGET_AUTHORITY_PRESENT_PROVIDER_GAP';
+  } else if (!targetDeficitAdmissible) {
+    terminalStatus = 'ROOT_ZONE_DEFICIT_SOURCE_PRESENT_BUT_NOT_ADMISSIBLE';
   } else {
-    terminalStatus = 'ROOT_ZONE_STATE_PRESENT_DEFICIT_SEMANTIC_AND_PROVIDER_GAP';
+    terminalStatus = 'GEOX_ROOT_ZONE_DEFICIT_SOURCE_CANDIDATE_PRESENT';
   }
 
   return Object.freeze({
     classification: 'NON_AUTHORITY_SOURCE_ADMISSIBILITY_ADJUDICATION',
     internalRootZoneState: internalRootZoneStatePresent ? 'PRESENT' : 'ABSENT',
-    rootZoneSupportFact: rootZoneSupportFactPresent ? 'PRESENT_CM_SOURCE_FACT' : 'ABSENT',
-    directRootZoneDeficitSemantic: directDeficitSemanticPresent ? 'PRESENT' : 'ABSENT',
-    availableWaterFractionSemantic: availableWaterFractionIsDeficit
+    genericAvailableWaterFractionSemantic: availableWaterFractionIsDeficit
       ? 'DEFICIT_EQUIVALENCE_SUPPORTED'
       : 'VAN_GENUCHTEN_EFFECTIVE_SATURATION_NOT_DEFICIT',
-    adrCompatibleRootZoneStateProvider: adapterCanPublishRootZoneState ? 'PRESENT' : 'ABSENT',
+    directRootZoneDepletionField: directDepletionFieldPresent
+      ? 'PRESENT_DEPLETION_FROM_FIELD_CAPACITY_MM'
+      : 'ABSENT',
+    directRootZoneDepletionMetricForm: directDepletionFieldPresent
+      ? 'FIELD_CAPACITY_STORAGE_MINUS_POSTERIOR_STORAGE'
+      : 'ABSENT',
+    targetHydraulicAuthority: targetHydraulicAuthorityReady
+      ? 'TARGET_SPECIFIC_FIELD_CALIBRATED'
+      : 'CONTROLLED_SYNTHETIC_NOT_FIELD_CALIBRATED',
+    targetRootZoneDepthAuthority: config.rootZonePolicyId === 'GOVERNED_FIXED_ROOT_ZONE_300MM_V1'
+      ? 'FIXED_SYNTHETIC_300MM_NOT_REAL_TARGET_AUTHORITY'
+      : 'NON_FIXED_POLICY_PRESENT',
+    targetDeficitAdmissibility: targetDeficitAdmissible ? 'ADMISSIBLE_CANDIDATE' : 'NOT_ADMISSIBLE',
+    adrCompatibleTwinStateProvider: adapterCanPublishTwinDeficit ? 'PRESENT' : 'ABSENT',
     legacyDeficitPath: legacyPathAdmissible ? 'ADMISSIBLE' : 'INADMISSIBLE',
     qualifiedTransformation: transformationAuthorized ? 'AUTHORIZED' : 'NOT_AUTHORIZED',
     targetSemantic: adr.requiredKnowledgeTargetSemantic,
     terminalStatus,
-    nextFrontier: 'GEOX_ROOT_ZONE_STATE_PROVIDER_SEAM_AND_METRIC_COMPARABILITY'
+    nextFrontier: 'GEOX_ROOT_ZONE_DEFICIT_TARGET_PARAMETER_AUTHORITY_AND_PROVIDER_SEAM'
   });
 }
 
@@ -84,28 +117,36 @@ assert.equal(evidence.acceptedAdrConstraints.requiredKnowledgeTargetSemantic, RE
 const result = classify(evidence);
 
 assert.equal(result.internalRootZoneState, 'PRESENT');
-assert.equal(result.rootZoneSupportFact, 'PRESENT_CM_SOURCE_FACT');
-assert.equal(result.directRootZoneDeficitSemantic, 'ABSENT');
-assert.equal(result.availableWaterFractionSemantic, 'VAN_GENUCHTEN_EFFECTIVE_SATURATION_NOT_DEFICIT');
-assert.equal(result.adrCompatibleRootZoneStateProvider, 'ABSENT');
+assert.equal(result.genericAvailableWaterFractionSemantic, 'VAN_GENUCHTEN_EFFECTIVE_SATURATION_NOT_DEFICIT');
+assert.equal(result.directRootZoneDepletionField, 'PRESENT_DEPLETION_FROM_FIELD_CAPACITY_MM');
+assert.equal(result.directRootZoneDepletionMetricForm, 'FIELD_CAPACITY_STORAGE_MINUS_POSTERIOR_STORAGE');
+assert.equal(result.targetHydraulicAuthority, 'CONTROLLED_SYNTHETIC_NOT_FIELD_CALIBRATED');
+assert.equal(result.targetRootZoneDepthAuthority, 'FIXED_SYNTHETIC_300MM_NOT_REAL_TARGET_AUTHORITY');
+assert.equal(result.targetDeficitAdmissibility, 'NOT_ADMISSIBLE');
+assert.equal(result.adrCompatibleTwinStateProvider, 'ABSENT');
 assert.equal(result.legacyDeficitPath, 'INADMISSIBLE');
 assert.equal(result.qualifiedTransformation, 'NOT_AUTHORIZED');
 assert.equal(result.targetSemantic, REQUIRED_TARGET_SEMANTIC);
-assert.equal(result.terminalStatus, 'ROOT_ZONE_STATE_PRESENT_DEFICIT_SEMANTIC_AND_PROVIDER_GAP');
-assert.equal(result.nextFrontier, 'GEOX_ROOT_ZONE_STATE_PROVIDER_SEAM_AND_METRIC_COMPARABILITY');
+assert.equal(result.terminalStatus, 'ROOT_ZONE_DEFICIT_FIELD_PRESENT_REAL_TARGET_PARAMETER_AUTHORITY_AND_PROVIDER_GAP');
+assert.equal(result.nextFrontier, 'GEOX_ROOT_ZONE_DEFICIT_TARGET_PARAMETER_AUTHORITY_AND_PROVIDER_SEAM');
 
+assert.equal(evidence.sources.twinStateEstimateV2.recommendationInputEligible, false);
+assert.equal(evidence.sources.twinStateEstimateV2.actionInputEligible, false);
+assert(evidence.sources.twinStateEstimateV2.limitations.includes('CONTROLLED_SYNTHETIC'));
+assert(evidence.sources.twinStateEstimateV2.limitations.includes('NOT_FIELD_CALIBRATED'));
+assert.equal(evidence.sources.continuationRuntimeConfigV1.rootZoneDepthMm, 300);
+assert.equal(evidence.sources.continuationRuntimeConfigV1.fieldCapacityFraction, 0.3);
+assert.equal(evidence.sources.continuationRuntimeConfigV1.wiltingPointFraction, 0.12);
+assert.equal(evidence.sources.continuationRuntimeConfigV1.parameterClass, 'CONTROLLED_SYNTHETIC');
+assert.equal(evidence.sources.continuationRuntimeConfigV1.fieldCalibrationStatus, 'NOT_FIELD_CALIBRATED');
 assert.equal(evidence.sources.legacyIrrigationRequirement.defaultTargetSoilMoisture, 0.22);
-assert.equal(evidence.sources.legacyIrrigationRequirement.defaultRootZoneDepthMm, 300);
 assert.equal(evidence.sources.vanGenuchtenModel.availableWaterFractionDefinition, 'effective_saturation');
-assert.equal(evidence.sources.rootZoneStateProjection.boundary.includes('no domain calculation'), true);
-assert.equal(evidence.sources.rootZoneStateProjection.boundary.includes('customer exposure'), true);
 assert.equal(evidence.sources.adrGeoxAdapter.deviceObservationExplicitExclusion, 'soil_moisture -> root-zone state');
-assert.equal(evidence.sources.adrGeoxAdapter.supportedSourceContracts.includes('root_zone_soil_water_state_v1'), false);
+assert.equal(evidence.sources.adrGeoxAdapter.supportedSourceContracts.includes('twin_state_estimate_v1'), false);
 
 const serialized = JSON.stringify(result);
 for (const forbidden of [
   'DIRECTLY_APPLICABLE',
-  'QualifiedTransformation',
   'RuntimeBinding',
   'DecisionResult',
   'PRODUCTION_CUTOVER'
@@ -114,4 +155,4 @@ for (const forbidden of [
 }
 
 console.log(JSON.stringify(result, null, 2));
-console.log('ADR-3B GEOX root-zone state source admissibility: PASS');
+console.log('ADR-3B GEOX root-zone deficit source admissibility: PASS');
