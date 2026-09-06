@@ -16,6 +16,7 @@ import { validateRuntimeProfileAuthority } from '../../runtime-profile/src/index
 export const HISTORICAL_DECISION_BASIS_READ_MODEL_VERSION = 'adr.historical-decision-basis.read-model.v1';
 export const HISTORICAL_DECISION_BASIS_AUTHORITY_CLASS = 'NONE_NON_AUTHORITY_RECONSTRUCTION_READ_MODEL';
 export const HISTORICAL_DECISION_BASIS_DIGEST_AUTHORITY = 'NONE_DIGEST_IS_REPRODUCIBILITY_EVIDENCE_NOT_AUTHORITY_REF';
+export const HISTORICAL_DECISION_BASIS_GRAPH_CLASS = 'NONE_NON_AUTHORITY_EXACT_REF_GRAPH_PROJECTION';
 
 export class HistoricalDecisionBasisError extends Error {
   constructor(code, message) {
@@ -40,6 +41,12 @@ function compareUtf16(left, right) {
   if (left < right) return -1;
   if (left > right) return 1;
   return 0;
+}
+
+function uniqueRefs(values) {
+  const map = new Map();
+  for (const ref of values.filter(Boolean)) map.set(refKey(ref), ref);
+  return [...map.values()].sort((left, right) => compareUtf16(refKey(left), refKey(right)));
 }
 
 function uniqueByRef(values) {
@@ -212,15 +219,11 @@ export function reconstructHistoricalDecisionBasis(input = {}) {
   });
 
   const applicabilityWorlds = uniqueByRef(runtimeWorlds.flatMap((world) => world.applicabilityWorlds));
-  const contextManifestRefs = [...new Map(applicabilityWorlds.map((world) => [
-    refKey(world.contextManifestRef),
-    world.contextManifestRef
-  ])).values()].sort((left, right) => compareUtf16(refKey(left), refKey(right)));
-  const knowledgeRefs = [...new Map(applicabilityWorlds.map((world) => [
-    refKey(world.knowledgeRef),
-    world.knowledgeRef
-  ])).values()].sort((left, right) => compareUtf16(refKey(left), refKey(right)));
+  const contextManifestRefs = uniqueRefs(applicabilityWorlds.map((world) => world.contextManifestRef));
+  const knowledgeRefs = uniqueRefs(applicabilityWorlds.map((world) => world.knowledgeRef));
 
+  // Keep the v1 digest basis semantically compatible with the first product slice.
+  // authorityGraph below is a derived inspection projection and is intentionally outside basisDigest.
   const basis = {
     readModelVersion: HISTORICAL_DECISION_BASIS_READ_MODEL_VERSION,
     authorityClass: HISTORICAL_DECISION_BASIS_AUTHORITY_CLASS,
@@ -256,10 +259,102 @@ export function reconstructHistoricalDecisionBasis(input = {}) {
     }
   };
 
+  const bindingPayloads = runtimeWorlds.map((world) => ledger.resolve(world.ref).semanticPayload);
+  const applicabilityPayloads = applicabilityWorlds.map((world) => ledger.resolve(world.ref).semanticPayload);
+  const contextWorlds = contextManifestRefs.map((contextManifestRef) => {
+    const payload = ledger.resolve(contextManifestRef).semanticPayload;
+    return {
+      contextManifestRef,
+      targetRef: payload.targetRef,
+      logicalTime: payload.logicalTime,
+      evidenceCutoff: payload.evidenceCutoff,
+      replayClass: payload.replayClass,
+      datumRefs: uniqueRefs(payload.datumRefs ?? []),
+      resolvedReferenceReceiptRefs: uniqueRefs(payload.resolvedReferenceReceiptRefs ?? [])
+    };
+  });
+  const applicabilityInspectionWorlds = applicabilityWorlds.map((world, index) => ({
+    applicabilityAssessmentRef: world.ref,
+    decisionProblemRef: applicabilityPayloads[index].decisionProblemRef,
+    knowledgeRetrievalResultRef: applicabilityPayloads[index].knowledgeRetrievalResultRef,
+    knowledgeRef: applicabilityPayloads[index].knowledgeRef,
+    knowledgeOriginContextRefs: uniqueRefs(applicabilityPayloads[index].knowledgeOriginContextRefs ?? []),
+    contextManifestRef: applicabilityPayloads[index].contextManifestRef,
+    transportStatus: applicabilityPayloads[index].transportStatus,
+    scientificUseStatus: applicabilityPayloads[index].scientificUseStatus,
+    decisionRelevance: applicabilityPayloads[index].decisionRelevance,
+    runtimeUse: applicabilityPayloads[index].runtimeUse,
+    limitations: applicabilityPayloads[index].limitations,
+    conflicts: applicabilityPayloads[index].conflicts,
+    missingContextSemanticIds: applicabilityPayloads[index].missingContextSemanticIds,
+    unsupportedConstraintCodes: applicabilityPayloads[index].unsupportedConstraintCodes
+  }));
+
+  const decisionRefs = uniqueRefs([
+    decisionResult.record.ref,
+    resultPayload.decisionProblemRef,
+    robustness.record.ref,
+    alternativeSet.record.ref,
+    resultPayload.decisionAuthority?.authorityRef
+  ]);
+  const runtimeRefs = uniqueRefs([
+    ...runtimeWorlds.map((world) => world.ref),
+    ...runtimeWorlds.map((world) => world.runtimeEligibilityRef),
+    ...runtimeWorlds.map((world) => world.deploymentRef),
+    ...runtimeWorlds.map((world) => world.runtimeProfileRef)
+  ]);
+  const contextRefs = uniqueRefs([
+    ...contextManifestRefs,
+    ...contextWorlds.flatMap((world) => world.datumRefs),
+    ...contextWorlds.flatMap((world) => world.resolvedReferenceReceiptRefs)
+  ]);
+  const knowledgeAuthorityRefs = uniqueRefs([
+    ...knowledgeRefs,
+    ...applicabilityWorlds.map((world) => world.retrievalRef),
+    ...applicabilityWorlds.map((world) => world.ref),
+    ...applicabilityWorlds.map((world) => world.knowledgeReleaseRef),
+    ...applicabilityPayloads.flatMap((payload) => payload.knowledgeOriginContextRefs ?? [])
+  ]);
+  const specificationRefs = uniqueRefs([
+    ...bindingPayloads.flatMap((payload) => payload.transformationBindings ?? []),
+    ...bindingPayloads.flatMap((payload) => payload.modelBindings ?? []),
+    ...bindingPayloads.flatMap((payload) => payload.policyBindings ?? []),
+    ...(resultPayload.policyResultRefs ?? []).map((item) => item.policyRef)
+  ]);
+  const implementationRefs = uniqueRefs(
+    runtimeWorlds.flatMap((world) => world.executionWorlds.flatMap((item) => [
+      item.implementationRef,
+      item.implementationConformanceRef
+    ]))
+  );
+  const allAuthorityRefs = uniqueRefs([
+    ...decisionRefs,
+    ...runtimeRefs,
+    ...contextRefs,
+    ...knowledgeAuthorityRefs,
+    ...specificationRefs,
+    ...implementationRefs
+  ]);
+
+  const authorityGraph = {
+    projectionClass: HISTORICAL_DECISION_BASIS_GRAPH_CLASS,
+    entryRef: decisionResult.record.ref,
+    decisionRefs,
+    runtimeRefs,
+    contextRefs,
+    knowledgeRefs: knowledgeAuthorityRefs,
+    specificationRefs,
+    implementationRefs,
+    allAuthorityRefs,
+    contextWorlds,
+    applicabilityWorlds: applicabilityInspectionWorlds
+  };
+
   const output = {
     ...cloneCanonicalValue(basis),
     basisDigest: semanticHash('HistoricalDecisionBasisReadModel', basis),
-    basisDigestAuthority: HISTORICAL_DECISION_BASIS_DIGEST_AUTHORITY
+    basisDigestAuthority: HISTORICAL_DECISION_BASIS_DIGEST_AUTHORITY,
+    authorityGraph: cloneCanonicalValue(authorityGraph)
   };
   return deepFreeze(output);
 }
