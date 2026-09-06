@@ -1,0 +1,89 @@
+{
+  "contractVersion": "adr.adr3b-irrigation-metric-comparability.v1",
+  "classification": "NON_AUTHORITY_MIGRATION_QUALIFICATION_EVIDENCE",
+  "authorityEffect": "NONE",
+  "cutoverAuthorized": false,
+  "sourceHeads": {
+    "adr": "77e505e8f9cbfd33983b270d9170c8bbd8c617ae",
+    "geox": "f41dde8d44de95e71748e756e048e0166c1916b7"
+  },
+  "migrationSubject": "GEOX-COMMERCIAL-IRRIGATION-DEFICIT-V1",
+  "scientificAuthorityCandidate": {
+    "sourceRef": {
+      "kind": "Source",
+      "logicalId": "source.adr3b-csu-crop-water-use-growth-stages",
+      "version": "1",
+      "semanticHash": "sha256:b1c4ab8e4d040d90b23af3f7111bdd29e30eace0faf9592a787161cd0f718e82"
+    },
+    "sourceArtifactRef": {
+      "kind": "SourceArtifact",
+      "logicalId": "artifact.adr3b-csu-mad-root-zone-excerpt",
+      "version": "1",
+      "semanticHash": "sha256:f054aaa9e7d3904c06eb61246f9d54139e9371b111f10e36ceae3899980dd25f"
+    },
+    "claimRef": {
+      "kind": "Claim",
+      "logicalId": "claim.adr3b-csu-mad-root-zone-definition",
+      "version": "1",
+      "semanticHash": "sha256:93eece2055d5883869374297d9379e8170405a8a890f0148e1dd7e6909c415aa"
+    },
+    "sourceContextRef": {
+      "kind": "SourceContext",
+      "logicalId": "source-context.adr3b-csu-mad-root-zone-definition",
+      "version": "1",
+      "semanticHash": "sha256:4eef943b885dd96544e44bd7f13cacf3fcefa5fc6aabc0ab086124c95f941cad"
+    },
+    "scientificQualificationDecisionRef": {
+      "kind": "ScientificQualificationDecision",
+      "logicalId": "qualification.adr3b-csu-mad-root-zone-definition",
+      "version": "1",
+      "semanticHash": "sha256:e997501b9cc6d592e128b6f58f5f77acdbae5e61cbb06e7b77222dfb5d5d955f"
+    },
+    "qualifiedKnowledgeCandidateRef": {
+      "kind": "QualifiedKnowledge",
+      "logicalId": "knowledge.adr3b-csu-mad-root-zone-definition",
+      "version": "1",
+      "semanticHash": "sha256:0148aebbebcfb6c58a59ff8a9017baa93c42f3752133ad6e9d5c3a52fd6789b4"
+    },
+    "governedScientificSemantics": {
+      "decisionDomain": "irrigation scheduling",
+      "metric": "management allowable depletion",
+      "spatialSupport": "root zone",
+      "absolutePointVwcThresholdAuthority": false
+    }
+  },
+  "legacyObservedSemantics": {
+    "decisionDomain": "irrigation deficit detection",
+    "formula": "deficit_detected = finite(soil_moisture) && soil_moisture < 0.22",
+    "metric": "normalized soil_moisture numeric fraction",
+    "unitSemantics": "dimensionless numeric fraction after route normalization",
+    "spatialSupport": "no governed root-zone aggregation in selected skill input",
+    "temporalSemantics": "instantaneous current input",
+    "cropSpecificTrigger": false
+  },
+  "comparabilityAdjudication": {
+    "broadActionDomainMatch": true,
+    "scientificPropositionMatch": false,
+    "metricSemanticMatch": false,
+    "spatialSupportMatch": false,
+    "unitMatch": false,
+    "temporalMatch": false,
+    "targetContextSufficient": false,
+    "materialParameterMatch": false,
+    "comparabilityStatus": "METRIC_SEMANTICS_NOT_EQUIVALENT",
+    "reasonCodes": [
+      "POINT_SOIL_MOISTURE_FRACTION_IS_NOT_ROOT_ZONE_DEPLETION",
+      "ROOT_ZONE_SPATIAL_SUPPORT_NOT_GOVERNED_IN_SELECTED_GEOX_INPUT",
+      "DEPLETION_REFERENCE_STATE_NOT_PRESENT_IN_SELECTED_GEOX_INPUT",
+      "INSTANTANEOUS_POINT_INPUT_DOES_NOT_ESTABLISH_ROOT_ZONE_DEPLETION_STATE",
+      "LEGACY_0_22_HAS_NO_AUTHORITY_IN_SCIENTIFIC_CANDIDATE"
+    ]
+  },
+  "terminalState": {
+    "sameDecisionAuthorityEstablished": false,
+    "decisionResultParityAuthorized": false,
+    "architectureGap": false,
+    "measurementContextAuthorityGap": true,
+    "nextFrontier": "GOVERNED_ROOT_ZONE_SOIL_WATER_STATE_CONTEXT"
+  }
+}
