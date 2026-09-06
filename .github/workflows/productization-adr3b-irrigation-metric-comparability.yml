@@ -1,0 +1,31 @@
+name: ADR Productization — ADR-3B Irrigation Metric Comparability
+
+on:
+  push:
+    branches:
+      - 'test/adr3b-irrigation-metric-comparability*'
+    paths:
+      - 'acceptance/adr3b-irrigation-metric-comparability/**'
+      - '.github/workflows/productization-adr3b-irrigation-metric-comparability.yml'
+  pull_request:
+    paths:
+      - 'acceptance/adr3b-irrigation-metric-comparability/**'
+      - '.github/workflows/productization-adr3b-irrigation-metric-comparability.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  adr3b_irrigation_metric_comparability:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Report runtime
+        run: node --version
+      - name: Qualify ADR-3B irrigation metric comparability
+        run: node acceptance/adr3b-irrigation-metric-comparability/run.mjs
