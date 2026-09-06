@@ -1,0 +1,31 @@
+name: ADR Productization — ADR-3B Root-Zone Soil-Water Scientific Authority
+
+on:
+  push:
+    branches:
+      - 'test/adr3b-root-zone-soil-water-authority*'
+    paths:
+      - 'acceptance/adr3b-root-zone-soil-water-authority/**'
+      - '.github/workflows/productization-adr3b-root-zone-soil-water-authority.yml'
+  pull_request:
+    paths:
+      - 'acceptance/adr3b-root-zone-soil-water-authority/**'
+      - '.github/workflows/productization-adr3b-root-zone-soil-water-authority.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  adr3b_root_zone_soil_water_scientific_authority:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Report runtime
+        run: node --version
+      - name: Qualify ADR-3B root-zone soil-water scientific authority
+        run: node acceptance/adr3b-root-zone-soil-water-authority/run.mjs
