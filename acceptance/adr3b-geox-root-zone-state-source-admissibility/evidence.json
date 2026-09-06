@@ -46,6 +46,55 @@
       "directRootZoneDeficitSemantic": false,
       "faoTawDepletionSemantic": false
     },
+    "twinStateEstimateV2": {
+      "path": "apps/server/src/runtime/twin_runtime/assimilated_continuation_record_set_builder_v2.ts",
+      "blobSha": "bc8d669f2208ede188eb236b8a5220a411537645",
+      "objectType": "twin_state_estimate_v1",
+      "stateKind": "POSTERIOR",
+      "directDepletionField": "depletion_from_field_capacity_mm",
+      "depletionFormula": "max(0, field_capacity_storage_mm - posterior_storage_mm)",
+      "stateFields": [
+        "root_zone_storage_mm",
+        "root_zone_vwc_fraction",
+        "available_water_fraction",
+        "depletion_from_field_capacity_mm"
+      ],
+      "lineageFields": [
+        "reality_binding_ref",
+        "reality_binding_hash",
+        "evidence_window_ref",
+        "transition_ref",
+        "assimilation_update_ref",
+        "runtime_config_ref",
+        "runtime_config_hash",
+        "determinism_hash",
+        "lineage_id",
+        "revision_id"
+      ],
+      "limitations": [
+        "CONTROLLED_SYNTHETIC",
+        "NOT_FIELD_CALIBRATED",
+        "NO_CALIBRATED_CONFIDENCE_MODEL"
+      ],
+      "confidenceStatus": "NOT_ESTABLISHED",
+      "recommendationInputEligible": false,
+      "actionInputEligible": false
+    },
+    "continuationRuntimeConfigV1": {
+      "path": "apps/server/src/domain/twin_runtime/continuation_runtime_config_v1.ts",
+      "blobSha": "ede903aa7ad7cd9de1f6482805442d9da4f5bf37",
+      "rootZonePolicyId": "GOVERNED_FIXED_ROOT_ZONE_300MM_V1",
+      "soilHydraulicBindingRef": "soil_hydraulic_config_c8_v1",
+      "rootZoneDepthMm": 300,
+      "wiltingPointFraction": 0.12,
+      "wiltingPointStorageMm": 36,
+      "fieldCapacityFraction": 0.3,
+      "fieldCapacityStorageMm": 90,
+      "saturationFraction": 0.45,
+      "saturationStorageMm": 135,
+      "parameterClass": "CONTROLLED_SYNTHETIC",
+      "fieldCalibrationStatus": "NOT_FIELD_CALIBRATED"
+    },
     "legacyIrrigationRequirement": {
       "path": "apps/server/src/domain/agronomy/skills/irrigation/irrigation_requirement_skill_v1.ts",
       "blobSha": "64f74e0d62d7eae6332c026725625593e7f53276",
@@ -62,6 +111,7 @@
         "crop_context_v1@1",
         "device_observation_index_v1"
       ],
+      "twinStateEstimateSourceContract": null,
       "rootZoneStateSourceContract": null,
       "deviceObservationSemantic": "soil.volumetric_water_content",
       "deviceObservationExplicitExclusion": "soil_moisture -> root-zone state"
@@ -71,6 +121,8 @@
     "dec0034Main": "b8d1bf5908b9946e2236e2e53182885065eace25",
     "requiredKnowledgeTargetSemantic": "soil.root_zone_deficit",
     "legacyThresholdAuthority": "PROHIBITED",
+    "targetSpecificRootDepthAuthorityRequired": true,
+    "targetSpecificFieldCapacityAuthorityRequired": true,
     "qualifiedTransformationAvailable": false,
     "mtlS01A09Authorized": false
   }
