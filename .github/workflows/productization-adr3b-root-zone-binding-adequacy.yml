@@ -1,0 +1,31 @@
+name: ADR Productization — ADR-3B Root-Zone Measurement Binding Adequacy
+
+on:
+  push:
+    branches:
+      - 'test/adr3b-root-zone-binding-adequacy*'
+    paths:
+      - 'acceptance/adr3b-root-zone-binding-adequacy/**'
+      - '.github/workflows/productization-adr3b-root-zone-binding-adequacy.yml'
+  pull_request:
+    paths:
+      - 'acceptance/adr3b-root-zone-binding-adequacy/**'
+      - '.github/workflows/productization-adr3b-root-zone-binding-adequacy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  adr3b_root_zone_binding_adequacy:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Report runtime
+        run: node --version
+      - name: Audit ADR-3B root-zone measurement binding adequacy
+        run: node acceptance/adr3b-root-zone-binding-adequacy/run.mjs
