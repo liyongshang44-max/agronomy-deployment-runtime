@@ -1,0 +1,372 @@
+{
+  "classification": "NON_AUTHORITY_CROSS_REPO_TARGET_PARAMETER_AUTHORITY_EVIDENCE",
+  "auditedAt": "2026-09-06",
+  "authorizedFrontier": "ADR-3C_GEOX_ROOT_ZONE_DEFICIT_TARGET_PARAMETER_AUTHORITY_AND_PROVIDER_SEAM",
+  "baselines": {
+    "adrProtectedMain": "b968f927d82bfc40d0d8d1328c6c76fc6ea51037",
+    "geoxProtectedMain": "ca2a96d131bc1d3b2935e7b7460752bdbf79f9bd"
+  },
+  "targetSemantic": {
+    "contextSemanticId": "soil.root_zone_deficit",
+    "sourceObjectType": "twin_state_estimate_v1",
+    "sourceField": "depletion_from_field_capacity_mm",
+    "sourceFormula": "max(0, field_capacity_storage_mm - posterior_storage_mm)",
+    "unit": "mm",
+    "transformationForDirectProjection": "NONE",
+    "requiredParametersForExactDepletionInterpretation": [
+      "field_capacity_storage_mm",
+      "root_zone_support_used_to_define_storage"
+    ],
+    "wiltingPointRequiredForDirectDepletionInterpretation": false,
+    "wiltingPointStillPartOfTwinHydraulicSnapshot": true
+  },
+  "geoxEvidence": {
+    "configurationMatrix": {
+      "path": "docs/digital_twin/mcft/GEOX-MCFT-00-CONFIGURATION-BINDING-MATRIX.json",
+      "blobSha": "c04c6805ab79c715781b99f8fbcf997fae3a8c48",
+      "determinismHash": "sha256:381ef166454c7b698c6641fadc5d08019fecff127e9529a4c58a1f09d9e1fef5",
+      "status": "FROZEN",
+      "acceptanceStatus": "COMPLETE",
+      "artifactClass": "GOVERNANCE_INPUT",
+      "canonicalPersistence": false,
+      "hydraulicDefinition": {
+        "configurationSourceId": "mcft_soil_hydraulic_config_c8_v1",
+        "configurationSourceKind": "VERSIONED_CONFIG_ARTIFACT",
+        "configurationVersion": 1,
+        "definitionAuthority": "GEOX-MCFT-00-CONFIGURATION-BINDING-MATRIX.json",
+        "provenanceClass": "CONTROLLED_SYNTHETIC_GOVERNED_CONFIG",
+        "proofScope": "GOVERNANCE_IDENTITY_ONLY",
+        "configurationSemanticHash": "sha256:51498f4fe332fd0fc9a432e49c8845b4aca3012285f2d7965de2c44d4b92db14",
+        "parameters": {
+          "root_zone_depth_mm": {"value": 300, "unit": "mm", "status": "CONFIGURED"},
+          "wilting_point_fraction": {"value": 0.12, "unit": "fraction", "status": "CONFIGURED"},
+          "field_capacity_fraction": {"value": 0.3, "unit": "fraction", "status": "CONFIGURED"},
+          "saturation_fraction": {"value": 0.45, "unit": "fraction", "status": "CONFIGURED"},
+          "wilting_point_storage_mm": {"value": 36, "unit": "mm", "status": "DERIVED_CONFIGURED"},
+          "field_capacity_storage_mm": {"value": 90, "unit": "mm", "status": "DERIVED_CONFIGURED"},
+          "saturation_storage_mm": {"value": 135, "unit": "mm", "status": "DERIVED_CONFIGURED"}
+        },
+        "limitations": [
+          "controlled synthetic",
+          "not field-calibrated",
+          "formula execution belongs to later phases"
+        ]
+      },
+      "hydraulicBinding": {
+        "bindingId": "soil_hydraulic_config_c8_v1",
+        "sourceRole": "SOIL_HYDRAULIC_CONFIGURATION",
+        "configurationSourceId": "mcft_soil_hydraulic_config_c8_v1",
+        "epistemicClass": "CONFIGURED",
+        "spatialSupport": "ZONE",
+        "verticalSupport": "ROOT_ZONE_OR_CROP_PROFILE",
+        "quantityKind": "SOIL_HYDRAULIC_PARAMETER_SET",
+        "applicability": {
+          "zone_id": "zone_mcft_c8_water_001",
+          "root_zone_definition_id": "rz_c8_0_300mm_v1"
+        },
+        "fieldId": null,
+        "seasonId": null,
+        "cropCode": null,
+        "biologicalStageBinding": null,
+        "timeSemantics": {
+          "effective_from": "MCFT_RUNTIME_CONFIG_ACTIVATION_BOUNDARY",
+          "mutable_during_tick": false
+        },
+        "effectiveTo": null,
+        "availableAt": null,
+        "availabilitySemantics": {
+          "resolved_before_tick_compute": true
+        },
+        "parameterProvenance": "CONTROLLED_SYNTHETIC_GOVERNED_CONFIG",
+        "eligibleDownstreamUses": ["MCFT_RUNTIME_CONFIG_COMPILE_INPUT"],
+        "forbiddenDownstreamUses": ["REALITY_OBSERVATION", "DIRECT_STATE_EVIDENCE"],
+        "limitations": ["configured authority only", "no physical formula implemented"],
+        "determinismHash": "sha256:3d6e3d8b52a9736ff6898487cacbbffdf71578cca693754ab34cb484e5bc3082"
+      },
+      "cropWaterUseBinding": {
+        "bindingId": "crop_water_use_config_c8_v1",
+        "configurationSourceId": "mcft_crop_water_use_corn_v1",
+        "applicability": {
+          "crop_code": "corn",
+          "season_id": "season_2026_c8_corn",
+          "zone_id": "zone_mcft_c8_water_001",
+          "governed_root_zone_bottom_mm": 300
+        },
+        "parameterProvenance": "CONTROLLED_SYNTHETIC_GOVERNED_CONFIG",
+        "rootDepthMapping": [
+          {"stage_code": "INITIAL", "crop_root_depth_mm": 150, "effective_model_root_depth_mm": 150},
+          {"stage_code": "DEVELOPMENT", "crop_root_depth_mm": 300, "effective_model_root_depth_mm": 300},
+          {"stage_code": "MID", "crop_root_depth_mm": 600, "effective_model_root_depth_mm": 300},
+          {"stage_code": "LATE", "crop_root_depth_mm": 600, "effective_model_root_depth_mm": 300}
+        ],
+        "effectiveModelRootDepthPolicy": "MIN_CROP_ROOT_DEPTH_AND_GOVERNED_ROOT_ZONE_V1",
+        "limitations": [
+          "configured authority only",
+          "effective model root depth capped by governed root zone"
+        ]
+      }
+    },
+    "realityBinding": {
+      "path": "docs/digital_twin/mcft/GEOX-MCFT-00-REALITY-BINDING.json",
+      "blobSha": "a1f831fa07811099184a249301e1401442449e3f",
+      "bindingId": "mcft_rb_bf1da664164a4fedda249bcb",
+      "determinismHash": "sha256:bf1da664164a4fedda249bcb0e330c1af2083173a52bd704f01eac3ad277ba4f",
+      "scope": {
+        "tenant_id": "tenantA",
+        "project_id": "projectA",
+        "group_id": "groupA",
+        "field_id": "field_c8_demo",
+        "season_id": "season_2026_c8_corn",
+        "zone_id": "zone_mcft_c8_water_001"
+      },
+      "cropBinding": {
+        "crop_code": "corn",
+        "season_id": "season_2026_c8_corn",
+        "forbidden_identity_fields": [
+          "crop_stage",
+          "root_depth_dynamic_state",
+          "canopy_state",
+          "crop_stress_state",
+          "biomass",
+          "phenology_estimate"
+        ]
+      },
+      "rootZoneBinding": {
+        "root_zone_definition_id": "rz_c8_0_300mm_v1",
+        "top_depth_mm": 0,
+        "bottom_depth_mm": 300,
+        "total_depth_mm": 300,
+        "depth_reference": "BELOW_GROUND_SURFACE"
+      },
+      "realityScopeClass": "CONTROLLED_SYNTHETIC_REPLAY_PROXY",
+      "fieldTruthMode": "CONTROLLED_REPLAY_FIELD_PROXY",
+      "geometryTruthStatus": "CONTROLLED_SYNTHETIC",
+      "realFieldPilotStatus": "NOT_CLAIMED",
+      "productionStatus": "NOT_CLAIMED",
+      "limitations": [
+        "controlled synthetic Replay proxy only",
+        "geometry not surveyed",
+        "configuration controlled synthetic"
+      ]
+    },
+    "c8ConfigurationContext": {
+      "path": "fixtures/mcft/water_state/replay_v1/configuration_context.json",
+      "blobSha": "2a9db8d8fa08a78f99dfe44aec9f29bfe1f400ee",
+      "contextClass": "CONFIGURATION_DERIVED_CONTEXT",
+      "evidenceRecord": false,
+      "coverageStart": "2026-06-01T00:00:00.000Z",
+      "coverageEndExclusive": "2026-07-01T00:00:00.000Z",
+      "cropStageScheduleHasEffectiveIntervals": true,
+      "limitations": [
+        "controlled synthetic configuration schedule",
+        "not observed Evidence",
+        "not field-verified phenology",
+        "effective model root depth capped by governed 300 mm root zone"
+      ],
+      "determinismHash": "sha256:2287c71e983b1ba529e49939f025d9b035e09e195a5effc994fe54b4ef7863ce"
+    },
+    "formalCropContextV3": {
+      "path": "docs/digital_twin/mcft/cap_09/GEOX-MCFT-CAP-09-S6-FORMAL-CROP-CONTEXT-AUTHORITY-V3.json",
+      "blobSha": "4bc1f8dda6559c8951db915132172b65469affcb",
+      "scope": {
+        "site_id": "KBS_MCSE_T4R1",
+        "field_id": "field_kbs_mcse_t4r1",
+        "season_id": "season_2026_corn",
+        "zone_id": "zone_kbs_mcse_t4r1_crop_formal_v1",
+        "crop": "corn"
+      },
+      "scopeMatchesC8Twin": false,
+      "observedBiologicalStageClaimed": false,
+      "vOrRStageTruthClaimed": false,
+      "mayCrossAuthorizeC8HydraulicParameters": false
+    },
+    "continuationAuthorityAdapter": {
+      "path": "apps/server/src/runtime/twin_runtime/continuation_runtime_config_authority_adapter_v1.ts",
+      "blobSha": "f6e98c118b403a91d4e37925d06c20c6bfe05320",
+      "behavior": [
+        "requires exact predecessor/reality/source/configuration hashes",
+        "requires exact runtime scope equality",
+        "requires exactly one SOIL_HYDRAULIC_CONFIGURATION binding",
+        "requires exact hydraulic binding ref and determinism hash",
+        "requires exact numeric equality for root-zone depth, wilting point, field capacity and saturation parameters"
+      ],
+      "physicalTruthQualificationAdded": false,
+      "parameterScopePromotionAdded": false,
+      "parameterAvailabilityTimestampAdded": false
+    },
+    "runtimeConfigCompileService": {
+      "path": "apps/server/src/runtime/twin_runtime/runtime_config_compile_service_v1.ts",
+      "blobSha": "75f8570922214e57b189add9c14beecf41824558",
+      "behavior": [
+        "binds exact reality/configuration/source matrix hashes",
+        "binds unique soil hydraulic configuration ref",
+        "carries scope into twin_runtime_config_v1"
+      ],
+      "limitations": [
+        "CONTROLLED_SYNTHETIC",
+        "NOT_FIELD_CALIBRATED",
+        "NO_ACTIVE_MODEL_ACTIVATION"
+      ]
+    },
+    "continuationRuntimeConfig": {
+      "path": "apps/server/src/domain/twin_runtime/continuation_runtime_config_v1.ts",
+      "blobSha": "ede903aa7ad7cd9de1f6482805442d9da4f5bf37",
+      "rootZonePolicyId": "GOVERNED_FIXED_ROOT_ZONE_300MM_V1",
+      "soilHydraulicBindingRef": "soil_hydraulic_config_c8_v1",
+      "soilHydraulicBindingHash": "sha256:3d6e3d8b52a9736ff6898487cacbbffdf71578cca693754ab34cb484e5bc3082",
+      "rootZoneDepthMm": 300,
+      "wiltingPointFraction": 0.12,
+      "fieldCapacityFraction": 0.3,
+      "fieldCapacityStorageMm": 90,
+      "parameterClass": "CONTROLLED_SYNTHETIC",
+      "fieldCalibrationStatus": "NOT_FIELD_CALIBRATED"
+    },
+    "twinStateEstimateBuilderV2": {
+      "path": "apps/server/src/runtime/twin_runtime/assimilated_continuation_record_set_builder_v2.ts",
+      "blobSha": "bc8d669f2208ede188eb236b8a5220a411537645",
+      "objectType": "twin_state_estimate_v1",
+      "stateKind": "POSTERIOR",
+      "scopeInheritedFromRuntimeOperation": true,
+      "logicalTimeAndAsOfBound": true,
+      "realityBindingRefAndHashPreserved": true,
+      "runtimeConfigRefAndHashPreserved": true,
+      "evidenceWindowRefPreserved": true,
+      "transitionRefPreserved": true,
+      "assimilationUpdateRefPreserved": true,
+      "determinismHashPreserved": true,
+      "lineageIdAndRevisionIdPreserved": true,
+      "depletionField": "depletion_from_field_capacity_mm",
+      "depletionFormula": "max(0, field_capacity_storage_mm - posterior_storage_mm)",
+      "confidence": {
+        "status": "NOT_ESTABLISHED",
+        "reason_code": "NO_CALIBRATED_CONFIDENCE_MODEL"
+      },
+      "useEligibility": {
+        "state_valid": true,
+        "posterior_chain_eligible": true,
+        "forecast_source_eligible": true,
+        "recommendation_input_eligible": false,
+        "action_input_eligible": false
+      }
+    },
+    "inventory": {
+      "soilHydraulicConfigurationBindingCountInFrozenMatrix": 1,
+      "discoveredAlternateC8TargetSpecificHydraulicAuthority": false,
+      "discoveredFieldOrZoneMeasuredFieldCapacityAuthorityForC8": false,
+      "discoveredCropSeasonStageSpecificRealRootDepthAuthorityForC8": false,
+      "discoveredExplicitParameterAvailableAtForC8HydraulicAuthority": false,
+      "discoveredParameterUncertaintyOrConfidenceForC8HydraulicAuthority": false
+    }
+  },
+  "admissibilityDimensions": {
+    "rootZoneDepth": {
+      "sourcePresent": true,
+      "value": 300,
+      "authorityClass": "CONTROLLED_SYNTHETIC_GOVERNED_CONFIG",
+      "proofScope": "GOVERNANCE_IDENTITY_ONLY",
+      "measurementOrEstimationMethod": "NONE_CONFIGURED_CONSTANT",
+      "fieldBinding": "INDIRECT_RUNTIME_SCOPE_ONLY",
+      "zoneBinding": "EXPLICIT_ZONE_AND_ROOT_ZONE_DEFINITION",
+      "cropBinding": "NOT_IN_HYDRAULIC_BINDING",
+      "seasonBinding": "NOT_IN_HYDRAULIC_BINDING",
+      "biologicalOrRootingStageBinding": "NOT_IN_HYDRAULIC_BINDING",
+      "effectiveInterval": "NOT_TARGET_SPECIFIC_ONLY_RUNTIME_CONFIG_ACTIVATION_BOUNDARY",
+      "availableAt": "NOT_EXPLICIT",
+      "uncertainty": "NOT_REPORTED_FOR_PARAMETER",
+      "validationStatus": "GOVERNANCE_IDENTITY_ONLY_NOT_REAL_TARGET_VALIDATION",
+      "authorityRefsAndHashes": "PRESENT",
+      "admissibility": "NOT_ADMISSIBLE"
+    },
+    "fieldCapacity": {
+      "sourcePresent": true,
+      "fraction": 0.3,
+      "storageMm": 90,
+      "storageStatus": "DERIVED_CONFIGURED",
+      "representation": "DIRECT_AGGREGATE_CONFIGURED_FRACTION_AND_STORAGE_NOT_LAYERED_SOURCE",
+      "authorityClass": "CONTROLLED_SYNTHETIC_GOVERNED_CONFIG",
+      "proofScope": "GOVERNANCE_IDENTITY_ONLY",
+      "measurementOrEstimationMethod": "NONE_CONFIGURED_CONSTANT",
+      "fieldBinding": "INDIRECT_RUNTIME_SCOPE_ONLY",
+      "zoneBinding": "EXPLICIT_ZONE_AND_ROOT_ZONE_DEFINITION",
+      "cropBinding": "NOT_IN_HYDRAULIC_BINDING",
+      "seasonBinding": "NOT_IN_HYDRAULIC_BINDING",
+      "effectiveInterval": "NOT_TARGET_SPECIFIC_ONLY_RUNTIME_CONFIG_ACTIVATION_BOUNDARY",
+      "availableAt": "NOT_EXPLICIT",
+      "uncertainty": "NOT_REPORTED_FOR_PARAMETER",
+      "validationStatus": "GOVERNANCE_IDENTITY_ONLY_NOT_REAL_TARGET_VALIDATION",
+      "authorityRefsAndHashes": "PRESENT",
+      "admissibility": "NOT_ADMISSIBLE"
+    },
+    "wiltingPoint": {
+      "sourcePresent": true,
+      "fraction": 0.12,
+      "requiredForDirectDepletionInterpretation": false,
+      "authorityClass": "CONTROLLED_SYNTHETIC_GOVERNED_CONFIG",
+      "admissibility": "NOT_REQUIRED_TO_DECIDE_DIRECT_DEPLETION_PROVIDER"
+    },
+    "verticalSupport": {
+      "configuredSupport": "EXACT_0_TO_300MM_ROOT_ZONE_DEFINITION",
+      "configuredRootZoneDefinitionId": "rz_c8_0_300mm_v1",
+      "targetSpecificBiologicalRootingSupportAuthority": "ABSENT",
+      "admissibility": "NOT_ADMISSIBLE_AS_REAL_TARGET_VERTICAL_SUPPORT"
+    },
+    "targetIdentityAndScope": {
+      "runtimeScope": "EXACT_C8_CONTROLLED_REPLAY_SCOPE",
+      "parameterBindingScope": "ZONE_AND_ROOT_ZONE_DEFINITION_ONLY",
+      "fieldCropSeasonStageParameterAuthority": "INCOMPLETE",
+      "realityClass": "CONTROLLED_SYNTHETIC_REPLAY_PROXY",
+      "admissibility": "NOT_ADMISSIBLE_AS_REAL_TARGET_SCOPE"
+    },
+    "temporalAndDecisionTime": {
+      "runtimeLogicalTimeBinding": "EXACT",
+      "parameterEffectiveTime": "RELATIVE_RUNTIME_CONFIG_ACTIVATION_BOUNDARY_ONLY",
+      "parameterAvailableAt": "NOT_EXPLICIT",
+      "decisionTimeVisibility": "RESOLVED_BEFORE_TICK_COMPUTE_RELATIVE_ONLY",
+      "cropStageEffectiveIntervals": "PRESENT_BUT_CONTROLLED_SYNTHETIC_NOT_OBSERVED_EVIDENCE",
+      "admissibility": "NOT_ADMISSIBLE_FOR_CONTEXTDATUM_AVAILABLE_AT_PRESERVATION"
+    },
+    "provenance": {
+      "identityRefsAndHashes": "COMPLETE",
+      "sourceProvenanceClass": "CONTROLLED_SYNTHETIC_GOVERNED_CONFIG",
+      "physicalTargetTruthProvenance": "ABSENT",
+      "measurementOrEstimationProvenance": "ABSENT_CONFIGURED_CONSTANT_ONLY",
+      "admissibility": "NOT_ADMISSIBLE"
+    },
+    "calibrationValidationUncertainty": {
+      "fieldCalibrationStatusObserved": "NOT_FIELD_CALIBRATED",
+      "fieldCalibrationStatusIsSoleAdmissibilityRule": false,
+      "governanceProofScope": "GOVERNANCE_IDENTITY_ONLY",
+      "parameterUncertainty": "NOT_REPORTED",
+      "stateConfidence": "NOT_ESTABLISHED_NO_CALIBRATED_CONFIDENCE_MODEL",
+      "admissibilityReason": "FAILS_REAL_TARGET_PROVENANCE_SCOPE_TIME_METHOD_AND_UNCERTAINTY_REQUIREMENTS_INDEPENDENT_OF_LABEL_STRING"
+    },
+    "twinStateParameterBinding": {
+      "configurationMatrixHash": "EXACT",
+      "hydraulicBindingRefAndHash": "EXACT",
+      "numericParameterEquality": "EXACT",
+      "runtimeConfigRefAndHash": "EXACT",
+      "stateEstimateLineage": "COMPLETE",
+      "bindingResult": "EXACT_TO_INADMISSIBLE_SYNTHETIC_PARAMETER_AUTHORITY"
+    },
+    "qualifiedTransformation": {
+      "authorized": false,
+      "used": false,
+      "layeredFieldCapacityAggregationPerformedByAdr": false,
+      "providerHiddenCalculationAllowed": false
+    }
+  },
+  "acceptedConstraints": {
+    "adrMayModifyMcftRuntimeConfig": false,
+    "adrMayReplaceSoilHydraulicConfig": false,
+    "adrMayInventRootZoneDepth": false,
+    "adrMayInventFieldCapacity": false,
+    "adrMayRelabelControlledSyntheticAsReal": false,
+    "adrMayCreateFieldCalibrationEvidence": false,
+    "adrMayCreateQualifiedTransformation": false,
+    "adrMayActivateMtlS01": false,
+    "adrMayActivateA09": false,
+    "adrMayWriteDecisionResult": false,
+    "adrMayPerformGeoxProductionCutover": false,
+    "providerImplementationAllowedOnlyIfAllTargetAuthorityConditionsPass": true
+  }
+}

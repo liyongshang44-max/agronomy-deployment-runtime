@@ -1,0 +1,60 @@
+name: ADR Productization — ADR-3C Target Parameter Authority
+
+on:
+  push:
+    branches:
+      - 'test/adr3c-target-parameter-authority-admissibility*'
+    paths:
+      - 'acceptance/adr3c-target-parameter-authority-admissibility/**'
+      - '.github/workflows/productization-adr3c-target-parameter-authority-admissibility.yml'
+  pull_request:
+    paths:
+      - 'acceptance/adr3c-target-parameter-authority-admissibility/**'
+      - '.github/workflows/productization-adr3c-target-parameter-authority-admissibility.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  adr3c_target_parameter_authority:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Report runtime
+        run: node --version
+      - name: Enforce bounded ADR-3C Phase-A package
+        env:
+          EXPECTED_BASE: b968f927d82bfc40d0d8d1328c6c76fc6ea51037
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only "$EXPECTED_BASE" HEAD | sort)"
+          printf '%s\n' "$changed"
+          count="$(printf '%s\n' "$changed" | sed '/^$/d' | wc -l | tr -d ' ')"
+          test "$count" = "3"
+          while IFS= read -r path; do
+            case "$path" in
+              .github/workflows/productization-adr3c-target-parameter-authority-admissibility.yml|acceptance/adr3c-target-parameter-authority-admissibility/evidence.json|acceptance/adr3c-target-parameter-authority-admissibility/run.mjs)
+                ;;
+              '')
+                ;;
+              *)
+                echo "ADR3C_UNBOUNDED_WRITE:$path" >&2
+                exit 1
+                ;;
+            esac
+          done <<< "$changed"
+          if printf '%s\n' "$changed" | grep -E '^(adapters/geox/|src/|packages/|contracts/)' >/dev/null; then
+            echo 'ADR3C_PROVIDER_OR_RUNTIME_WRITE_FORBIDDEN_IN_PATH_B' >&2
+            exit 1
+          fi
+      - name: Re-run accepted ADR-3B source admissibility predecessor
+        run: node acceptance/adr3b-geox-root-zone-state-source-admissibility/run.mjs
+      - name: Adjudicate ADR-3C target parameter authority
+        run: node acceptance/adr3c-target-parameter-authority-admissibility/run.mjs
