@@ -1,0 +1,31 @@
+name: ADR Productization — GEOX Root-Zone State Source Admissibility
+
+on:
+  push:
+    branches:
+      - 'test/adr3b-geox-root-zone-state-source-admissibility*'
+    paths:
+      - 'acceptance/adr3b-geox-root-zone-state-source-admissibility/**'
+      - '.github/workflows/productization-adr3b-geox-root-zone-state-source-admissibility.yml'
+  pull_request:
+    paths:
+      - 'acceptance/adr3b-geox-root-zone-state-source-admissibility/**'
+      - '.github/workflows/productization-adr3b-geox-root-zone-state-source-admissibility.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  geox_root_zone_state_source_admissibility:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Report runtime
+        run: node --version
+      - name: Adjudicate GEOX root-zone state source admissibility
+        run: node acceptance/adr3b-geox-root-zone-state-source-admissibility/run.mjs
