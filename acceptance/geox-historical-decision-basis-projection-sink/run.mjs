@@ -19,7 +19,7 @@ import {
 import { consumeAdrDecisionResultForGeox } from '../../adapters/geox/src/decision-result-sink.mjs';
 import { buildGeoxConsumerReleaseBundle } from '../../adapters/geox/scripts/build-consumer-release-bundle.mjs';
 import { verifyGeoxConsumerReleaseBundle } from '../../adapters/geox/scripts/verify-consumer-release-bundle.mjs';
-import { reconstructHistoricalDecisionBasisWithPublicationAudit } from '../../packages/historical-decision-basis/src/publication-audit.mjs';
+import { reconstructHistoricalDecisionBasisExitGate } from '../../packages/historical-decision-basis/src/exit-gate.mjs';
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, { encoding: 'utf8', ...options });
@@ -51,7 +51,7 @@ const decisionResults = ledger.exportSnapshot().records.filter((record) => recor
 assert.equal(decisionResults.length, 1, 'qualified World P must expose exactly one historical DecisionResult');
 
 const beforeReadCount = ledger.exportSnapshot().records.length;
-const historicalBasis = reconstructHistoricalDecisionBasisWithPublicationAudit({
+const historicalBasis = reconstructHistoricalDecisionBasisExitGate({
   ledger,
   snapshotStore,
   decisionResultRef: decisionResults[0].ref
@@ -63,6 +63,18 @@ assert.equal(
 );
 assert.deepEqual(historicalBasis.publicationAuditClosure.decisionResultRef, historicalBasis.decisionResultRef);
 assert.equal(historicalBasis.publicationAuditClosure.auditEvent.action, 'PUBLISH_DECISION_RESULT');
+assert.equal(
+  historicalBasis.exitGateClosure.projectionClass,
+  'NONE_NON_AUTHORITY_ADR2_EXIT_GATE_INSPECTION_PROJECTION'
+);
+assert.deepEqual(
+  historicalBasis.exitGateClosure.decisionProblemWorld.decisionProblemRef,
+  historicalBasis.decisionProblemRef
+);
+assert.ok(historicalBasis.exitGateClosure.knowledgeWorlds.length > 0);
+assert.ok(historicalBasis.exitGateClosure.applicabilityAssessmentWorlds.length > 0);
+assert.ok(historicalBasis.exitGateClosure.runtimeBindingWorlds.length > 0);
+assert.ok(historicalBasis.exitGateClosure.executionArtifactWorlds.length > 0);
 
 const event = createAdrHistoricalDecisionBasisProjectionEventForGeox({
   eventId: 'geox-historical-decision-basis-world-p-1',
@@ -90,10 +102,6 @@ assert.equal(
   'PROJECTION_HASH_INTEGRITY_ONLY_UPSTREAM_AUTHORITY_REPLAY_NOT_REPERFORMED'
 );
 
-// Keep this probe isolated to transport-integrity semantics. decisionDisposition is now
-// cross-checked against exact D06 semantics and would correctly fail before the projection
-// hash gate. A syntactically valid but altered basisDigest changes the transport payload
-// without triggering a different semantic-consistency boundary first.
 const tamperedEvent = clone(event);
 tamperedEvent.payload.historical_basis.basisDigest = `sha256:${'0'.repeat(64)}`;
 assert.notEqual(tamperedEvent.payload.historical_basis.basisDigest, historicalBasis.basisDigest);
@@ -230,6 +238,13 @@ try {
   assert.equal(consumerEvidence.publicationAuditEventHash, historicalBasis.publicationAuditClosure.auditEvent.eventHash);
   assert.equal(consumerEvidence.publicationAuditHashVerified, true);
   assert.equal(consumerEvidence.publicationAuditD06RefClosureVerified, true);
+  assert.equal(consumerEvidence.decisionProblemSemanticHashVerified, true);
+  assert.equal(consumerEvidence.contextSemanticHashesVerified, true);
+  assert.equal(consumerEvidence.retrievalApplicabilitySemanticHashesVerified, true);
+  assert.equal(consumerEvidence.runtimeBindingSemanticHashesVerified, true);
+  assert.equal(consumerEvidence.decisionRobustnessSemanticHashVerified, true);
+  assert.equal(consumerEvidence.executionArtifactSemanticHashesVerified, true);
+  assert.equal(consumerEvidence.authorityGraphExitGateClosureVerified, true);
   assert.equal(consumerEvidence.fieldActionable, false);
   assert.equal(consumerEvidence.dispatchAuthorized, false);
 
@@ -242,6 +257,7 @@ try {
     projectionHash: event.projection_hash,
     authorityGraphRefCount: historicalBasis.authorityGraph.allAuthorityRefs.length,
     publicationAuditEventHash: historicalBasis.publicationAuditClosure.auditEvent.eventHash,
+    exitGateAuthorityRefCount: consumerEvidence.exitGateAuthorityRefCount,
     packageName: release.packageName,
     packageVersion: release.packageVersion,
     packageTarballHash: release.packageTarballHash,
@@ -255,6 +271,8 @@ try {
     runtimeAlternativeProvenanceVerified: true,
     decisionResultPublicationAuditHashVerifiedByIndependentConsumer: true,
     decisionResultPublicationAuditD06RefClosureVerifiedByIndependentConsumer: true,
+    adr2ExitGateSemanticsVerifiedByIndependentConsumer: true,
+    authorityGraphExitGateClosureVerifiedByIndependentConsumer: true,
     tamperedProjectionRejected: true,
     authorityPromotionRejected: true,
     authorityIdentitySmugglingRejected: true,

@@ -38,6 +38,35 @@ function canonicalRefs(values) {
   return [...map.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, ref]) => ref);
 }
 
+function isAuthorityRef(value) {
+  return value
+    && typeof value === 'object'
+    && !Array.isArray(value)
+    && typeof value.kind === 'string'
+    && typeof value.logicalId === 'string'
+    && typeof value.version === 'string'
+    && typeof value.semanticHash === 'string';
+}
+
+function collectAuthorityRefs(value, output = []) {
+  if (isAuthorityRef(value)) {
+    output.push(value);
+    return output;
+  }
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectAuthorityRefs(item, output));
+    return output;
+  }
+  if (value && typeof value === 'object') {
+    Object.values(value).forEach((item) => collectAuthorityRefs(item, output));
+  }
+  return output;
+}
+
+function verifySemanticRef(ref, payload, kind = ref.kind) {
+  assert.equal(adrSemanticHash(kind, payload), ref.semanticHash, `${kind} semantic bytes must reproduce exact ref`);
+}
+
 function decisionResultExactRefs(payload) {
   const refs = [
     payload.decisionProblemRef,
@@ -91,6 +120,122 @@ function verifyPublicationAuditClosure(historicalBasis) {
   return eventHash;
 }
 
+function verifyExitGateClosure(historicalBasis) {
+  const closure = historicalBasis.exitGateClosure;
+  assert.equal(closure.projectionClass, 'NONE_NON_AUTHORITY_ADR2_EXIT_GATE_INSPECTION_PROJECTION');
+  assert.equal(closure.authorityClaim, 'NONE_EXIT_GATE_PROJECTION_IS_INSPECTION_EVIDENCE_NOT_AUTHORITY');
+  assert.equal(
+    closure.reconstructionClassification,
+    'EXACT_FROZEN_AUTHORITY_WORLD_WITH_CONTEXT_REPLAY_CLASS_PRESERVED_NO_LATEST_LOOKUP'
+  );
+
+  const a01 = closure.decisionProblemWorld;
+  verifySemanticRef(a01.decisionProblemRef, a01.semanticPayload, 'DecisionProblem');
+  assert.equal(refKey(a01.decisionProblemRef), refKey(historicalBasis.decisionProblemRef));
+  assert.equal(a01.semanticPayload.decisionAuthorityMode, historicalBasis.decisionSemantics.semanticPayload.decisionAuthority.mode);
+  assert.ok(Date.parse(a01.semanticPayload.decisionDeadline) >= Date.parse(historicalBasis.decidedAt));
+
+  for (const context of closure.contextEvidenceWorlds) {
+    verifySemanticRef(context.contextManifestRef, context.semanticPayload, 'ContextManifest');
+    assert.equal(refKey(context.semanticPayload.decisionProblemRef), refKey(a01.decisionProblemRef));
+    for (const datum of context.datumWorlds) verifySemanticRef(datum.contextDatumRef, datum.semanticPayload, 'ContextDatum');
+    for (const item of context.receiptWorlds) {
+      verifySemanticRef(item.resolvedReferenceReceiptRef, item.receiptSemanticPayload, 'ResolvedContextDatumReceipt');
+      verifySemanticRef(item.authorizedContextReferenceRef, item.authorizedContextReferenceSemanticPayload, 'AuthorizedContextReference');
+      verifySemanticRef(item.resolvedContextDatumRef, item.resolvedContextDatumSemanticPayload, 'ContextDatum');
+    }
+  }
+
+  for (const release of closure.knowledgeReleaseWorlds) {
+    verifySemanticRef(release.knowledgeReleaseRef, release.semanticPayload, 'KnowledgeRelease');
+    assert.equal(canonicalJson(release.semanticPayload.memberRefs), canonicalJson(release.memberRefs));
+  }
+  let scientificQualificationDecisionCount = 0;
+  for (const knowledge of closure.knowledgeWorlds) {
+    verifySemanticRef(knowledge.knowledgeRef, knowledge.semanticPayload, knowledge.knowledgeKind);
+    if (knowledge.knowledgeKind === 'QualifiedKnowledge') {
+      verifySemanticRef(knowledge.claimRef, knowledge.claimSemanticPayload, 'Claim');
+      verifySemanticRef(knowledge.sourceContextRef, knowledge.sourceContextSemanticPayload, 'SourceContext');
+      verifySemanticRef(knowledge.sourceRef, knowledge.sourceSemanticPayload, 'Source');
+      verifySemanticRef(
+        knowledge.sourceFaithfulReviewRef,
+        knowledge.sourceFaithfulReviewSemanticPayload,
+        'SourceFaithfulReviewDecision'
+      );
+      for (const qualification of knowledge.scientificQualificationDecisionWorlds) {
+        verifySemanticRef(qualification.ref, qualification.semanticPayload, 'ScientificQualificationDecision');
+        scientificQualificationDecisionCount += 1;
+      }
+    } else {
+      assert.equal(knowledge.knowledgeKind, 'DerivedKnowledge');
+      verifySemanticRef(
+        knowledge.derivedKnowledgeContextRef,
+        knowledge.derivedKnowledgeContextSemanticPayload,
+        'DerivedKnowledgeContext'
+      );
+      verifySemanticRef(knowledge.derivationMethodRef, knowledge.derivationMethodSemanticPayload, 'DerivationMethod');
+      for (const input of knowledge.inputQualifiedKnowledgeWorlds) {
+        verifySemanticRef(input.knowledgeRef, input.semanticPayload, 'QualifiedKnowledge');
+      }
+    }
+  }
+  assert.ok(scientificQualificationDecisionCount > 0, 'World P scientific qualification authority must be independently inspectable');
+
+  for (const retrieval of closure.knowledgeRetrievalWorlds) {
+    verifySemanticRef(retrieval.knowledgeRetrievalResultRef, retrieval.semanticPayload, 'KnowledgeRetrievalResult');
+    assert.equal(refKey(retrieval.semanticPayload.decisionProblemRef), refKey(a01.decisionProblemRef));
+  }
+  for (const applicability of closure.applicabilityAssessmentWorlds) {
+    verifySemanticRef(applicability.applicabilityAssessmentRef, applicability.semanticPayload, 'ApplicabilityAssessment');
+    assert.equal(refKey(applicability.semanticPayload.decisionProblemRef), refKey(a01.decisionProblemRef));
+  }
+  for (const binding of closure.runtimeBindingWorlds) {
+    verifySemanticRef(binding.runtimeBindingRef, binding.semanticPayload, 'RuntimeBinding');
+    for (const field of [
+      'knowledgeBindings',
+      'transformationBindings',
+      'modelBindings',
+      'policyBindings',
+      'implementationBindings',
+      'calibrationBindings'
+    ]) assert.ok(Array.isArray(binding.semanticPayload[field]));
+  }
+
+  verifySemanticRef(
+    closure.decisionRobustnessWorld.decisionRobustnessRef,
+    closure.decisionRobustnessWorld.semanticPayload,
+    'DecisionRobustness'
+  );
+  if (closure.policyWorld) verifySemanticRef(closure.policyWorld.policyRef, closure.policyWorld.semanticPayload, 'Policy');
+  for (const execution of closure.executionArtifactWorlds) {
+    verifySemanticRef(
+      execution.implementationConformanceRef,
+      execution.implementationConformanceSemanticPayload,
+      'ImplementationConformance'
+    );
+    verifySemanticRef(execution.specificationRef, execution.specificationSemanticPayload, execution.specificationRef.kind);
+    verifySemanticRef(execution.implementationRef, execution.implementationSemanticPayload, 'Implementation');
+  }
+
+  const graphKeys = new Set(historicalBasis.authorityGraph.allAuthorityRefs.map(refKey));
+  const closureRefs = canonicalRefs(collectAuthorityRefs(closure));
+  for (const ref of closureRefs) assert.ok(graphKeys.has(refKey(ref)), `authorityGraph missing ${ref.kind}/${ref.logicalId}`);
+
+  return {
+    decisionProblemSemanticHashVerified: true,
+    contextSemanticHashesVerified: true,
+    knowledgeReleaseSemanticHashVerified: true,
+    scientificKnowledgeProvenanceSemanticHashesVerified: true,
+    scientificQualificationDecisionCount,
+    retrievalApplicabilitySemanticHashesVerified: true,
+    runtimeBindingSemanticHashesVerified: true,
+    decisionRobustnessSemanticHashVerified: true,
+    executionArtifactSemanticHashesVerified: true,
+    authorityGraphExitGateClosureVerified: true,
+    exitGateAuthorityRefCount: closureRefs.length
+  };
+}
+
 assert.equal('authority_ref' in event, false, 'historical basis projection transport must not masquerade as an AuthorityRef event');
 const projection = consumeAdrHistoricalDecisionBasisProjectionForGeox({
   event,
@@ -124,6 +269,7 @@ assert.equal(
 );
 const publicationAuditEventHash = verifyPublicationAuditClosure(projection.historical_basis);
 assert.equal(publicationAuditEventHash, receipt.expectedPublicationAuditEventHash);
+const exitGateEvidence = verifyExitGateClosure(projection.historical_basis);
 
 console.log(JSON.stringify({
   ok: true,
@@ -140,6 +286,7 @@ console.log(JSON.stringify({
   publicationAuditEventHash,
   publicationAuditHashVerified: true,
   publicationAuditD06RefClosureVerified: true,
+  ...exitGateEvidence,
   consumerDisposition: projection.consumer_disposition,
   fieldActionable: projection.field_actionable,
   dispatchAuthorized: projection.dispatch_authorized,

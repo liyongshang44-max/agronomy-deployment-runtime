@@ -9,8 +9,9 @@ Expose ADR-2 Historical Decision Basis reconstruction to a GEOX-compatible downs
 The projection preserves:
 
 - exact D06 decision semantics across ACT / WAIT / ASK / ABSTAIN;
-- exact D04 / R03 historical runtime-alternative provenance even when a non-ACT decision has zero `RuntimeBinding` authorities; and
-- the exact hash-valid D06 publication AuditEvent that satisfied ADR's existing DecisionResult publication-authority validation.
+- exact D04 / R03 historical runtime-alternative provenance even when a non-ACT decision has zero `RuntimeBinding` authorities;
+- the exact hash-valid D06 publication AuditEvent that satisfied ADR's existing DecisionResult publication-authority validation; and
+- an ADR-2 exit-gate inspection projection that exposes the exact validated historical authority semantics needed to inspect the decision scope, context, knowledge provenance, applicability, runtime profile/binding, robustness, and material implementation world from one exact DecisionResult ref.
 
 Public consumer subpath:
 
@@ -140,9 +141,64 @@ The clean npm-offline GEOX consumer can independently verify, without an ADR led
 - `inputRefs` equal the exact predecessor-ref set deterministically derived from the transported D06 payload;
 - DecisionRobustness, RuntimeAlternativeSet, decision authority/disposition, InformationRequirement refs, Policy-result hashes, and downstream nonauthority details match the transported D06 semantics.
 
-The clean consumer does **not** possess the D05 authority bytes needed to independently re-prove that the event actor is the historical DecisionRobustness runtime principal. That upstream principal check remains part of ADR's governed D06 validation before the projection is created. This distinction prevents audit-hash verification from being overstated as full upstream authority replay.
+The clean consumer does **not** independently re-prove the upstream D05 runtime-principal publication authority. That governed principal check remains part of ADR's D06 validation before the projection is created. This distinction prevents audit-hash verification from being overstated as full upstream authority replay.
 
 `publicationAuditClosure` is intentionally outside the frozen `basisDigest`; adding it does not rewrite the original HistoricalDecisionBasisReadModel digest identity.
+
+## ADR-2 exit-gate inspection projection
+
+The historical reconstruction also exposes the validated authority semantics required to inspect the frozen decision-time world without replacing any authority with a new object:
+
+```text
+exitGateClosure.projectionClass =
+  NONE_NON_AUTHORITY_ADR2_EXIT_GATE_INSPECTION_PROJECTION
+
+exitGateClosure.reconstructionClassification =
+  EXACT_FROZEN_AUTHORITY_WORLD_WITH_CONTEXT_REPLAY_CLASS_PRESERVED_NO_LATEST_LOOKUP
+
+exitGateClosure.authorityClaim =
+  NONE_EXIT_GATE_PROJECTION_IS_INSPECTION_EVIDENCE_NOT_AUTHORITY
+```
+
+Producer construction uses:
+
+```text
+reconstructHistoricalDecisionBasisExitGate(...)
+```
+
+which first performs the accepted historical basis, D06, D04/R03, and publication-audit reconstruction, then reuses the existing historical validators for the exact refs reachable from that world. It does not perform a latest/current lookup and it does not publish any authority record.
+
+The exit-gate projection exposes, where present in the exact historical world:
+
+- `decisionProblemWorld`: exact A01 `DecisionProblem` semantic payload, including `decisionAuthorityMode`, `targetRef`, logical time, horizon, objective, action space, constraints, use purpose/class, and decision deadline, plus its exact creation authorization decision;
+- `contextEvidenceWorlds`: exact `ContextManifest` semantic payload, exact `ContextDatum` membership, exact resolved-receipt/reference/datum semantic payloads, evidence cutoff, logical time, and replay classification;
+- `knowledgeReleaseWorlds`: exact K06 `KnowledgeRelease`, publication decision, the complete exact release-member set, and historical lifecycle result;
+- `knowledgeWorlds`: historical provenance for every exact KnowledgeRelease member as well as every knowledge authority present on the D04/R03/D01 decision paths. Qualified knowledge carries exact Claim, SourceContext, Source, SourceFaithfulReviewDecision, and ScientificQualificationDecision semantics. Derived knowledge carries exact DerivedKnowledgeContext, DerivationMethod, and input QualifiedKnowledge provenance;
+- `knowledgeRetrievalWorlds`: exact A07 `KnowledgeRetrievalResult`, Deployment semantics, and retained runtime authorization decision;
+- `applicabilityAssessmentWorlds`: exact A08 `ApplicabilityAssessment` semantic payload, preserving the frozen transport/scientific-use/runtime-use basis;
+- `runtimeProfileWorld`: exact historical `RuntimeProfile` semantic payload already validated through the D05/D04 decision world;
+- `runtimeBindingWorlds`: exact D01 `RuntimeBinding` semantic payload, selected alternative, and every frozen binding class. Unused binding classes remain explicit empty arrays rather than disappearing from the historical representation;
+- `executionArtifactWorlds`: exact `Specification`, `Implementation`, and `ImplementationConformance` semantic payloads when material to an included D01 execution binding;
+- `decisionRobustnessWorld`: exact D05 `DecisionRobustness` semantic payload, including coverage assessment, action evaluations, signature groups, action-changing diagnostics, robustness class, and historical replay mode;
+- `policyWorld`: exact Policy semantic payload when the D06 decision authority is ADR policy-backed.
+
+All exact AuthorityRefs carried by `exitGateClosure` are added only to the derived `authorityGraph.allAuthorityRefs` inspection set. They are not added to the original v1 digest basis.
+
+The frozen v1 identity remains:
+
+```text
+basisDigest = semanticHash('HistoricalDecisionBasisReadModel', original v1 basis)
+```
+
+For the qualified World P used by ADR-2 acceptance, the unchanged digest remains:
+
+```text
+sha256:103e0136fa7d0d3ad3ef8ff0e2746369a3b294a428d68e54b741dbeec8c50d45
+```
+
+The clean npm-offline consumer independently recomputes semantic hashes from transported bytes for the exact DecisionProblem, ContextManifest/ContextDatum/receipt/reference records, KnowledgeRelease, scientific knowledge provenance chain, KnowledgeRetrievalResult, ApplicabilityAssessment, RuntimeBinding, DecisionRobustness, Policy, Specification, Implementation, and ImplementationConformance evidence. It also verifies that every exact AuthorityRef carried by the exit-gate projection is present in the transported derived authority graph. Producer-side qualification additionally verifies the exact RuntimeProfile semantic identity and complete KnowledgeRelease-member provenance coverage.
+
+That independent verification does **not** mean the consumer has re-executed all upstream authorization, provider-retention, conflict-governance, qualification, or publication validators. In particular, the consumer does not possess the ADR snapshot store needed to replay retained provider bytes, and transported semantic-hash verification does not confer any authority role. Full governed replay remains the responsibility of ADR before transport construction.
 
 ## Verification boundary
 
@@ -168,7 +224,7 @@ The sink verifies:
 - every D04 path is accounted for exactly once against the R03 path universe;
 - the derived authority graph retains all exact AuthorityRefs required by the D04/R03 provenance projection.
 
-The sink's projection hash covers `publicationAuditClosure` when it is present. The clean independent consumer additionally performs the AuditEvent/D06 closure checks listed above. The public sink does not claim that this local hash/ref verification replays the upstream ADR publication authority graph.
+The projection hash covers `publicationAuditClosure` and `exitGateClosure` when they are present. Qualification additionally requires the clean independent consumer to verify the publication AuditEvent/D06 closure and the transported exit-gate semantic hashes/ref graph described above. The public sink does not claim that these local hash/ref checks replay the upstream ADR authority graph.
 
 The sink does **not** possess an ADR ledger or snapshot store and therefore does not independently replay upstream authority history. Its returned verification classification remains:
 
@@ -176,14 +232,14 @@ The sink does **not** possess an ADR ledger or snapshot store and therefore does
 PROJECTION_HASH_INTEGRITY_ONLY_UPSTREAM_AUTHORITY_REPLAY_NOT_REPERFORMED
 ```
 
-The additive sink result facts:
+The additive sink result facts remain:
 
 ```text
 decision_result_semantic_hash_verified   = true
 runtime_alternative_provenance_verified  = true
 ```
 
-mean only that the transported D06/D04/R03 semantic payloads were verified against their exact identities and checked for internal lineage consistency. Separately, qualification requires the clean consumer to prove the publication AuditEvent hash and exact D06 ref closure. None of these checks means the consumer replayed provider snapshots, D05 publication-principal authority, or acquired ADR authority.
+They mean only that the transported D06/D04/R03 semantic payloads were verified against their exact identities and checked for internal lineage consistency. Publication-audit and exit-gate verification performed by qualification are additional evidence; they do not mean the consumer replayed provider snapshots or publication/authorization decisions, and they do not grant ADR authority to GEOX.
 
 ## GEOX consumer ceiling
 
@@ -209,6 +265,6 @@ It creates no:
 
 This subpath is an explicit public API surface already present in the private `@adr/geox-adapter` consumer artifact. Its public module/export inventory remains governed by `consumer-api-surface.v1.json` and the existing exact compatibility review policy.
 
-The D06 semantics, D04/R03 provenance, and publication-audit closures do not add or remove any public module path or exported symbol. They extend the transported historical basis with derived non-authority inspection evidence; the existing public surface inventory therefore remains unchanged.
+The D06 semantics, D04/R03 provenance, publication-audit, and ADR-2 exit-gate closures do not add or remove any public module path or exported symbol. They extend the transported historical basis with derived non-authority inspection evidence; the existing public surface inventory therefore remains unchanged.
 
 The existing `@adr/geox-adapter/decision-result-sink` remains unchanged and continues to require exact `DecisionResult` `authority_ref` identity. It must reject historical-basis `projection_hash` events.
