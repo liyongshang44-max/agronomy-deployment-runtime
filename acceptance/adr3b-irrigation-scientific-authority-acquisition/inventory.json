@@ -1,0 +1,162 @@
+{
+  "contractVersion": "adr.adr3b-irrigation-scientific-authority-acquisition.v1",
+  "classification": "TEST_ONLY_SCIENTIFIC_AUTHORITY_ACQUISITION_AND_COMPARABILITY_EVIDENCE",
+  "authorityEffect": "TEST_ONLY_QUALIFIED_KNOWLEDGE_IN_ACCEPTANCE_LEDGER",
+  "cutoverAuthorized": false,
+  "shadowDualRunAuthorized": false,
+  "sourceHeads": {
+    "adr": "6001a1240c092fa0c1655d87cf027e46cc4cff56",
+    "geox": "f41dde8d44de95e71748e756e048e0166c1916b7"
+  },
+  "selectedMigrationSubject": "GEOX-COMMERCIAL-IRRIGATION-DEFICIT-V1",
+  "researchQuestion": "What independently source-supported irrigation-initiation science can be expressed for the same governed soil-water metric and target context as the selected GEOX deficit decision, without treating the legacy 0.22 constant as scientific authority?",
+  "sources": [
+    {
+      "sourceId": "UMN-SOIL-MOISTURE-SENSORS-IRRIGATION-SCHEDULING",
+      "institution": "University of Minnesota Extension",
+      "author": "Vasudha Sharma, Extension irrigation specialist",
+      "title": "Soil moisture sensors for irrigation scheduling",
+      "sourceType": "OTHER",
+      "sourceClass": "UNIVERSITY_EXTENSION_GUIDANCE",
+      "originLocator": "https://extension.umn.edu/natural-resources/conservation/agricultural-soil-and-water/irrigation/soil-moisture-sensors-for-irrigation-scheduling",
+      "reviewedLabel": "Reviewed in 2019",
+      "retrievedAt": "2026-09-06T08:36:00.000Z",
+      "retainedEvidenceText": "Irrigation should be triggered when the % soil water depletion is equal or close to the % MAD.",
+      "retainedEvidenceContentHash": "sha256:2482f7e318371cb60588168bca7c5987ebf1065b7e3c61da73ca6b01fec5b95c",
+      "sourceFaithfulClaim": "Irrigation should be triggered when percent soil-water depletion is equal or close to percent management allowable depletion (MAD).",
+      "claimType": "OPERATIONAL_RECOMMENDATION",
+      "qualificationTarget": "AGRONOMIC_POLICY_INPUT",
+      "semanticPreconditions": [
+        {
+          "semanticId": "water.metric",
+          "operator": "EQUALS",
+          "value": "soil water depletion relative to management allowable depletion"
+        }
+      ],
+      "limitations": [
+        {"code": "MAD_CONTEXT_MUST_BE_GOVERNED_AT_TARGET"},
+        {"code": "NOT_AN_ABSOLUTE_VWC_TRIGGER"}
+      ]
+    },
+    {
+      "sourceId": "UMN-IRRIGATION-MANAGEMENT-STRATEGIES-CORN",
+      "institution": "University of Minnesota Extension",
+      "authors": ["Vasudha Sharma", "Jerry Wright"],
+      "title": "Irrigation management strategies",
+      "sourceType": "OTHER",
+      "sourceClass": "UNIVERSITY_EXTENSION_GUIDANCE",
+      "originLocator": "https://extension.umn.edu/natural-resources/conservation/agricultural-soil-and-water/irrigation/irrigation-management-strategies",
+      "reviewedLabel": "Reviewed in 2019",
+      "retrievedAt": "2026-09-06T08:36:00.000Z",
+      "retainedEvidenceText": "For corn, experience shows that the soil water deficit can be as high as 60 to 65 percent in the early vegetative growth stage",
+      "retainedEvidenceContentHash": "sha256:976bc4b16a130bbb398354558521e893216c6cfac3add37d7fb6864b69eb1fc6",
+      "sourceFaithfulClaim": "For corn in the early vegetative growth stage, the guidance reports soil-water deficit can be as high as 60-65 percent.",
+      "claimType": "BOUNDARY_CONSTRAINT",
+      "qualificationTarget": "AGRONOMIC_POLICY_INPUT",
+      "semanticPreconditions": [
+        {"semanticId": "crop.code", "operator": "EQUALS", "value": "corn"},
+        {"semanticId": "crop.stage", "operator": "EQUALS", "value": "early vegetative growth stage"},
+        {"semanticId": "water.metric", "operator": "EQUALS", "value": "soil water deficit percent"}
+      ],
+      "limitations": [
+        {"code": "REGIONAL_EXTENSION_GUIDANCE_MINNESOTA"},
+        {"code": "SOIL_WATER_DEFICIT_SEMANTICS_MUST_BE_GOVERNED_AT_TARGET"}
+      ]
+    }
+  ],
+  "sourceSynthesis": {
+    "authorityCandidateAcquired": true,
+    "claim": "A source-backed irrigation-initiation framework triggers on soil-water depletion relative to management allowable depletion, while corn guidance demonstrates that deficit boundaries are crop-stage dependent rather than a context-free absolute soil-moisture fraction.",
+    "derivedFromQualifiedClaimsOnly": true,
+    "legacyConstantUsedAsSearchTarget": false,
+    "legacyConstantPromotedToAuthority": false,
+    "newGenericAuthorityObjectRequired": false
+  },
+  "geoxExactEvidence": {
+    "telemetryMetricCatalog": {
+      "path": "packages/contracts/src/schema/telemetry_metric_catalog_v1.ts",
+      "blobSha": "65b002949375d0b8fd308473a0e1a882fbeb542e",
+      "canonicalMetric": "soil_moisture",
+      "canonicalUnit": "%VWC",
+      "acceptedAliases": ["%", "VWC%"],
+      "description": "Volumetric soil moisture percentage",
+      "governedVwcSemanticsEstablished": true
+    },
+    "stage1InputMapping": {
+      "path": "apps/server/src/domain/sensing/stage1_sensing_input_mapping_v1.ts",
+      "blobSha": "85bf912aa8bca524af392233bfb2316d3a9e4167",
+      "canonicalMetric": "soil_moisture",
+      "mappedObservationFields": ["soil_moisture", "soil_moisture_pct"],
+      "pipelineAggregateField": "soil_moisture_pct"
+    },
+    "selectedSkill": {
+      "path": "apps/server/src/domain/agronomy/skills/irrigation/irrigation_deficit_skill_v1.ts",
+      "blobSha": "db229cf4931bc9d11fe7c0c40a12c1dc1e481359",
+      "trigger": "finite soil_moisture < 0.22",
+      "metricAtSkillBoundary": "dimensionless fraction derived by caller from a soil-moisture value; canonical Stage-1 telemetry establishes %VWC upstream, but the skill itself does not bind field-capacity/AWC/PWP/MAD/root-zone semantics",
+      "cropStageUsedByTrigger": false,
+      "rainUsedByTrigger": false
+    },
+    "caller": {
+      "path": "apps/server/src/routes/decision_engine_v1.ts",
+      "blobSha": "fc40ff003433177aaeabb5e810394c0dabc03aba",
+      "input": "field_sensing_overview_v1 soil-moisture value",
+      "normalization": "if numeric value > 1 divide by 100; otherwise pass through, converting percent-form canonical VWC to fraction-form numeric input without converting VWC into depletion",
+      "governedUpstreamSemantic": "%VWC",
+      "normalizationDoesNotEstablish": [
+        "field_capacity",
+        "permanent_wilting_point",
+        "available_water_holding_capacity",
+        "management_allowable_depletion",
+        "vwc_to_soil_water_depletion_transformation",
+        "root_zone_profile_aggregation",
+        "crop_stage_specific_allowable_depletion",
+        "spatial_representativeness"
+      ]
+    },
+    "fieldSensingProjection": {
+      "path": "apps/server/src/projections/field_sensing_overview_v1.ts",
+      "selection": "latest candidate per metric ranked by observation time, confidence, device id",
+      "profileAggregation": false,
+      "scientificCoverageClaim": false
+    },
+    "stage1Contract": {
+      "path": "apps/server/src/domain/sensing/stage1_sensing_contract_v1.ts",
+      "blobSha": "67703b0bc0a024aed1e4fa9dcdab282e03b9d089",
+      "sourceOfTruthLayer": "official_pipeline_input_whitelist",
+      "summarySoilMetricsAreDisplaySubset": true
+    }
+  },
+  "comparabilityAdjudication": {
+    "status": "METRIC_SEMANTICS_NOT_EQUIVALENT",
+    "scientificPropositionMatch": false,
+    "targetMatch": false,
+    "metricSemanticMatch": false,
+    "unitMatch": false,
+    "temporalMatch": false,
+    "cropStageMatch": false,
+    "positiveCorrespondence": [
+      "GEOX_CANONICAL_SOIL_MOISTURE_IS_GOVERNED_PERCENT_VWC",
+      "GEOX_CALLER_CONVERTS_PERCENT_FORM_VWC_TO_FRACTION_FORM_NUMERIC_INPUT"
+    ],
+    "reasonCodes": [
+      "GEOX_GOVERNED_VWC_IS_NOT_GOVERNED_SOIL_WATER_DEPLETION_OR_MAD",
+      "MAD_OR_EQUIVALENT_ALLOWABLE_DEPLETION_NOT_BOUND_TO_SELECTED_DECISION_INPUT",
+      "FIELD_CAPACITY_AWC_OR_PWP_NOT_BOUND_TO_SELECTED_DECISION_INPUT",
+      "VWC_TO_SOIL_WATER_DEPLETION_TRANSFORMATION_NOT_ESTABLISHED",
+      "ROOT_ZONE_PROFILE_AGGREGATION_NOT_ESTABLISHED",
+      "CROP_AND_GROWTH_STAGE_NOT_MATERIAL_TO_SELECTED_TRIGGER",
+      "SOURCE_GUIDANCE_IS_CONTEXT_DEPENDENT_AND_NOT_A_UNIVERSAL_ABSOLUTE_VWC_THRESHOLD"
+    ]
+  },
+  "terminalState": {
+    "adr3bScientificAuthorityCandidate": "ACQUIRED_AND_TEST_QUALIFIABLE",
+    "sourceFaithfulClaims": "AVAILABLE",
+    "sameDecisionAuthorityForSelectedGeoxSubject": "NOT_ESTABLISHED",
+    "blockingClass": "METRIC_AND_TARGET_CONTEXT_SEMANTICS_INSUFFICIENT",
+    "architectureAdjudicationRequired": false,
+    "cutoverAuthorized": false,
+    "shadowDualRunAuthorized": false,
+    "nextRequiredWork": "GOVERNED_MEASUREMENT_AND_TARGET_CONTEXT_CORRESPONDENCE"
+  }
+}
