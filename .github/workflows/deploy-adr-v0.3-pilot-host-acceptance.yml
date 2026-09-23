@@ -1,0 +1,37 @@
+name: ADR Deploy — v0.3 Thin Pilot Host
+
+on:
+  push:
+    branches:
+      - 'deploy/adr-v0.3-pilot-host-*'
+    paths:
+      - 'deploy/adr-pilot-host/**'
+      - '.github/workflows/deploy-adr-v0.3-pilot-host-acceptance.yml'
+  pull_request:
+    paths:
+      - 'deploy/adr-pilot-host/**'
+      - '.github/workflows/deploy-adr-v0.3-pilot-host-acceptance.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pilot_host_acceptance:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Report runtime
+        run: node --version
+      - name: Preserve frozen P01 surface
+        run: npm run test:public-api
+      - name: Preserve P02 SDK contract
+        run: npm run test:sdk-generic
+      - name: Preserve integrated v0.3 release acceptance
+        run: npm run test:v0.3-pilot-release
+      - name: Qualify thin HTTP host
+        run: node deploy/adr-pilot-host/acceptance.mjs
