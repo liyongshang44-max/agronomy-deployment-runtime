@@ -300,6 +300,8 @@ Any credible false-safe case should trigger case-level root-cause review rather 
 
 For the first 1-3 design partners, sell a fixed-scope paid pilot rather than per-acre pricing.
 
+The price range below is a working commercial hypothesis for customer discovery, not an established market price. It must be tested and revised using the first 1-3 real buyers.
+
 Recommended commercial frame:
 
 ~~~
