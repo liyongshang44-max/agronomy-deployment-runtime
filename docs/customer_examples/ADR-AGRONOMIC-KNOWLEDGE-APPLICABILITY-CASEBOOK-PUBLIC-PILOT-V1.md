@@ -36,10 +36,12 @@ For this casebook:
 1. The public source is treated as a candidate SourceArtifact.
 2. Source-supported claims are extracted conservatively.
 3. Source context is preserved only where the source supports it.
-4. Synthetic target cases are clearly marked as synthetic.
-5. Applicability is evaluated using ADR frozen status vocabulary.
-6. Where a case says DIRECTLY_APPLICABLE, it means the claim can enter the target decision world under the stated demo assumptions. It does not mean the action is automatically recommended, safe, authorized or economically optimal.
-7. No case in this document is commercial, regulatory, pesticide-label or production authority.
+4. Before any result can exist as an ADR ApplicabilityAssessment, the candidate claim must pass the existing source-faithful review and scientific-qualification path and become eligible Knowledge authority for the stated use. This casebook does not itself perform or grant that qualification.
+5. The synthetic outcomes below therefore assume that prerequisite qualification has already been satisfied for the candidate claim being demonstrated.
+6. Synthetic target cases are clearly marked as synthetic.
+7. Applicability is evaluated using ADR frozen status vocabulary.
+8. Where a case says DIRECTLY_APPLICABLE, it means the qualified knowledge can enter the target decision world under the stated demo assumptions. It does not mean the action is automatically recommended, safe, authorized or economically optimal.
+9. No case in this document is commercial, regulatory, pesticide-label or production authority.
 
 ## 3. ADR status vocabulary used
 
@@ -134,6 +136,9 @@ Each case follows the same semantic path:
 SourceArtifact
 → Claim
 → SourceContext
+→ source-faithful review
+→ scientific qualification
+→ eligible QualifiedKnowledge / DerivedKnowledge
 → synthetic TargetContext
 → DecisionProblem
 → ContextManifest
@@ -634,12 +639,13 @@ A useful customer-facing workflow can be:
 2. Preserve exact source and version
 3. Extract candidate claims
 4. Record where those claims originally apply
-5. Connect current customer/field context
-6. Freeze the decision-time ContextManifest
-7. Evaluate source-to-target applicability
-8. Surface MATCH / MISMATCH / UNKNOWN / CONFLICT
-9. Send unresolved or conflicting cases to an agronomist
-10. Retain the basis for later replay
+5. Complete source-faithful review and qualification for the intended use
+6. Connect current customer/field context
+7. Freeze the decision-time ContextManifest
+8. Evaluate source-to-target applicability
+9. Surface MATCH / MISMATCH / UNKNOWN / CONFLICT
+10. Send unresolved or conflicting cases to an agronomist
+11. Retain the basis for later replay
 ~~~
 
 A customer-facing answer can therefore be much more useful than a generic recommendation:
@@ -784,7 +790,7 @@ Suggested pilot measurements:
 
 This casebook does not establish:
 
-- that the public sources are ADR QualifiedKnowledge;
+- that the public sources are ADR QualifiedKnowledge; the synthetic applicability outcomes are conditional demonstrations of downstream behavior after the required review/qualification prerequisite is satisfied;
 - that any pesticide application is legally authorized;
 - that any fertilizer or irrigation rate is correct for an actual customer field;
 - recommendation correctness;
