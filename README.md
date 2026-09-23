@@ -6,6 +6,24 @@ ADR owns the semantics and governance of agronomic knowledge deployment. It may 
 
 GEOX is a first-party integration, reference consumer, and field-validation substrate; it is not the host or domain authority of this repository.
 
+## Current product release
+
+**ADR v0.3 — Paid Design-Partner Pilot**
+
+```text
+software qualification = PAID_DESIGN_PARTNER_PILOT_CANDIDATE
+commercial validation  = NOT_ESTABLISHED
+ADR core engineering   = FROZEN
+```
+
+This release is a bounded design-partner product, not ADR 1.0 GA and not autonomous agronomic decision software. The product boundary ends at governed `ApplicabilityAssessment` plus the non-authority `Agronomist Workbench`.
+
+The v0.3 public surface intentionally excludes recommendation, `RuntimeEligibility`, `RuntimeBinding`, `DecisionResult`, and autonomous execution contracts. GEOX remains an optional first-party integration and field-validation substrate; GEOX/MCFT completion is not a prerequisite for the ADR v0.3 pilot release.
+
+Release record: [ADR v0.3 Paid Design-Partner Pilot](docs/releases/ADR-v0.3-PAID-DESIGN-PARTNER-PILOT-2026-09-23.md)
+
+Customer casebook: [Agronomic Knowledge Applicability Casebook](docs/customer_examples/ADR-AGRONOMIC-KNOWLEDGE-APPLICABILITY-CASEBOOK-PUBLIC-PILOT-V1.md)
+
 ## Architecture status
 
 The current target architecture is **v1.0 FROZEN**. This freeze defines product/domain/authority boundaries only; it does not imply that implementation scope or MVP sequencing has been selected.
