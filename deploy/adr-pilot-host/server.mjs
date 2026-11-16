@@ -398,6 +398,17 @@ function requestFingerprint(operationId, path, body) {
   return semanticHash('AdrPilotHttpRequest', { operationId, path, body });
 }
 
+// Deployment-only latch. A failed checkpoint may leave the in-memory ledger or
+// transport cache ahead of disk. Never serve that instance again; a new runtime
+// must restore a validated checkpoint. Do not roll back or reinterpret Core facts.
+function assertRuntimeAvailable(runtime) {
+  if (runtime.ready && !runtime.persistenceFault) return;
+  const error = new Error('pilot runtime is unavailable; restore a validated checkpoint in a new runtime');
+  error.code = 'PILOT_RUNTIME_UNAVAILABLE';
+  error.httpStatus = 503;
+  throw error;
+}
+
 function transportKey(principal, operationId, idempotencyKey) {
   return semanticHash('AdrPilotTransportIdempotency', {
     principal: principalIdentity(principal),
@@ -439,9 +450,13 @@ function normalizeEnvelope(body, expectedContract) {
 }
 
 async function dispatchWrite(runtime, operation, req, path) {
+  assertRuntimeAvailable(runtime);
   const authenticated = parseBearer(req, runtime.tokenBindings);
   const idempotencyKey = nonEmpty(req.headers['idempotency-key'], 'Idempotency-Key');
   const body = await readJson(req);
+  // Queued requests and requests whose bodies were still arriving must observe
+  // isolation before any cache hit or governed backend call.
+  assertRuntimeAvailable(runtime);
   const envelope = normalizeEnvelope(body, operation.resourceContract);
   if (!exactPrincipal(authenticated, envelope.principal)) {
     const error = new Error('authenticated bearer subject does not equal declared principal');
@@ -649,21 +664,34 @@ export async function initializePilotRuntime({
     snapshotDir,
     tokenBindings: tokenBindingsFromEnv(),
     persist() {
-      const checkpoint = createAuthorityRecoveryCheckpoint({
-        ledger: runtime.ledger,
-        capturedAt: new Date().toISOString()
-      });
-      const payload = JSON.stringify({
-        schema_version: 'adr.pilot-host-state.v1',
-        release: RELEASE,
-        checkpoint,
-        metadata: runtime.metadata
-      });
-      const temporary = `${statePath}.tmp`;
-      const previous = `${statePath}.prev`;
-      if (existsSync(statePath)) copyFileSync(statePath, previous);
-      writeFileSync(temporary, payload);
-      renameSync(temporary, statePath);
+      assertRuntimeAvailable(runtime);
+      try {
+        const checkpoint = createAuthorityRecoveryCheckpoint({
+          ledger: runtime.ledger,
+          capturedAt: new Date().toISOString()
+        });
+        const payload = JSON.stringify({
+          schema_version: 'adr.pilot-host-state.v1',
+          release: RELEASE,
+          checkpoint,
+          metadata: runtime.metadata
+        });
+        const temporary = `${statePath}.tmp`;
+        const previous = `${statePath}.prev`;
+        if (existsSync(statePath)) copyFileSync(statePath, previous);
+        writeFileSync(temporary, payload);
+        renameSync(temporary, statePath);
+      } catch (cause) {
+        runtime.persistenceFault = true;
+        runtime.ready = false;
+        runtime.reason = 'PERSISTENCE_STATE_UNCONFIRMED';
+        // Keep the old checkpoint, .prev and .tmp for controlled diagnosis.
+        // A successful cache hit or later request must not commit dirty memory.
+        const error = new Error('persistence outcome is unconfirmed; runtime isolated', { cause });
+        error.code = 'PILOT_RUNTIME_UNAVAILABLE';
+        error.httpStatus = 503;
+        throw error;
+      }
     }
   };
   runtime.persist();
@@ -679,10 +707,11 @@ export function createPilotHttpServer(runtime) {
       const path = url.pathname;
 
       if (req.method === 'GET' && path === '/healthz') {
+        if (runtime.persistenceFault) return json(res, 503, { status: 'unavailable', reason: runtime.reason });
         return json(res, 200, { status: 'ok', release: RELEASE.name });
       }
       if (req.method === 'GET' && path === '/ready') {
-        if (!runtime.ready) return json(res, 503, { status: 'not_ready', reason: runtime.reason });
+        if (!runtime.ready || runtime.persistenceFault) return json(res, 503, { status: 'not_ready', reason: runtime.reason });
         if (runtime.tokenBindings.size === 0) return json(res, 503, { status: 'not_ready', reason: 'TOKEN_BINDINGS_REQUIRED' });
         return json(res, 200, {
           status: 'ready',
@@ -695,6 +724,8 @@ export function createPilotHttpServer(runtime) {
       if (req.method === 'GET' && path === '/openapi.json') {
         return json(res, 200, materializePilotOpenApi());
       }
+
+      assertRuntimeAvailable(runtime);
 
       const caseMatch = /^\/v1\/workbench\/cases\/([^/]+)$/.exec(path);
       if (req.method === 'GET' && caseMatch) {
