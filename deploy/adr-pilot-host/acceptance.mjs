@@ -207,3 +207,6 @@ try {
 }
 
 console.log('ADR v0.3 thin pilot host acceptance: PASS');
+
+// Keep persistence fault isolation in the existing Node 24 Host CI entrypoint.
+await import('./reliability.mjs');

@@ -53,6 +53,9 @@ Set `ADR_HOST_RELIABILITY_EVIDENCE_DIR` to a new directory to retain R0–R8 JSO
 and the exact source HEAD. The fault suite stops at its first actual failure;
 transport replays are planned assertions, not retries to obtain PASS.
 
+The existing Host acceptance entrypoint also imports the fault suite, so the
+unchanged Node 24 Host workflow exercises these scenarios on future Host changes.
+
 R0 checks normal commit/replay/restart and healthy rejection behavior. R1–R5
 inject checkpoint/copy/partial-write/rename failures and assert isolation,
 unchanged disk, no cache 201, blocked reads and successful controlled restart.
