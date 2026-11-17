@@ -1,0 +1,31 @@
+name: ADR Product Shell
+
+on:
+  pull_request:
+    paths:
+      - "apps/adr-product/**"
+      - "docs/product/**"
+      - ".github/workflows/adr-product-shell.yml"
+  push:
+    branches:
+      - "feat/adr-prod-v1-product-shell"
+    paths:
+      - "apps/adr-product/**"
+      - "docs/product/**"
+      - ".github/workflows/adr-product-shell.yml"
+
+jobs:
+  product-shell:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Constitution check
+        run: node scripts/constitution/check.mjs
+      - name: Public API frozen contract acceptance
+        run: node acceptance/public-api/run.mjs
+      - name: ADR product HTTP acceptance
+        run: npm --prefix apps/adr-product test
