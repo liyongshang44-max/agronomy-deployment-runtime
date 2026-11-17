@@ -1,3 +1,4 @@
+import { renderLiveAssessment, renderLiveReviews } from './live-demo.js';
 // ADR-PROD product shell. DEMO cases are synthetic illustrations, never scientific outcomes.
 const app = document.getElementById('app');
 const nav = [
@@ -47,7 +48,7 @@ function shell(title, subtitle, content) {
     '<span class="mode-pill">' + (meta?.mode === 'DEMO' ? 'DEMO · 合成资料' : 'PILOT · 未配置') + '</span></header>' +
     '<div class="page"><div class="pageheading"><div><p class="eyebrow">AGRONOMIC APPLICABILITY</p>' +
     '<h1>' + escapeHtml(title) + '</h1><p class="subtitle">' + escapeHtml(subtitle) + '</p></div></div>' +
-    '<div class="notice"><strong>演示隔离：</strong>当前展示的是虚构测试资料，不是 ADR 科学评估、合格知识或真实客户记录。不得据此采取农业行动。</div>' +
+    '<div class="notice"><strong>演示隔离：</strong>' + (meta?.liveDemoAvailable ? '通过真实 ADR Pilot Host 对合格的合成测试世界执行评估；不是客户数据，也不构成农业行动许可。' : '当前展示的是虚构测试资料，不是 ADR 科学评估、合格知识或真实客户记录。不得据此采取农业行动。') + '</div>' +
     content + '<footer>ADR-PROD · 产品界面开发版本 · 未取得 M1/M2 验收</footer></div></div></div>';
 }
 const empty = (title, text, action) => '<div class="empty"><div class="empty-icon">◇</div><h2>' +
@@ -94,7 +95,8 @@ function bindReviewFilters() {
   filter.addEventListener('change', update);
   query.addEventListener('input', update);
 }
-function renderReviews() {
+async function renderReviews() {
+  if (meta.liveDemoAvailable) return await renderLiveReviews({shell, json, escapeHtml, status, cell});
   shell('专家复核', '按原始 ADR 分类阅读案件。所有条目仅供界面交互验证。',
     '<section class="panel"><div class="sectionhead"><h2>案件队列</h2><span id="filter-count" class="muted">' +
     cases.length + ' 条合成案例</span></div><div class="filters"><label>分类筛选<select id="case-filter"><option value="ALL">所有分类</option>' +
@@ -133,7 +135,8 @@ function renderContext() {
       '向导必须先获得正确的 ADR 主体、授权决定及精确来源引用。缺失值将明确保留 UNKNOWN。',
       link('/reviews', '查看案例上下文结构', 'primary-link')));
 }
-function renderAssessments() {
+async function renderAssessments() {
+  if (meta.liveDemoAvailable) return await renderLiveAssessment({shell, json, escapeHtml, status, cell});
   shell('适用性评估', '从决策问题到受治理的知识适用性判断。',
     '<div class="steps">' + ['定义决策问题', '填写目标上下文', '选择已获资格知识', '核对资料', '提交评估', '阅读复核原因']
       .map((item, i) => '<div class="step"><b>' + (i + 1) + '</b><span>' + item + '</span></div>').join('') +
@@ -171,8 +174,8 @@ async function render() {
     if (path === '/') return renderHome();
     if (path === '/knowledge') return renderKnowledge();
     if (path === '/context') return renderContext();
-    if (path === '/assessments') return renderAssessments();
-    if (path === '/reviews') return renderReviews();
+    if (path === '/assessments') return await renderAssessments();
+    if (path === '/reviews') return await renderReviews();
     if (path === '/reports') return renderReports();
     const id = decodeURIComponent(path.split('/')[2] || '');
     const found = cases.find((x) => x.id === id);

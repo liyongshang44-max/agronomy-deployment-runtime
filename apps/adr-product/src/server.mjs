@@ -3,10 +3,12 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { DEMO_CASES, demoCaseById } from './demo.mjs';
+import { createDemoController } from './demo-controller.mjs';
 
 const ASSETS = Object.freeze({
   '/': ['../public/index.html', 'text/html; charset=utf-8'],
   '/app.js': ['../public/app.js', 'text/javascript; charset=utf-8'],
+  '/live-demo.js': ['../public/live-demo.js', 'text/javascript; charset=utf-8'],
   '/styles.css': ['../public/styles.css', 'text/css; charset=utf-8']
 });
 
@@ -28,13 +30,18 @@ function error(res, status, code, message) {
   respond(res, status, { code, message });
 }
 
-export function createProductServer({ mode = 'DEMO' } = {}) {
+export function createProductServer({ mode = 'DEMO', demoBinding = null } = {}) {
   if (!['DEMO', 'PILOT'].includes(mode)) throw new Error('ADR_PRODUCT_MODE must be DEMO or PILOT');
+  if (mode === 'PILOT' && demoBinding) throw new Error('PILOT_DEMO_BINDING_FORBIDDEN');
+  const demoController = mode === 'DEMO' && demoBinding ? createDemoController(demoBinding) : null;
   return createServer(async (req, res) => {
     try {
       const pathname = new URL(req.url ?? '/', 'http://adr-product.local').pathname;
+      if (demoController && (pathname.startsWith('/api/demo/') || pathname.startsWith('/api/workbench/'))) {
+        return await demoController.handle(req, res, pathname);
+      }
       if (req.method !== 'GET') {
-        return error(res, 405, 'METHOD_NOT_ALLOWED', 'ADR product shell currently exposes read-only routes');
+        return error(res, 405, 'METHOD_NOT_ALLOWED', 'product route does not support this method');
       }
 
       // The product shell is visible in both modes, but no synthetic authority data
@@ -53,6 +60,7 @@ export function createProductServer({ mode = 'DEMO' } = {}) {
           phase: 'PRODUCT_SHELL',
           customerAuthReady: false,
           authorityWritesAvailable: false,
+          liveDemoAvailable: Boolean(demoController),
           dataOrigin: mode === 'DEMO' ? 'SYNTHETIC_DEMO_ONLY' : 'NOT_CONFIGURED'
         });
       }
@@ -80,10 +88,11 @@ export function createProductServer({ mode = 'DEMO' } = {}) {
 
 export async function startProductServer({
   mode = process.env.ADR_PRODUCT_MODE ?? 'DEMO',
+  demoBinding = null,
   host = process.env.ADR_PRODUCT_HOST ?? '127.0.0.1',
   port = Number(process.env.PORT ?? 3080)
 } = {}) {
-  const server = createProductServer({ mode });
+  const server = createProductServer({ mode, demoBinding });
   await new Promise((resolveListen, rejectListen) => {
     server.once('error', rejectListen);
     server.listen(port, host, resolveListen);
