@@ -1,4 +1,5 @@
-import { contextCard } from './assessment-view.js';
+import { contextCard, sourceCard, resultCard } from './assessment-view.js';
+import { classificationExplanation } from './ux-language.js';
 import {renderSourceIntake} from './source-intake.js';
 import { renderLiveAssessment, renderLiveReviews } from './live-demo.js';
 // ADR-PROD product shell. DEMO cases are synthetic illustrations, never scientific outcomes.
@@ -29,9 +30,24 @@ let meta = null;
 let cases = null;
 
 async function json(path) {
-  const response = await fetch(path, { credentials: 'same-origin', cache: 'no-store' });
-  const value = await response.json();
-  if (!response.ok) throw new Error(value.message || value.code || '请求失败');
+  let response;
+  try {
+    response = await fetch(path, { credentials: 'same-origin', cache: 'no-store' });
+  } catch {
+    throw new Error('网络连接失败；请检查连接。已存在的操作编号不会因为读取失败而更换。');
+  }
+  let value;
+  try {
+    value = await response.json();
+  } catch {
+    throw new Error('服务器返回了无法解析的响应（HTTP ' + response.status +
+      '）；请保留当前操作编号并稍后核对。');
+  }
+  if (!response.ok) {
+    const code = String(value?.code ?? 'HTTP_' + response.status);
+    throw new Error('请求未完成（HTTP ' + response.status + ' / ' + code +
+      '）。请检查当前连接或授权，不应创建替代操作。');
+  }
   return value;
 }
 function link(path, title, className = '') {
@@ -41,17 +57,18 @@ function shell(title, subtitle, content) {
   const path = location.pathname;
   const active = path.startsWith('/reviews/') ? '/reviews' : path;
   app.innerHTML =
+    '<a class="skip-link" href="#main-content">跳转至正文</a>' +
     '<div class="workspace"><aside class="sidebar" aria-label="主导航">' +
     '<div class="brand"><div class="brand-mark">A</div><div><strong>ADR</strong><small>AGRONOMY RUNTIME</small></div></div>' +
     '<div class="side-label">客户工作台</div><nav class="navigation">' +
     nav.map((n) => '<a href="' + n[0] + '" data-route class="navitem ' + (active === n[0] ? 'selected' : '') + '"><span class="navicon">' + n[2] + '</span>' + n[1] + '</a>').join('') +
     '</nav><div class="side-bottom"><div class="mode-dot"></div><span>产品开发预览</span><small>ADR v0.3</small></div></aside>' +
-    '<div class="main"><header class="topbar"><span>ADR / ' + escapeHtml(title) + '</span>' +
+    '<main class="main" id="main-content" tabindex="-1"><header class="topbar"><span>ADR / ' + escapeHtml(title) + '</span>' +
     '<span class="mode-pill">' + (meta?.mode === 'DEMO' ? 'DEMO · 合成资料' : 'PILOT · 未配置') + '</span></header>' +
     '<div class="page"><div class="pageheading"><div><p class="eyebrow">AGRONOMIC APPLICABILITY</p>' +
     '<h1>' + escapeHtml(title) + '</h1><p class="subtitle">' + escapeHtml(subtitle) + '</p></div></div>' +
     '<div class="notice"><strong>演示隔离：</strong>' + (meta?.liveDemoAvailable ? '通过真实 ADR Pilot Host 对合格的合成测试世界执行评估；不是客户数据，也不构成农业行动许可。' : '当前展示的是虚构测试资料，不是 ADR 科学评估、合格知识或真实客户记录。不得据此采取农业行动。') + '</div>' +
-    content + '<footer>ADR-PROD · 产品界面开发版本 · 未取得 M1/M2 验收</footer></div></div></div>';
+    content + '<footer>ADR-PROD · M1 功能实现已接受 · 独立易用性验证进行中 · M2 尚未验收</footer></div></main></div>';
 }
 const empty = (title, text, action) => '<div class="empty"><div class="empty-icon">◇</div><h2>' +
   escapeHtml(title) + '</h2><p>' + escapeHtml(text) + '</p>' + (action || '') + '</div>';
@@ -197,16 +214,28 @@ async function renderReports() {
           '。在结果未确认之前不导出伪科学报告。</p></section>');
         return;
       }
-      shell('报告','已确认的真实演示报告，包含 ADR 精确引用和非权威人工反馈。',
-        '<section class="panel"><h2>已确认的真实演示报告</h2>' +
-        '<dl class="fact-grid">' +
-        cell('操作 ID', id) +
-        cell('评估引用', JSON.stringify(outcome.assessmentRef)) +
-        cell('Workbench 投影哈希', c.projectionHash) +
-        cell('原始科学分类', c.classification) + '</dl>' +
-        '<p class="muted">下载的 HTML 含目标上下文、来源、科学主张、条件、限制及人工复核；可在浏览器打印为 PDF。</p>' +
+      const explanation=classificationExplanation(c.classification);
+      shell('报告','先理解农业问题与科学证据，再下载保留精确引用的完整报告。',
+        '<section class="panel"><h2>本次合成农业问题</h2>' +
+        '<p>田块：'+escapeHtml(c.targetContext?.targetRef?.fieldId ?? 'UNKNOWN')+
+        ' · 农业决策问题：'+escapeHtml(c.targetContext?.decisionType ?? 'UNKNOWN')+
+        ' · 证据截止：'+escapeHtml(c.targetContext?.evidenceCutoff ?? 'UNKNOWN')+'</p>' +
+        '<h2>分类与结论边界</h2><p class="ux-guidance"><strong>'+
+        escapeHtml(explanation.label)+'</strong>：'+escapeHtml(explanation.next)+'</p>' +
+        '<p>未触发人工复核，不代表农业操作安全、建议有效或允许执行。</p>' +
         '<a href="/api/demo/reports/'+encodeURIComponent(id)+
-        '" id="reports-export" class="primary-link">下载精确证据报告</a></section>');
+        '" id="reports-export" class="primary-link">下载完整科学证据报告（HTML）</a></section>'+
+        sourceCard(c.scientificEvidence,escapeHtml,{
+          applicability:c.applicability,heading:'同源科学知识 · 报告预览'
+        })+
+        '<section class="panel"><h2>目标适用性与复核条件</h2>'+
+        resultCard(c,escapeHtml)+'</section>'+
+        '<details class="technical-detail"><summary>查看报告的审计引用与原始分类</summary>'+
+        '<dl class="fact-grid">'+
+        cell('操作 ID',id)+
+        cell('评估 AuthorityRef',JSON.stringify(outcome.assessmentRef))+
+        cell('Workbench 投影哈希',c.projectionHash)+
+        cell('ADR 原始分类',c.classification)+'</dl></details>');
     } catch (error) {
       shell('报告','暂时无法核对原操作，不生成其他身份或伪造报告。',
         '<section class="panel"><h2>待核对</h2><p>原操作 ID：'+escapeHtml(id)+'</p><p>'+
@@ -225,8 +254,11 @@ async function renderReports() {
   document.getElementById('print-report').addEventListener('click', () => window.print());
 }
 function showFailure(message) {
-  app.innerHTML = '<div class="fatal"><h1>无法加载产品数据</h1><p>' + escapeHtml(message) +
-    '</p><p>不会以演示身份回退到客户运行。</p></div>';
+  app.innerHTML = '<div class="fatal" role="alert"><h1>暂时无法读取当前页面</h1><p>' +
+    escapeHtml(message) +
+    '</p><p>不会通过演示身份回退到正式客户运行。刷新前请保存当前操作编号。</p>' +
+    '<button type="button" class="primary-link" id="retry-product-read">重新读取当前页面</button></div>';
+  document.getElementById('retry-product-read').addEventListener('click', () => { void render(); });
 }
 async function render() {
   const path = location.pathname;
@@ -261,7 +293,7 @@ document.addEventListener('click', (event) => {
   const next = new URL(anchor.href);
   if (next.origin !== location.origin || !safePath(next.pathname)) return;
   history.pushState(null, '', next.pathname);
-  render();
+  void render().then(() => document.getElementById('main-content')?.focus({preventScroll:true}));
   window.scrollTo(0, 0);
 });
 window.addEventListener('popstate', render);

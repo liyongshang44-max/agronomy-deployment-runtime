@@ -10,3 +10,66 @@
 @media(max-width:690px){.science-card,.science-block,.science-table{min-width:0;max-width:100%}.science-table{table-layout:fixed}.page,.panel{max-width:100%;min-width:0}}
 
 .source-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px}.source-form label{font-size:12px;color:#6b7d91;display:flex;flex-direction:column;gap:7px}.source-form textarea{border:1px solid #d9e1e9;border-radius:9px;padding:12px;font:inherit;resize:vertical}.source-form button,.source-form label:last-of-type,.source-form #source-message{grid-column:1/-1}.source-form button{justify-self:start}@media(max-width:690px){.source-form{grid-template-columns:1fr}}
+
+/* ADR-PROD UX-01: progressive evidence disclosure, legible state and keyboard support */
+.ux-step-nav{display:flex;gap:9px;flex-wrap:wrap;margin:0 0 20px}
+.ux-step-nav a{display:inline-block;padding:10px 13px;border:1px solid #cad9e7;border-radius:9px;background:#fff;color:#214e83;font-size:13px;font-weight:600}
+.ux-step-nav a:hover{background:#edf5ff;text-decoration:none}
+.ux-guidance{border-left:4px solid #386d9c;background:#f2f7fc;border-radius:4px;padding:13px 16px;font-size:14px;line-height:1.85;color:#243e59}
+.outcome-explainer{padding:19px 20px;margin:18px 0;background:#f2f7fc;border:1px solid #cfdfec;border-left:4px solid #376fa3;border-radius:9px;color:#2b4562}
+.outcome-explainer h3{font-size:19px;margin:0 0 10px;color:#183d63}
+.outcome-explainer p{margin:7px 0;line-height:1.75;font-size:14px}
+.outcome-explainer .muted{font-size:12px;color:#52667d}
+.science-card h4{font-size:13px;color:#455b73;margin:13px 0 5px}
+.term-help{margin:14px 0;padding:10px 13px;border:1px solid #d9e5ef;border-radius:9px;background:#fbfdff}
+.term-help summary{color:#255a8b;font-size:13px;font-weight:600;cursor:pointer}
+.term-help p{font-size:13px;line-height:1.75;color:#465c73}
+.ux-state{border-left:4px solid #c38336;background:#fffdf8}
+.ux-state p{color:#3b506b}
+.ux-state code,.outcome-explainer code{font-family:ui-monospace,Consolas,monospace;overflow-wrap:anywhere}
+#operation-identity-status{overflow-wrap:anywhere}
+#review-feedback[role="status"]{padding-top:9px;font-size:13px;line-height:1.7;overflow-wrap:anywhere;color:#315171}
+:where(a,button,input,select,textarea,summary):focus-visible{outline:3px solid #1358a7;outline-offset:3px}
+.skip-link{position:absolute;top:0;left:-9999px;z-index:9999;background:white;color:#103c73;padding:12px 18px;border:2px solid #2763a5}
+.skip-link:focus{left:12px;top:12px}
+button:disabled{cursor:not-allowed}
+@media(max-width:690px){
+  .ux-step-nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ux-step-nav a{font-size:12px;text-align:center;padding:11px 6px}
+  .quick{flex-wrap:wrap}
+  .outcome-explainer{padding:14px}
+  .science-table th{width:39%}
+}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
+/* UI-01: exact ADR classification codes are unbroken identifiers. Never
+ * truncate, replace, or hide them: wrap cleanly across dashboard widths. */
+.metric,.metric strong{min-width:0;max-width:100%}
+.metric strong{overflow-wrap:anywhere;word-break:break-word;white-space:normal;line-height:1.3}
+@media(max-width:690px){.metric strong{font-size:clamp(16px,4.4vw,25px)}}
+
+/* ADR-PROD UX-02: business-first science reading, independent data/rights states. */
+.knowledge-reading{overflow-wrap:anywhere}
+.science-demo-label{background:#fff7e8;color:#764d1a;border:1px solid #ebd5ac;border-radius:8px;padding:10px 13px;font-size:13px}
+.reading-question{border-top:1px solid #e0e8f0;margin-top:20px;padding-top:20px}
+.reading-question h3{font-size:17px;color:#244563;line-height:1.35;margin:0 0 11px}
+.reading-question h4{font-size:13px;margin:15px 0 7px;color:#365b77}
+.reading-question p{line-height:1.82;margin:9px 0;color:#405973;font-size:13px}
+.science-assertion{border-left:4px solid #3573a7;background:#f2f7fc;border-radius:4px;padding:15px 18px;margin:14px 0;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;font-size:15px;line-height:1.8;color:#1d3b5b}
+.source-claim{white-space:pre-wrap;overflow-wrap:anywhere;color:#294e71;font-weight:600}
+.source-caption{font-size:13px;overflow-wrap:anywhere;color:#4d6480}
+.source-caption strong{color:#274a68}
+.condition-list{margin:14px 0}
+.condition-item{background:#f7f9fc;border:1px solid #e2e9f1;border-radius:9px;padding:10px 14px;margin:10px 0;overflow-wrap:anywhere}
+.condition-item .science-list{margin:8px 0;padding-left:21px}
+.science-unknown{border-left:3px solid #c1a16c;padding:8px 12px;background:#fffcf5;color:#66593f;font-size:13px;line-height:1.75;overflow-wrap:anywhere}
+.knowledge-reading .technical-detail{margin-top:22px;padding:12px;border:1px solid #d3dfe9;border-radius:10px}
+.knowledge-reading .technical-detail summary{font-weight:600;color:#2e5c8b}
+#source-intake-details{border:1px solid #d5e1eb;border-radius:10px;padding:13px;margin-top:15px}
+#source-intake-details>summary{font-weight:600;color:#205f9a;cursor:pointer;font-size:14px}
+#source-intake-details[open]>summary{margin-bottom:14px}
+.knowledge-reading :where(p,li,th,td,blockquote){overflow-wrap:anywhere}
+@media(max-width:690px){.reading-question{padding-top:16px;margin-top:16px}.science-assertion{font-size:14px;padding:12px}.reading-question h3{font-size:16px}.knowledge-reading .science-block{padding:12px 0}}
+
+/* Literal-source-only Chinese reading aid: never replaces the exact Host claim. */
+.science-gloss{font-size:14px!important;line-height:1.85;color:#1b486b!important;background:#eaf3fb;border:1px solid #b7d4e9;border-radius:8px;padding:13px 16px;overflow-wrap:anywhere}
