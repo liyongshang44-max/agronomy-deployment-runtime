@@ -1,3 +1,4 @@
+import { renderDemoReport } from './report.mjs';
 // Non-authority ADR product BFF: the browser never chooses Principal,
 // AuthorizationDecisionAudit, AuthorityRef, or long-lived service credentials.
 import { randomUUID, randomBytes } from 'node:crypto';
@@ -354,19 +355,7 @@ export function createDemoController(config) {
       if (!attempt || attempt.state !== 'CONFIRMED') return json(res, 409, { code: 'CONFIRMED_CASE_REQUIRED' });
       const c = attempt.workbenchCase;
       const review = store.getReview(session.sid, reportMatch[1]);
-      const ref = attempt.assessmentRef;
-      const body = '<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>ADR DEMO 案件报告</title>' +
-        '<style>body{font-family:sans-serif;max-width:780px;margin:50px auto;line-height:1.8;color:#243247}small{color:#ad471d}</style>' +
-        '<h1>ADR · 合成演示评估报告</h1><small>DEMO / 不是正式科学意见或客户报告</small>' +
-        '<p>Classification: ' + html(c.classification) + '</p>' +
-        '<p>Assessment: ' + html(ref.kind + ' / ' + ref.logical_id + ' / ' + ref.version + ' / ' + ref.semantic_hash) + '</p>' +
-        '<p>Workbench projection: ' + html(c.projectionHash) + '</p>' +
-        '<h2>评估限制</h2><pre style="white-space:pre-wrap">' +
-        html(JSON.stringify(c.applicability?.limitations ?? [], null, 2)) + '</pre>' +
-        '<h2>来源与知识引用</h2><pre style="white-space:pre-wrap">' +
-        html(JSON.stringify(c.scientificEvidence ?? {}, null, 2)) + '</pre>' +
-        '<h2>非权威人工复核</h2><p>' + html(review?.outcome ?? '尚未复核') + '</p><p>' +
-        html(review?.notes ?? '') + '</p><p>仅供演示；可由浏览器打印为 PDF。</p></html>';
+      const body = renderDemoReport({ attempt, review });
       const data = Buffer.from(body);
       res.writeHead(200, {
         'content-type': 'text/html; charset=utf-8',

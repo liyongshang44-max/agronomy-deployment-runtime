@@ -86,6 +86,18 @@ try {
   const geometry = await page.evaluate(() => ({
     viewport: window.innerWidth, width: document.documentElement.scrollWidth
   }));
+  const overflowElements = await page.evaluate(() => [...document.querySelectorAll('*')]
+    .map((el) => {
+      const box = el.getBoundingClientRect();
+      return {
+        tag: el.tagName, className: String(el.className).slice(0, 80),
+        text: (el.innerText || '').slice(0, 70), left: Math.round(box.left),
+        right: Math.round(box.right), width: Math.round(box.width)
+      };
+    })
+    .filter((item) => item.right > window.innerWidth + 6 || item.left < -6)
+    .sort((a, b) => b.right - a.right).slice(0, 20));
+  console.log('MOBILE_LAYOUT_OVERFLOW_DIAGNOSTIC=' + JSON.stringify(overflowElements));
   assert.ok(geometry.width <= geometry.viewport + 5,
     'mobile layout unexpectedly overflows horizontally: ' + JSON.stringify(geometry));
   assert.deepEqual(pageErrors, []);
