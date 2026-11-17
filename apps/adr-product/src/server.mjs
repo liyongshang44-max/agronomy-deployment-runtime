@@ -39,7 +39,8 @@ export function createProductServer({ mode = 'DEMO' } = {}) {
 
       // The product shell is visible in both modes, but no synthetic authority data
       // can ever be served from the customer PILOT mode.
-      const asset = ASSETS[pathname] ?? (pathname.startsWith('/reviews/') ? ASSETS['/'] : null);
+      const clientRoutes = new Set(['/knowledge', '/context', '/assessments', '/reviews', '/reports']);
+      const asset = ASSETS[pathname] ?? ((clientRoutes.has(pathname) || /^\/reviews\/DEMO-[0-9]{3}$/.test(pathname)) ? ASSETS['/'] : null);
       if (asset) {
         const content = await readFile(new URL(asset[0], import.meta.url));
         return respond(res, 200, content.toString('utf8'), asset[1]);
