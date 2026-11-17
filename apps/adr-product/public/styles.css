@@ -4,3 +4,7 @@
 
 /* Product science-read model presentation, exact data values always come from Host. */
 .science-table{width:100%;border-collapse:collapse;table-layout:fixed}.science-table th{width:43%;color:#697b91}.science-table td{overflow-wrap:anywhere}.science-table th,.science-table td{vertical-align:top;line-height:1.7}.science-card .muted{margin:5px 0 15px}.science-block{border-top:1px solid #edf1f5;padding:15px 0}.science-block:first-child{border-top:0}.science-block h3{font-size:14px;color:#455b78;margin:0 0 7px}.science-list{font-size:13px;color:#526987;line-height:1.8;padding-left:20px}.science-hash{font:11px/1.65 ui-monospace,SFMono-Regular,Consolas,monospace;color:#58708a;overflow-wrap:anywhere}.confirmation{margin:20px 0;display:grid;gap:13px}.confirmation label{display:flex;gap:9px;align-items:center;font-size:13px;color:#4b6280}.confirmation input{width:18px;height:18px;accent-color:#2368c5}.technical-detail{margin-top:20px;color:#596e87}.technical-detail summary{cursor:pointer;font-size:12px;padding:8px}
+
+/* Long canonical condition JSON and scientific hashes must wrap within the viewport. */
+.science-card,.science-list,.science-list li,.science-block,.science-table td{overflow-wrap:anywhere;word-break:break-word}
+@media(max-width:690px){.science-card,.science-block,.science-table{min-width:0;max-width:100%}.science-table{table-layout:fixed}.page,.panel{max-width:100%;min-width:0}}
