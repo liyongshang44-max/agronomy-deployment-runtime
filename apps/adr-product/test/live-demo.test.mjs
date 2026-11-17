@@ -142,6 +142,10 @@ test('real ADR v0.3 HTTP assessment -> Workbench -> persistent non-authority rev
     assert.equal(vocabularyModule.status, 200, 'the browser module graph must not contain an unmapped vocabulary import');
     assert.match(vocabularyModule.headers.get('content-type'), /javascript/);
     assert.match(await vocabularyModule.text(), /classificationExplanation/);
+    const knowledgeModule = await fetch(base + '/knowledge-reading.js');
+    assert.equal(knowledgeModule.status, 200,'the shared science explanation ESM import must be mapped');
+    assert.match(knowledgeModule.headers.get('content-type'),/javascript/);
+    assert.match(await knowledgeModule.text(),/knowledgeReading/);
   } finally {
     if (product?.listening) await new Promise((resolve) => product.close(resolve));
     await harness.close();

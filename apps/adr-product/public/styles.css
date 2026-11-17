@@ -47,3 +47,26 @@ button:disabled{cursor:not-allowed}
 .metric,.metric strong{min-width:0;max-width:100%}
 .metric strong{overflow-wrap:anywhere;word-break:break-word;white-space:normal;line-height:1.3}
 @media(max-width:690px){.metric strong{font-size:clamp(16px,4.4vw,25px)}}
+
+/* ADR-PROD UX-02: business-first science reading, independent data/rights states. */
+.knowledge-reading{overflow-wrap:anywhere}
+.science-demo-label{background:#fff7e8;color:#764d1a;border:1px solid #ebd5ac;border-radius:8px;padding:10px 13px;font-size:13px}
+.reading-question{border-top:1px solid #e0e8f0;margin-top:20px;padding-top:20px}
+.reading-question h3{font-size:17px;color:#244563;line-height:1.35;margin:0 0 11px}
+.reading-question h4{font-size:13px;margin:15px 0 7px;color:#365b77}
+.reading-question p{line-height:1.82;margin:9px 0;color:#405973;font-size:13px}
+.science-assertion{border-left:4px solid #3573a7;background:#f2f7fc;border-radius:4px;padding:15px 18px;margin:14px 0;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;font-size:15px;line-height:1.8;color:#1d3b5b}
+.source-claim{white-space:pre-wrap;overflow-wrap:anywhere;color:#294e71;font-weight:600}
+.source-caption{font-size:13px;overflow-wrap:anywhere;color:#4d6480}
+.source-caption strong{color:#274a68}
+.condition-list{margin:14px 0}
+.condition-item{background:#f7f9fc;border:1px solid #e2e9f1;border-radius:9px;padding:10px 14px;margin:10px 0;overflow-wrap:anywhere}
+.condition-item .science-list{margin:8px 0;padding-left:21px}
+.science-unknown{border-left:3px solid #c1a16c;padding:8px 12px;background:#fffcf5;color:#66593f;font-size:13px;line-height:1.75;overflow-wrap:anywhere}
+.knowledge-reading .technical-detail{margin-top:22px;padding:12px;border:1px solid #d3dfe9;border-radius:10px}
+.knowledge-reading .technical-detail summary{font-weight:600;color:#2e5c8b}
+#source-intake-details{border:1px solid #d5e1eb;border-radius:10px;padding:13px;margin-top:15px}
+#source-intake-details>summary{font-weight:600;color:#205f9a;cursor:pointer;font-size:14px}
+#source-intake-details[open]>summary{margin-bottom:14px}
+.knowledge-reading :where(p,li,th,td,blockquote){overflow-wrap:anywhere}
+@media(max-width:690px){.reading-question{padding-top:16px;margin-top:16px}.science-assertion{font-size:14px;padding:12px}.reading-question h3{font-size:16px}.knowledge-reading .science-block{padding:12px 0}}

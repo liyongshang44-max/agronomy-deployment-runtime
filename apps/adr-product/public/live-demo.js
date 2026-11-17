@@ -35,13 +35,19 @@ export async function renderLiveReviews({shell, json, escapeHtml, status}) {
       const target = document.getElementById('host-case-detail');
       try {
         const full = await json('/api/workbench/cases/' + encodeURIComponent(id));
-        target.innerHTML = '<h2>已读取案件详情</h2><pre class="evidence-json">' +
-          escapeHtml(jsonText({
+        target.innerHTML = '<section class="panel"><h2>已读取案件详情 · 科学阅读</h2>' +
+          '<p class="muted">此处属于待复核队列，不代表全部历史案件。保留 Host 原始评估分类。</p>' +
+          resultCard(full, escapeHtml) +
+          sourceCard(full.scientificEvidence, escapeHtml, {
+            applicability:full.applicability,heading:'科学知识解读 · 队列案件'
+          }) +
+          '<details class="technical-detail"><summary>查看队列案件完整原始证据</summary>'+
+          '<pre class="evidence-json">' + escapeHtml(jsonText({
             assessmentRef: full.applicability.applicabilityAssessmentRef,
             classification: full.classification, why: full.why,
             scientificEvidence: full.scientificEvidence, targetContext: full.targetContext,
             applicability: full.applicability
-          })) + '</pre>';
+          })) + '</pre></details></section>';
       } catch (e) { target.textContent = '案件无法读取：' + e.message; }
     });
   });
@@ -65,18 +71,21 @@ export async function renderLiveAssessment({shell, json, escapeHtml, status, cel
     cell('基线 Workbench 分类', sample.classification) +
     '</div></section>' +
     '<div id="ux-context">' + contextCard(sample.targetContext, escapeHtml) + '</div>' +
-    '<div id="ux-source">' + sourceCard(sample.scientificEvidence, escapeHtml) + '</div>' +
+    '<div id="ux-source">' + sourceCard(sample.scientificEvidence, escapeHtml, {
+      applicability:sample.applicability, heading:'科学知识解读 · 本次合成场景'
+    }) + '</div>' +
     '<section class="panel" id="ux-scenario"><h2>第三步 · 选择合格演示场景</h2>' +
     '<label class="review-input">选择实际可执行场景<select id="selected-scenario" required>' +
     '<option value="">请选择合格演示场景</option>' +
     '<option value="' + escapeHtml(scenario.scenarioId) + '">v0.3 合格合成世界 · ' + escapeHtml(scenario.scenarioId) + '</option>' +
     '<option disabled value="">其他知识/田块组合：UNAVAILABLE（缺少合格接口）</option>' +
     '</select></label><p class="muted">选定场景绑定以下精确输入，而非由浏览器自行签发科学资格：</p>' +
+    '<details class="technical-detail"><summary>查看完整输入绑定（技术证据，不必理解其内部代码）</summary>'+
     '<pre class="evidence-json">' + escapeHtml(jsonText({
       knowledgeRef:sample.scientificEvidence?.knowledgeRef,
       contextManifestRef:sample.targetContext?.contextManifestRef,
       decisionProblemRef:sample.targetContext?.decisionProblemRef
-    })) + '</pre></section>' +
+    })) + '</pre></details></section>' +
     '<section class="panel" id="ux-run"><h2>第四步 · 确认并执行</h2>' +
     '<p>确认所选场景、观测时间和科学来源。系统保存精确操作编号；如发生断线，只核对原操作，不自动产生新评估。</p>' +
     '<div class="confirmation"><label><input type="checkbox" id="confirm-context"> 已核对当前合成目标上下文、时间和测量来源</label>' +
@@ -116,7 +125,9 @@ export async function renderLiveAssessment({shell, json, escapeHtml, status, cel
       cell('Transport Status', c.applicability?.transportStatus) +
       cell('Scientific Use Status', c.applicability?.scientificUseStatus) + '</div>' +
       resultCard(c, escapeHtml) +
-      sourceCard(c.scientificEvidence, escapeHtml) +
+      sourceCard(c.scientificEvidence, escapeHtml, {
+        applicability:c.applicability, heading:'科学知识解读 · 评估实际使用的证据'
+      }) +
       '<details class="technical-detail"><summary>查看完整原始 Workbench 证据</summary>' +
       '<pre class="evidence-json">' + escapeHtml(jsonText({
         why: c.why, scientificEvidence: c.scientificEvidence,
@@ -148,9 +159,9 @@ export async function renderLiveAssessment({shell, json, escapeHtml, status, cel
       feedbackSaved = true;
       startButton.disabled = true;
       saveButton.disabled = true;
-      feedbackView.textContent = restored ? '此前已保存：' + record.outcome +
-        '（' + (REVIEW_OUTCOME_LABELS[record.outcome] ?? '请核查原始代码') + '）' :
-        '非权威复核已保存，耗时：' + reviewTimingLabel(record) +
+      feedbackView.textContent = restored ? '此前已保存非权威人工意见：' + record.outcome +
+        '（' + (REVIEW_OUTCOME_LABELS[record.outcome] ?? '请核查原始代码') + '）；ADR 原始分类未改变。' :
+        '非权威人工意见已保存；ADR 原始科学分类未改变。耗时：' + reviewTimingLabel(record) +
         '，绑定投影：' + record.caseProjectionHash;
     };
     const markStarted = (record) => {

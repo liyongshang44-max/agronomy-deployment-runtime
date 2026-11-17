@@ -1,4 +1,5 @@
-import { contextCard } from './assessment-view.js';
+import { contextCard, sourceCard, resultCard } from './assessment-view.js';
+import { classificationExplanation } from './ux-language.js';
 import {renderSourceIntake} from './source-intake.js';
 import { renderLiveAssessment, renderLiveReviews } from './live-demo.js';
 // ADR-PROD product shell. DEMO cases are synthetic illustrations, never scientific outcomes.
@@ -213,16 +214,28 @@ async function renderReports() {
           '。在结果未确认之前不导出伪科学报告。</p></section>');
         return;
       }
-      shell('报告','已确认的真实演示报告，包含 ADR 精确引用和非权威人工反馈。',
-        '<section class="panel"><h2>已确认的真实演示报告</h2>' +
-        '<dl class="fact-grid">' +
-        cell('操作 ID', id) +
-        cell('评估引用', JSON.stringify(outcome.assessmentRef)) +
-        cell('Workbench 投影哈希', c.projectionHash) +
-        cell('原始科学分类', c.classification) + '</dl>' +
-        '<p class="muted">下载的 HTML 含目标上下文、来源、科学主张、条件、限制及人工复核；可在浏览器打印为 PDF。</p>' +
+      const explanation=classificationExplanation(c.classification);
+      shell('报告','先理解农业问题与科学证据，再下载保留精确引用的完整报告。',
+        '<section class="panel"><h2>本次合成农业问题</h2>' +
+        '<p>田块：'+escapeHtml(c.targetContext?.targetRef?.fieldId ?? 'UNKNOWN')+
+        ' · 农业决策问题：'+escapeHtml(c.targetContext?.decisionType ?? 'UNKNOWN')+
+        ' · 证据截止：'+escapeHtml(c.targetContext?.evidenceCutoff ?? 'UNKNOWN')+'</p>' +
+        '<h2>分类与结论边界</h2><p class="ux-guidance"><strong>'+
+        escapeHtml(explanation.label)+'</strong>：'+escapeHtml(explanation.next)+'</p>' +
+        '<p>未触发人工复核，不代表农业操作安全、建议有效或允许执行。</p>' +
         '<a href="/api/demo/reports/'+encodeURIComponent(id)+
-        '" id="reports-export" class="primary-link">下载精确证据报告</a></section>');
+        '" id="reports-export" class="primary-link">下载完整科学证据报告（HTML）</a></section>'+
+        sourceCard(c.scientificEvidence,escapeHtml,{
+          applicability:c.applicability,heading:'同源科学知识 · 报告预览'
+        })+
+        '<section class="panel"><h2>目标适用性与复核条件</h2>'+
+        resultCard(c,escapeHtml)+'</section>'+
+        '<details class="technical-detail"><summary>查看报告的审计引用与原始分类</summary>'+
+        '<dl class="fact-grid">'+
+        cell('操作 ID',id)+
+        cell('评估 AuthorityRef',JSON.stringify(outcome.assessmentRef))+
+        cell('Workbench 投影哈希',c.projectionHash)+
+        cell('ADR 原始分类',c.classification)+'</dl></details>');
     } catch (error) {
       shell('报告','暂时无法核对原操作，不生成其他身份或伪造报告。',
         '<section class="panel"><h2>待核对</h2><p>原操作 ID：'+escapeHtml(id)+'</p><p>'+

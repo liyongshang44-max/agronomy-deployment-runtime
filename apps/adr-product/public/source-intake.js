@@ -13,12 +13,18 @@ export async function renderSourceIntake({shell,json,escapeHtml}) {
     escapeHtml(item.qualificationStatus)+'</strong></p>'+
     '<p class="muted">所记录的权利依据：'+escapeHtml(item.rightsBasis)+
     '（仅为产品元数据，不构成 ADR RightsDecision 或允许保留/外发的证明。）</p></div>';
-  shell('农艺知识','来源登记、科学资格和使用限制分开管理。',
-    '<section class="panel"><div class="sectionhead"><h2>正式 Host 已可读取的合格演示知识</h2>'+
+  shell('农艺知识','先阅读科学主张和适用限制；候选来源登记是另一项非权威操作。',
+    '<section class="panel" id="qualified-reading"><div class="sectionhead"><h2>正式 Host 已可读取的合格演示知识</h2>'+
     '<span class="status">SYNTHETIC / HOST READ</span></div>'+
-    '<p>以下资格及来源引用来自隔离 ADR Host Workbench。不可由产品登记表单创建或修改。</p></section>'+
-    sourceCard(scenario.sampleCase.scientificEvidence,escapeHtml)+
-    '<section class="panel"><h2>登记待审核来源</h2>'+
+    '<p><strong>先看科学主张、依据、适用条件和缺口。</strong>下方每项内容均来自 ADR Host 当前返回的合成证据，不是独立核查论文全文，也不是现实田块作业许可。</p>'+
+    '<p><a data-route class="primary-link" href="/assessments">在适用性评估中核对同一来源</a></p></section>'+
+    sourceCard(scenario.sampleCase.scientificEvidence,escapeHtml,{
+      applicability:scenario.sampleCase.applicability,
+      heading:'科学知识解读 · 主张、依据与限制'
+    })+
+    '<section class="panel" id="candidate-source-registration"><h2>候选来源元数据登记（非科学知识）</h2>'+
+    '<p class="muted">下方登记表与上面的已合格 Host 科学知识完全隔离。SUBMITTED 不代表已审核、科学合格、具备原文读取权，且不能用于生成新的农业建议。</p>'+
+    '<details id="source-intake-details"><summary>展开来源元数据登记表（不上传或查看论文）</summary>'+
     '<p class="muted">仅登记元数据。不上传 PDF、不保留全文、不进行模型外发。提交后默认 SUBMITTED；不生成 QualifiedKnowledge。</p>'+
     '<form id="source-intake" class="source-form">'+
     '<label>来源名称<input name="title" required maxlength="180" placeholder="例如：候选农业研究资料"></label>'+
@@ -34,8 +40,8 @@ export async function renderSourceIntake({shell,json,escapeHtml}) {
     '</select></label>'+
     '<label>接入说明<textarea name="notes" maxlength="400" rows="3"></textarea></label>'+
     '<button type="submit" class="primary-link">登记为 SUBMITTED</button>'+
-    '<p id="source-message" role="status"></p></form></section>'+
-    '<section class="panel"><h2>本次会话登记记录</h2>'+
+    '<p id="source-message" role="status"></p></form></details></section>'+
+    '<section class="panel"><h2>本次会话登记记录（不进入科学资格）</h2>'+
     '<div id="sources-list">'+(sourceList.length?sourceList.map(row).join(''):
     '<p class="muted">尚未登记待审核来源。</p>')+'</div></section>');
 
