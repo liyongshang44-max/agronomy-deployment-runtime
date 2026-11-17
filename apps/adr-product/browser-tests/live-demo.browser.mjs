@@ -94,6 +94,20 @@ try {
   assert.ok(originalAssessment.includes('sha256:'));
   await page.locator('text=此前已保存：CONTEXT_REQUESTED').waitFor({ timeout: 15000 });
 
+  // A new assessment identity is permissible only after the terminal operation
+  // AND an explicit new-case click by the agronomist.
+  const previousOperation=await page.evaluate(() => sessionStorage.getItem('adr-product-demo-operation'));
+  assert.equal(await page.locator('#new-demo-case').isEnabled(),true);
+  await page.locator('#new-demo-case').click();
+  assert.equal(await page.evaluate(() => sessionStorage.getItem('adr-product-demo-operation')),null);
+  await page.locator('#selected-scenario').selectOption('QUALIFIED_SYNTHETIC_V03');
+  await page.locator('#confirm-context').check();
+  await page.locator('#confirm-knowledge').check();
+  await page.locator('#live-run').click();
+  await page.locator('text=实际 ADR 评估结果').waitFor({timeout:45000});
+  const newOperation=await page.evaluate(() => sessionStorage.getItem('adr-product-demo-operation'));
+  assert.ok(newOperation && newOperation!==previousOperation);
+
   await page.locator('a[href="/reviews"]').click();
   await page.locator('text=Host 投影').waitFor({ timeout: 15000 });
   const details = page.locator('[data-host-index]').first();
