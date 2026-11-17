@@ -47,6 +47,11 @@ try {
   assert.match(await page.locator('#sources-list').innerText(), /UNAVAILABLE/);
   await page.screenshot({ path: new URL('01b-knowledge-source-intake.png', evidenceDir).pathname, fullPage: true });
 
+  await page.locator('.navigation a[href="/context"]').click();
+  await page.locator('text=第一步 · 核对目标上下文').waitFor();
+  assert.match(await page.locator('.science-table').first().innerText(),/ContextManifest/);
+  await page.screenshot({ path: new URL('01c-real-target-context.png', evidenceDir).pathname, fullPage: true });
+
   await page.locator('.navigation a[href="/assessments"]').click();
   await page.locator('text=已合格演示世界').waitFor();
   assert.equal(await page.locator('#live-run').isDisabled(), true);
@@ -84,6 +89,13 @@ try {
   const download = await downloadPromise;
   assert.equal(download.suggestedFilename(), 'adr-demo-report.html');
   assert.ok(!await download.failure());
+
+  await page.locator('.navigation a[href="/reports"]').click();
+  await page.locator('text=已确认的真实演示报告').first().waitFor();
+  assert.equal(await page.locator('#reports-export').count(),1);
+  await page.screenshot({ path: new URL('03b-real-reports-page.png', evidenceDir).pathname,fullPage:true });
+  await page.locator('.navigation a[href="/assessments"]').click();
+  await page.locator('text=实际 ADR 评估结果').waitFor();
 
   // Reproduce the observed race: review-feedback GET returns before the
   // review-start GET. Persisted "already saved" status must always win.

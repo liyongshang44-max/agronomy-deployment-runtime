@@ -1,3 +1,4 @@
+import { contextCard } from './assessment-view.js';
 import {renderSourceIntake} from './source-intake.js';
 import { renderLiveAssessment, renderLiveReviews } from './live-demo.js';
 // ADR-PROD product shell. DEMO cases are synthetic illustrations, never scientific outcomes.
@@ -58,7 +59,27 @@ function counter(label, value, desc) {
   return '<div class="metric"><span>' + escapeHtml(label) + '</span><strong>' + escapeHtml(value) +
     '</strong><small>' + escapeHtml(desc) + '</small></div>';
 }
-function renderHome() {
+async function renderHome() {
+  if (meta.liveDemoAvailable) {
+    await json('/api/demo/session');
+    const scenario = await json('/api/demo/scenario');
+    const assessment = scenario.sampleCase.applicability ?? {};
+    shell('总览', '真实 ADR 合成评估环境：从精确科学引用到可复核的客户报告。',
+      '<section class="metrics">' +
+      counter('合格合成场景', scenario.runnable ? 1 : 0, '由正式 ADR Pilot Host 测试世界提供') +
+      counter('基线科学分类', scenario.sampleCase.classification, '直接来自 Host Workbench 投影') +
+      counter('客户运行状态', 'DEMO', '生产身份及授权尚未接入') +
+      '</section><section class="split"><div class="panel"><h2>执行一条可追溯的评估</h2>' +
+      '<p>在真实测试世界核对目标观测、知识来源和使用限制，提交新的 ApplicabilityAssessment，完成复核并导出报告。</p>' +
+      '<div class="quick">' + link('/assessments','进入评估向导','primary-link') +
+      link('/knowledge','核对科学来源') + '</div></div>' +
+      '<div class="panel"><h2>演示世界边界</h2><dl class="fact-grid">' +
+      cell('基线 AuthorityRef', scenario.sampleCase.applicability?.applicabilityAssessmentRef?.logicalId) +
+      cell('使用状态', assessment.scientificUseStatus) +
+      cell('Workbench 投影哈希', scenario.sampleCase.projectionHash) +
+      '</dl></div></section>');
+    return;
+  }
   const review = cases.filter((c) => c.reviewRequired).length;
   shell('总览', '从可追溯的科学证据到受治理的适用性复核。',
     '<section class="metrics">' +
@@ -131,7 +152,16 @@ async function renderKnowledge() {
       '当前 Public API 未提供授权知识目录。产品组将对接 WP 提供的已授权目录；不会将上传成功等同于知识已资格化。',
       link('/reviews', '查看合成案例来源', 'primary-link')));
 }
-function renderContext() {
+async function renderContext() {
+  if (meta.liveDemoAvailable) {
+    await json('/api/demo/session');
+    const scenario=await json('/api/demo/scenario');
+    shell('目标上下文', '以真实 ADR Host Workbench 投影核对农业观测的支持范围及原始引用。',
+      contextCard(scenario.sampleCase.targetContext, escapeHtml) +
+      '<section class="panel"><p class="muted">该页面只读。新 ContextDatum、ContextManifest 和测量语义不得由产品自行创造；当前向导使用已合格的精确合成输入。</p>' +
+      link('/assessments', '进入适用性评估', 'primary-link') + '</section>');
+    return;
+  }
   shell('目标上下文', '组织作物、阶段、空间、测量与时间证据。',
     empty('正式上下文提交尚未启用',
       '向导必须先获得正确的 ADR 主体、授权决定及精确来源引用。缺失值将明确保留 UNKNOWN。',
@@ -146,7 +176,44 @@ async function renderAssessments() {
       'ADR-PROD-04 将使用冻结的七个写入合同。当前仅展示流程设计，不会模拟一次已获科学授权的评估。',
       link('/reviews', '查看界面演示结果', 'primary-link')));
 }
-function renderReports() {
+async function renderReports() {
+  if (meta.liveDemoAvailable) {
+    await json('/api/demo/session');
+    const id=sessionStorage.getItem('adr-product-demo-operation');
+    if (!id) {
+      shell('报告','真实 ADR 评估与客户可追溯报告。',
+        empty('尚无本次会话的演示评估',
+          '先在评估向导运行实际 ADR ApplicabilityAssessment，然后从此处导出报告。',
+          link('/assessments','进入评估向导','primary-link')));
+      return;
+    }
+    try {
+      const outcome=await json('/api/demo/assessments/'+encodeURIComponent(id));
+      const c=outcome.workbenchCase;
+      if (outcome.state !== 'CONFIRMED' || !c) {
+        shell('报告','报告生成必须依赖已确认的精确评估。',
+          '<section class="panel"><h2>原操作尚未确认</h2>' +
+          '<p>操作 ID：'+escapeHtml(id)+'</p><p>状态：'+escapeHtml(outcome.state)+
+          '。在结果未确认之前不导出伪科学报告。</p></section>');
+        return;
+      }
+      shell('报告','已确认的真实演示报告，包含 ADR 精确引用和非权威人工反馈。',
+        '<section class="panel"><h2>已确认的真实演示报告</h2>' +
+        '<dl class="fact-grid">' +
+        cell('操作 ID', id) +
+        cell('评估引用', JSON.stringify(outcome.assessmentRef)) +
+        cell('Workbench 投影哈希', c.projectionHash) +
+        cell('原始科学分类', c.classification) + '</dl>' +
+        '<p class="muted">下载的 HTML 含目标上下文、来源、科学主张、条件、限制及人工复核；可在浏览器打印为 PDF。</p>' +
+        '<a href="/api/demo/reports/'+encodeURIComponent(id)+
+        '" id="reports-export" class="primary-link">下载精确证据报告</a></section>');
+    } catch (error) {
+      shell('报告','暂时无法核对原操作，不生成其他身份或伪造报告。',
+        '<section class="panel"><h2>待核对</h2><p>原操作 ID：'+escapeHtml(id)+'</p><p>'+
+        escapeHtml(error.message)+'</p></section>');
+    }
+    return;
+  }
   shell('报告', '保留引用、来源和限制，输出可阅读的客户资料。',
     '<section class="panel"><div class="sectionhead"><h2>合成数据概览</h2>' +
     '<button type="button" id="print-report" class="print-button">打印页面</button></div>' +
@@ -173,12 +240,12 @@ async function render() {
       return showFailure('正式客户模式尚未配置已验证的身份与授权接口。');
     }
     cases = await json('/api/cases');
-    if (path === '/') return renderHome();
+    if (path === '/') return await renderHome();
     if (path === '/knowledge') return await renderKnowledge();
-    if (path === '/context') return renderContext();
+    if (path === '/context') return await renderContext();
     if (path === '/assessments') return await renderAssessments();
     if (path === '/reviews') return await renderReviews();
-    if (path === '/reports') return renderReports();
+    if (path === '/reports') return await renderReports();
     const id = decodeURIComponent(path.split('/')[2] || '');
     const found = cases.find((x) => x.id === id);
     if (found) return renderCase(found);
