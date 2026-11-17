@@ -9,6 +9,10 @@
   "scripts": {
     "start": "node src/server.mjs",
     "test": "node --test test/*.test.mjs",
-    "demo": "node dev.mjs"
+    "demo": "node dev.mjs",
+    "test:browser": "node browser-tests/live-demo.browser.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.65.1"
   }
 }

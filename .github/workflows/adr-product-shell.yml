@@ -29,3 +29,17 @@ jobs:
         run: node acceptance/public-api/run.mjs
       - name: ADR product HTTP acceptance
         run: npm --prefix apps/adr-product test
+      - name: Install pinned browser test dependencies
+        run: npm --prefix apps/adr-product install --no-audit --no-fund
+      - name: Install Chromium for browser acceptance
+        run: ./apps/adr-product/node_modules/.bin/playwright install --with-deps chromium
+      - name: Browser end-to-end acceptance
+        run: npm --prefix apps/adr-product run test:browser
+      - name: Retain product browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: adr-product-browser-evidence
+          path: apps/adr-product/browser-evidence/
+          if-no-files-found: ignore
+
