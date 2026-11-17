@@ -138,6 +138,10 @@ test('real ADR v0.3 HTTP assessment -> Workbench -> persistent non-authority rev
     const asset = await fetch(base + '/live-demo.js');
     assert.equal(asset.status, 200);
     assert.match(await asset.text(), /renderLiveAssessment/);
+    const vocabularyModule = await fetch(base + '/ux-language.js');
+    assert.equal(vocabularyModule.status, 200, 'the browser module graph must not contain an unmapped vocabulary import');
+    assert.match(vocabularyModule.headers.get('content-type'), /javascript/);
+    assert.match(await vocabularyModule.text(), /classificationExplanation/);
   } finally {
     if (product?.listening) await new Promise((resolve) => product.close(resolve));
     await harness.close();

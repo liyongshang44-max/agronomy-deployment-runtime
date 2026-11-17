@@ -10,6 +10,7 @@ const ASSETS = Object.freeze({
   '/app.js': ['../public/app.js', 'text/javascript; charset=utf-8'],
   '/live-demo.js': ['../public/live-demo.js', 'text/javascript; charset=utf-8'],
   '/assessment-view.js': ['../public/assessment-view.js', 'text/javascript; charset=utf-8'],
+  '/ux-language.js': ['../public/ux-language.js', 'text/javascript; charset=utf-8'],
   '/source-intake.js': ['../public/source-intake.js', 'text/javascript; charset=utf-8'],
   '/styles.css': ['../public/styles.css', 'text/css; charset=utf-8']
 });
