@@ -1,7 +1,7 @@
 // Actual Chromium browser acceptance: user flow against real ADR v0.3 Host HTTP.
 // Evidence is a qualified synthetic DEMO, not M1 or M2 production qualification.
 import assert from 'node:assert/strict';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
 import { createDemoHarness } from '../src/demo-harness.mjs';
 import { createProductServer } from '../src/server.mjs';
@@ -54,6 +54,12 @@ try {
 
   await page.locator('.navigation a[href="/assessments"]').click();
   await page.locator('text=已合格演示世界').waitFor();
+  assert.equal(await page.locator('.ux-step-nav a').count(),4);
+  assert.equal(await page.locator('main#main-content').count(),1);
+  assert.equal(await page.locator('.skip-link').count(),1);
+  assert.match(await page.locator('.term-help summary').first().innerText(),/上下文清单/);
+  await page.locator('.term-help summary').first().click();
+  assert.match(await page.locator('.term-help').first().innerText(),/上下文清单/);
   assert.equal(await page.locator('#live-run').isDisabled(), true);
   await page.locator('#selected-scenario').selectOption('QUALIFIED_SYNTHETIC_V03');
   await page.locator('#confirm-context').check();
@@ -66,6 +72,9 @@ try {
   assert.match(content, /ApplicabilityAssessment/);
   assert.match(content, /Workbench Projection Hash/);
   assert.match(content, /sha256:/);
+  assert.match(content,/如何理解这次分类/);
+  assert.match(content,/冲突与限制/);
+  assert.match(content,/优先阅读/);
   const originalAssessment = await page.locator('#live-result').innerText();
   await page.screenshot({ path: new URL('02-real-assessment.png', evidenceDir).pathname, fullPage: true });
 
@@ -89,6 +98,10 @@ try {
   const download = await downloadPromise;
   assert.equal(download.suggestedFilename(), 'adr-demo-report.html');
   assert.ok(!await download.failure());
+  const reportHtml=await readFile(await download.path(),'utf8');
+  assert.match(reportHtml,/首先阅读 · 这次评估说明了什么/);
+  assert.match(reportHtml,/术语与数据限制/);
+  assert.match(reportHtml,/人工复核（非权威产品记录）/);
 
   await page.locator('.navigation a[href="/reports"]').click();
   await page.locator('text=已确认的真实演示报告').first().waitFor();

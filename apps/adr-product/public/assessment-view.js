@@ -1,3 +1,4 @@
+import { classificationExplanation, TERM_HELP, textAvailability } from './ux-language.js';
 // Pure product presentation only: no classification, scientific authority, or unit inference.
 const stringify = (v) => typeof v === 'string' ? v : JSON.stringify(v ?? 'UNKNOWN');
 const value = (datum) => {
@@ -22,7 +23,9 @@ export function contextCard(ctx, esc) {
   const target = ctx?.targetRef ?? {};
   const datums = ctx?.datums ?? [];
   return '<section class="panel science-card"><h2>第一步 · 核对目标上下文</h2>' +
-    '<p class="muted">本次仅使用已建立 AuthorityRef 的合成观测；显示来源的原始单位和时间支持，不进行推测性换算。</p>' +
+    '<p class="muted">请先确认：这是哪块田、哪个季节、何时取得的观测，以及哪些条件没有数据。本次只展示已建立精确引用的合成观测；不会推测或换算缺失值。</p>' +
+    '<details class="term-help"><summary>什么是上下文清单（ContextManifest）？</summary><p>' +
+    esc(TERM_HELP.ContextManifest) + '</p></details>' +
     table([
       row('决策类型', ctx?.decisionType, esc),
       row('田块 / 季节', (target.fieldId ?? 'UNKNOWN') + ' / ' + (target.seasonId ?? 'UNKNOWN'), esc),
@@ -33,6 +36,7 @@ export function contextCard(ctx, esc) {
       row('ContextManifest 引用', refs(ctx?.contextManifestRef), esc)
     ]) +
     '<h2>已记录的观测与上下文</h2>' +
+    '<p class="muted">下面的数值、单位及支持范围保留来自 ADR 的原始表达；“未知”不等于 0。</p>' +
     (datums.length ? datums.map((d) =>
       '<div class="science-block"><h3>' + esc(d.semanticId ?? 'UNKNOWN') + '</h3>' +
       table([
@@ -51,49 +55,70 @@ export function contextCard(ctx, esc) {
 }
 
 export function sourceCard(evidence, esc) {
-  const item = evidence?.knowledgeKind === 'DerivedKnowledge'
-    ? evidence.inputQualifiedEvidence?.[0] ?? {}
-    : evidence ?? {};
-  const source = item.source ?? {};
-  const claim = item.claim ?? {};
-  const span = item.sourceSpan ?? {};
+  const candidates = evidence?.knowledgeKind === 'DerivedKnowledge'
+    ? (Array.isArray(evidence.inputQualifiedEvidence) ? evidence.inputQualifiedEvidence : [])
+    : evidence ? [evidence] : [];
+  const renderOne = (item, i) => {
+    const source = item?.source ?? {};
+    const claim = item?.claim ?? {};
+    const span = item?.sourceSpan ?? {};
+    return '<div class="science-block"><h3>来源证据 ' + (i + 1) + '</h3>' +
+      table([
+        row('来源标题', source.title, esc),
+        row('SourceArtifact 精确引用', refs(source.sourceArtifactRef), esc),
+        row('来源内容哈希', source.contentHash, esc),
+        row('原始科学主张', stringify(claim.assertion), esc),
+        row('主张类型', claim.claimType, esc),
+        row('Claim 精确引用', refs(claim.claimRef), esc),
+        row('来源定位', stringify(claim.sourceLocator ?? span.locator), esc),
+        row('来源忠实性复核状态', item?.sourceFaithfulReview?.disposition, esc),
+        row('资格决定数量', item?.qualification?.decisions?.length ?? 'UNKNOWN', esc),
+        row('原文预览', span.previewAvailable ? '来源声明可用；实际读取仍以授权接口为准' :
+          '当前没有授权原文预览', esc)
+      ]) + '</div>';
+  };
   return '<section class="panel science-card"><h2>第二步 · 阅读农艺知识和来源</h2>' +
+    '<p class="muted">优先核对研究原始主张、适用条件和来源定位。合格知识不代表自动适用于当前田块。</p>' +
+    '<details class="term-help"><summary>“合格知识”和“精确引用”分别意味着什么？</summary><p>' +
+    esc(TERM_HELP.QualifiedKnowledge) + ' ' + esc(TERM_HELP.AuthorityRef) + '</p></details>' +
     table([
-      row('知识类型', evidence?.knowledgeKind, esc),
-      row('知识 AuthorityRef', refs(evidence?.knowledgeRef), esc),
-      row('来源标题', source.title, esc),
-      row('SourceArtifact 引用', refs(source.sourceArtifactRef), esc),
-      row('来源内容哈希', source.contentHash, esc),
-      row('科学主张', stringify(claim.assertion), esc),
-      row('主张类型', claim.claimType, esc),
-      row('Claim 引用', refs(claim.claimRef), esc),
-      row('来源定位', stringify(claim.sourceLocator ?? span.locator), esc),
-      row('科学复核状态', item.sourceFaithfulReview?.disposition, esc),
-      row('资格决定数量', item.qualification?.decisions?.length ?? 'UNKNOWN', esc),
-      row('来源全文预览', span.previewAvailable ? '已获授权可用' : '未提供授权原文', esc)
+      row('知识类型（ADR 原始值）', evidence?.knowledgeKind, esc),
+      row('知识精确引用', refs(evidence?.knowledgeRef), esc),
+      row('展示的来源证据条数', candidates.length, esc)
     ]) +
-    '<p class="muted">科学资格引用不等于对当前田块的自动执行许可；没有授权原文时不伪造页码或全文。</p></section>';
+    (candidates.length ? candidates.map(renderOne).join('') :
+      '<p class="muted">该读模型没有提供可展示的来源证据明细；不能凭空补齐。</p>') +
+    '<p class="muted">如无授权原文，当前页面只显示已返回的来源元数据，不能声称已核实论文全文或具体页码。</p></section>';
 }
 
 export function resultCard(c, esc) {
   const a = c?.applicability ?? {};
+  const interpretation = classificationExplanation(c?.classification);
   return '<div class="science-card">' +
-    '<div class="science-block"><h3>适用性解释</h3>' +
+    '<div class="outcome-explainer" role="note"><p class="eyebrow">如何理解这次分类</p>' +
+    '<h3>' + esc(interpretation.label) + '</h3><p>' + esc(interpretation.next) + '</p>' +
+    '<p class="muted">ADR 原始分类代码：<code>' + esc(textAvailability(c?.classification)) +
+    '</code>。解释仅帮助阅读，不改变科学结论和权限。</p></div>' +
+    '<div class="science-block"><h3>结果与下一步</h3>' +
     table([
-      row('原始 ADR 分类代码', c?.classification, esc),
-      row('是否进入人工复核', c?.reviewRequired ? '是' : '否', esc),
-      row('运输适用性状态', a.transportStatus, esc),
-      row('科学使用状态', a.scientificUseStatus, esc),
-      row('复核原因代码', codeList(c?.reasonCodes, esc), (x) => x)
-    ]) + '</div>' +
-    '<div class="science-block"><h3>缺失的目标上下文</h3>' +
+      row('是否进入人工复核', c?.reviewRequired == null ? 'UNKNOWN' : c.reviewRequired ? '是' : '否', esc),
+      row('目标适用性状态（Transport Status）', a.transportStatus, esc),
+      row('科学用途资格（Scientific Use Status）', a.scientificUseStatus, esc),
+      row('需要关注的原因代码', codeList(c?.reasonCodes, esc), (x) => x)
+    ]) +
+    '<details class="term-help"><summary>这两个状态有什么区别？</summary><p>' +
+    esc(TERM_HELP.TransportStatus) + ' ' + esc(TERM_HELP.ScientificUseStatus) +
+    '</p></details></div>' +
+    '<div class="science-block"><h3>待补充的目标信息</h3>' +
     list(a.missingContextSemanticIds, esc) + '</div>' +
-    '<div class="science-block"><h3>条件匹配</h3>' +
+    '<div class="science-block"><h3>条件核对（ADR 原始值）</h3>' +
     list(a.conditionResults, esc) + '</div>' +
-    '<div class="science-block"><h3>知识冲突和适用性限制</h3>' +
-    list(a.conflicts, esc) + list(a.limitations, esc) + '</div>' +
-    '<div class="science-block"><h3>校准与受治理转换需求</h3>' +
-    list(a.requiredCalibrationCodes, esc) +
-    list(a.requiredTransformationRefs, esc) + '</div>' +
+    '<div class="science-block"><h3>冲突与限制</h3>' +
+    '<h4>知识冲突</h4>' + list(a.conflicts, esc) +
+    '<h4>适用性限制</h4>' + list(a.limitations, esc) + '</div>' +
+    '<div class="science-block"><h3>进一步治理需求</h3>' +
+    '<h4>校准要求</h4>' + list(a.requiredCalibrationCodes, esc) +
+    '<h4>正式转换要求</h4>' + list(a.requiredTransformationRefs, esc) + '</div>' +
+    '<p class="muted">“未列出”仅表示此只读投影未提供相应条目，不保证该问题不存在。</p>' +
     '</div>';
 }

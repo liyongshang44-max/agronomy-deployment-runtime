@@ -1,4 +1,5 @@
 import { contextCard, sourceCard, resultCard } from './assessment-view.js';
+import { TERM_HELP, REVIEW_OUTCOME_LABELS, statusExplanation, classificationExplanation, reviewTimingLabel } from './ux-language.js';
 // Browser UI for the real ADR v0.3 synthetic world.
 // All actual scientific values displayed below come from the ADR Host, never from UI classification rules.
 const jsonText = (value) => JSON.stringify(value, null, 2);
@@ -50,7 +51,10 @@ export async function renderLiveAssessment({shell, json, escapeHtml, status, cel
   const session = await json('/api/demo/session');
   const scenario = await json('/api/demo/scenario');
   const sample = scenario.sampleCase;
-  shell('适用性评估', '真实 Pilot Host 的 ApplicabilityAssessment 写入及 Workbench 读取；使用现有合格合成世界。',
+  shell('适用性评估', '分四步核对证据，再执行真实 ADR 适用性评估。全部数据来自隔离合成测试世界。',
+    '<nav class="ux-step-nav" aria-label="评估步骤">' +
+    '<a href="#ux-context">1. 目标信息</a><a href="#ux-source">2. 科学来源</a>' +
+    '<a href="#ux-scenario">3. 选择场景</a><a href="#ux-run">4. 核对并运行</a></nav>' +
     '<section class="panel"><div class="sectionhead"><h2>已合格演示世界</h2>' +
     '<span class="status">真实 Host HTTP</span></div>' +
     '<p>当前仅使用 ADR 已建立的合成知识、ContextManifest、KnowledgeRetrievalResult 和测试授权。浏览器不选择 ADR Principal、凭据或科学资格。</p>' +
@@ -60,9 +64,9 @@ export async function renderLiveAssessment({shell, json, escapeHtml, status, cel
     cell('科学使用状态', sample.applicability?.scientificUseStatus ?? 'UNKNOWN') +
     cell('基线 Workbench 分类', sample.classification) +
     '</div></section>' +
-    contextCard(sample.targetContext, escapeHtml) +
-    sourceCard(sample.scientificEvidence, escapeHtml) +
-    '<section class="panel"><h2>第三步 · 选择合格演示场景</h2>' +
+    '<div id="ux-context">' + contextCard(sample.targetContext, escapeHtml) + '</div>' +
+    '<div id="ux-source">' + sourceCard(sample.scientificEvidence, escapeHtml) + '</div>' +
+    '<section class="panel" id="ux-scenario"><h2>第三步 · 选择合格演示场景</h2>' +
     '<label class="review-input">选择实际可执行场景<select id="selected-scenario" required>' +
     '<option value="">请选择合格演示场景</option>' +
     '<option value="' + escapeHtml(scenario.scenarioId) + '">v0.3 合格合成世界 · ' + escapeHtml(scenario.scenarioId) + '</option>' +
@@ -73,10 +77,11 @@ export async function renderLiveAssessment({shell, json, escapeHtml, status, cel
       contextManifestRef:sample.targetContext?.contextManifestRef,
       decisionProblemRef:sample.targetContext?.decisionProblemRef
     })) + '</pre></section>' +
-    '<section class="panel"><h2>第四步 · 确认并执行</h2><p>每次明确触发后生成新的评估逻辑 ID，BFF 固定全部已授权证据引用。发生超时后仅允许使用同一操作 ID 核对。</p>' +
+    '<section class="panel" id="ux-run"><h2>第四步 · 确认并执行</h2>' +
+    '<p>确认所选场景、观测时间和科学来源。系统保存精确操作编号；如发生断线，只核对原操作，不自动产生新评估。</p>' +
     '<div class="confirmation"><label><input type="checkbox" id="confirm-context"> 已核对当前合成目标上下文、时间和测量来源</label>' +
     '<label><input type="checkbox" id="confirm-knowledge"> 已核对知识引用、原始主张及使用限制</label></div>' +
-    '<button type="button" class="primary-link" id="live-run" disabled>运行 ADR 适用性评估</button>' +
+    '<button type="button" class="primary-link" id="live-run" disabled aria-describedby="operation-identity-status">执行真实适用性评估</button>' +
     '<button type="button" class="print-button" id="new-demo-case" disabled>明确开始新案件</button>' +
     '<p class="muted" id="operation-identity-status" role="status">尚未创建本次操作。</p>' +
     '<p class="muted">这是隔离测试世界的真实科学计算，不是正式客户的科学授权或农业执行指令。</p></section>' +
@@ -86,15 +91,21 @@ export async function renderLiveAssessment({shell, json, escapeHtml, status, cel
     const target = document.getElementById('live-result');
     if (!target) return;
     if (result.state !== 'CONFIRMED' || !result.workbenchCase) {
-      target.innerHTML = '<section class="panel"><h2>执行状态：' + escapeHtml(result.state) +
-        '</h2><p>原因：' + escapeHtml(result.failureCode ?? '尚未完成') +
-        '</p><p>如结果不确定，再次点击运行将使用同一个 operationId / Idempotency-Key。</p></section>';
+      target.innerHTML = '<section class="panel ux-state" role="status">' +
+        '<h2>执行状态：' + escapeHtml(result.state) + '</h2>' +
+        '<p>' + escapeHtml(statusExplanation(result.state)) + '</p>' +
+        '<p class="muted">原始原因代码：<code>' + escapeHtml(result.failureCode ?? '未提供') +
+        '</code></p><p>当前操作编号：<code>' + escapeHtml(result.operationId ?? 'UNKNOWN') +
+        '</code></p><p>再次核对时只会使用原操作及原幂等身份。未确认的结果不得导出为成功报告。</p></section>';
       return;
     }
     const c = result.workbenchCase;
+    const interpretation = classificationExplanation(c.classification);
     target.innerHTML = '<section class="panel"><div class="sectionhead"><h2>实际 ADR 评估结果</h2>' +
       status(c.classification) + '</div>' +
-      '<p class="muted">下列数据直接来自新创建的 ApplicabilityAssessment 及其 Workbench 投影。</p>' +
+      '<p class="muted">已从真实 ADR Pilot Host 取得新评估记录与 Workbench 投影；这不是农业行动许可。</p>' +
+      '<p class="ux-guidance"><strong>优先阅读：</strong>' + escapeHtml(interpretation.label) +
+      '。' + escapeHtml(interpretation.next) + '</p>' +
       '<div class="fact-grid">' +
       cell('AuthorityRef', refLabel(result.assessmentRef)) +
       cell('Workbench Projection Hash', c.projectionHash) +
@@ -111,15 +122,18 @@ export async function renderLiveAssessment({shell, json, escapeHtml, status, cel
         why: c.why, scientificEvidence: c.scientificEvidence,
         targetContext: c.targetContext, applicability: c.applicability
       })) + '</pre></details></section>' +
-      '<section class="panel"><h2>非权威人工复核</h2>' +
-      '<p>反馈只存储在独立产品记录中，不改变 ADR ApplicabilityAssessment。</p>' +
-      '<label class="review-input">复核结论<select id="live-outcome">' +
-      OUTCOMES.map((o) => '<option>' + o + '</option>').join('') + '</select></label>' +
-      '<label class="review-input">备注<textarea id="live-notes" maxlength="2000" rows="4" placeholder="说明复核依据和需补充的材料"></textarea></label>' +
+      '<section class="panel" id="ux-review"><h2>人工复核与记录</h2>' +
+      '<p>先点击“开始人工复核”，阅读结果并记录意见。人工意见只保存于独立产品记录，不更改 ADR 的原始分类或科学资格。</p>' +
+      '<details class="term-help"><summary>人工复核是否会修改科学结论？</summary><p>' +
+      escapeHtml(TERM_HELP.ReviewFeedback) + '</p></details>' +
+      '<label class="review-input">人工意见<select id="live-outcome">' +
+      OUTCOMES.map((o) => '<option value="' + o + '">' +
+        escapeHtml(REVIEW_OUTCOME_LABELS[o] ?? o) + '</option>').join('') + '</select></label>' +
+      '<label class="review-input">复核说明（可注明证据缺口）<textarea id="live-notes" maxlength="2000" rows="4" placeholder="例如：需补充某个观测的时间和测量来源"></textarea></label>' +
       '<div class="quick"><button type="button" id="begin-review" class="print-button">开始人工复核计时</button>' +
     '<button type="button" id="live-review" class="primary-link" disabled>保存复核反馈</button>' +
       '<a href="/api/demo/reports/' + encodeURIComponent(result.operationId) +
-      '" id="live-report">导出含证据的 HTML 报告</a></div>' +
+      '" id="live-report">导出可追溯报告（HTML）</a></div>' +
       '<div id="review-feedback" role="status"></div></section>';
     const startButton = document.getElementById('begin-review');
     const saveButton = document.getElementById('live-review');
@@ -134,9 +148,9 @@ export async function renderLiveAssessment({shell, json, escapeHtml, status, cel
       feedbackSaved = true;
       startButton.disabled = true;
       saveButton.disabled = true;
-      feedbackView.textContent = restored ? '此前已保存：' + record.outcome :
-        '非权威复核已保存，复核时长：' +
-        (record.reviewDurationStatus === 'MEASURED' ? record.durationMs + ' 毫秒' : 'UNKNOWN') +
+      feedbackView.textContent = restored ? '此前已保存：' + record.outcome +
+        '（' + (REVIEW_OUTCOME_LABELS[record.outcome] ?? '请核查原始代码') + '）' :
+        '非权威复核已保存，耗时：' + reviewTimingLabel(record) +
         '，绑定投影：' + record.caseProjectionHash;
     };
     const markStarted = (record) => {
@@ -144,7 +158,7 @@ export async function renderLiveAssessment({shell, json, escapeHtml, status, cel
       startButton.disabled = true;
       saveButton.disabled = false;
       feedbackView.textContent =
-        '复核开始时间：' + record.startedAt + '（与评估创建时间分离）';
+        '复核开始时间：' + record.startedAt + '（仅从此事件开始计时，不包含评估执行及等待）';
     };
     startButton.addEventListener('click', async () => {
       startButton.disabled = true;
@@ -229,11 +243,11 @@ export async function renderLiveAssessment({shell, json, escapeHtml, status, cel
     } catch (error) {
       terminal = false;
       newCase.disabled = true;
-      noteIdentity(id, '状态读取失败，未更换身份；等待核对原请求');
+      noteIdentity(id, '状态暂时无法读取；原操作编号和幂等身份保持不变');
       document.getElementById('live-result').innerHTML =
         '<section class="panel"><h2>原操作状态暂不可核对</h2><p>' +
         escapeHtml(error.message) + '</p><p>已保留操作 ID：' + escapeHtml(id) +
-        '。查询失败不能视为新案件授权。</p></section>';
+        '。请检查连接并再次点击“执行真实适用性评估”核对同一操作；查询失败不允许新建案件。</p></section>';
       return null;
     }
   };
@@ -276,11 +290,11 @@ export async function renderLiveAssessment({shell, json, escapeHtml, status, cel
       const id = sessionStorage.getItem(key);
       terminal = false;
       newCase.disabled = true;
-      noteIdentity(id, '请求结果不确定；保留同一幂等身份');
+      noteIdentity(id, '写入结果尚未确认；保持同一操作编号，先核对状态');
       document.getElementById('live-result').innerHTML =
         '<section class="panel"><h2>提交结果不确定</h2><p>' + escapeHtml(error.message) +
         '</p><p>原操作 ID：' + escapeHtml(id ?? '未取得') +
-        '。不可自动创建新幂等键。</p></section>';
+        '。网络恢复后先核对原操作；不可自动创建新幂等键。</p></section>';
     } finally { button.disabled = false; }
   });
 }
