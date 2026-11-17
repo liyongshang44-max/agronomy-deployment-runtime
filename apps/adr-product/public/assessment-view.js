@@ -82,7 +82,7 @@ export function sourceCard(evidence, esc, options = {}) {
     (src.conditions.length?src.conditions.map(c=>
       '<div class="condition-item"><strong>'+esc(c.label)+'</strong> <span class="muted">['+esc(c.code)+'] '+fmt(c.status)+'</span>'+
       (c.dimensions.length?'<ul class="science-list">'+c.dimensions.map(d=>
-        '<li>'+esc(d.label)+'：'+fmt(d.value)+' <span class="muted">('+fmt(d.semanticId)+')</span></li>').join('')+'</ul>':
+        '<li>'+esc(d.label)+'：'+fmt(d.readableValue)+' <span class="muted">('+fmt(d.semanticId)+')</span></li>').join('')+'</ul>':
         '<p class="science-unknown">该类别没有列出具体条件值；不得填补。</p>')+
       '</div>').join(''):
       '<p class="science-unknown">NOT_REPORTED：未提供来源条件清单</p>')+
@@ -108,8 +108,10 @@ export function sourceCard(evidence, esc, options = {}) {
     '<h2>'+esc(options.heading ?? '第二步 · 阅读农艺知识和来源')+'</h2>'+
     '<p class="science-demo-label">SYNTHETIC DEMO · 仅用于隔离合成测试，不是对生产田块的农业建议。</p>'+
     '<div class="reading-question"><h3>1. 这项研究说了什么？</h3>'+
-    '<p class="muted">下面仅重述 ADR Host 返回的原始科学主张，不翻译出新的阈值、因果关系或用途。</p>'+
+    '<p class="muted">先看 Host 原始科学主张。中文阅读辅助只对精确匹配的已知合成句子提供字面直译；不扩写阈值、因果关系或用途。</p>'+
     '<blockquote class="science-assertion" data-reading-assertion>'+fmt(reading.assertion)+'</blockquote>'+
+    (reading.literalChineseGloss?'<p class="science-gloss" data-literal-gloss>'+esc(reading.literalChineseGloss)+'</p>':
+      '<p class="science-unknown">尚无经逐字核对的中文阅读辅助；请按原始主张核查，不能自行补写结论。</p>')+
     (reading.isDerived?'<p>此项为综合知识；各条输入研究的原始主张见下一部分，不能当作单项实验结论。</p>':'')+
     '</div>'+
     '<div class="reading-question"><h3>2. 证据来自哪里？</h3>'+

@@ -1,7 +1,8 @@
 // UX-02 targeted science-faithfulness tests: product-facing interpretations only.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { fieldState, knowledgeReading, evidenceItems } from '../public/knowledge-reading.js';
+import { fieldState, knowledgeReading, evidenceItems,
+  literalGloss, readableDimensionValue } from '../public/knowledge-reading.js';
 import { sourceCard, resultCard } from '../public/assessment-view.js';
 import { renderDemoReport } from '../src/report.mjs';
 
@@ -147,4 +148,24 @@ test('no fabricated author, year, verified full text or numeric threshold',()=>{
   delete noLocator.claim.sourceLocator;
   const missing=knowledgeReading(noLocator);
   assert.ok(missing.absenceReasons.includes('可核查来源定位'));
+});
+
+test('exact synthetic literal Chinese gloss and category translations do not broaden source claims',()=>{
+  const exact='Maintain irrigation depletion within the qualified threshold.';
+  const gloss=literalGloss(exact);
+  assert.ok(gloss && gloss.includes('中文直译'));
+  assert.ok(gloss.includes('未给出具体阈值数字'));
+  assert.equal(literalGloss(exact+' Now recommend irrigation.'),null,
+    'even a one-sentence change must not reuse unsupported translation');
+  assert.equal(literalGloss('Different treatment with 50 percent yield increase'),null);
+  assert.equal(readableDimensionValue({type:'CATEGORY',category:'maize'}),'玉米（原始值 maize）');
+  assert.equal(readableDimensionValue({type:'CATEGORY',category:'silt loam'}),'粉砂壤土（原始值 silt loam）');
+  assert.equal(readableDimensionValue({type:'INTEGER',integer:0}),'0');
+  const literalSource=structuredClone(qualified);
+  literalSource.claim.assertion=exact;
+  const view=sourceCard(literalSource,esc);
+  assert.match(view,/中文直译（仅帮助阅读原句）/);
+  assert.match(view,/没有授权原文预览/);
+  assert.match(view,/未提供具体阈值/);
+  assert.equal(JSON.stringify(literalSource.claim.assertion),JSON.stringify(exact));
 });

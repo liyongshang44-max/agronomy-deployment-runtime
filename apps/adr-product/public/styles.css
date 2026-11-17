@@ -70,3 +70,6 @@ button:disabled{cursor:not-allowed}
 #source-intake-details[open]>summary{margin-bottom:14px}
 .knowledge-reading :where(p,li,th,td,blockquote){overflow-wrap:anywhere}
 @media(max-width:690px){.reading-question{padding-top:16px;margin-top:16px}.science-assertion{font-size:14px;padding:12px}.reading-question h3{font-size:16px}.knowledge-reading .science-block{padding:12px 0}}
+
+/* Literal-source-only Chinese reading aid: never replaces the exact Host claim. */
+.science-gloss{font-size:14px!important;line-height:1.85;color:#1b486b!important;background:#eaf3fb;border:1px solid #b7d4e9;border-radius:8px;padding:13px 16px;overflow-wrap:anywhere}

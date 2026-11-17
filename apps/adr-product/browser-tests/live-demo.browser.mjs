@@ -83,6 +83,12 @@ try {
   assert.equal((await knowledgeSummary.locator('[data-reading-assertion]').textContent()).trim(),
     expectedAssertion);
   const understanding=await knowledgeSummary.innerText();
+  // The one fixed qualified synthetic sentence receives only its exact,
+  // non-authoritative literal reading aid. Unknown claims must not reuse it.
+  if (expectedAssertion==='Maintain irrigation depletion within the qualified threshold.') {
+    assert.match(await knowledgeSummary.locator('[data-literal-gloss]').innerText(),/中文直译/);
+    assert.match(await knowledgeSummary.locator('[data-literal-gloss]').innerText(),/未给出具体阈值数字/);
+  }
   for(const question of ['1. 这项研究说了什么？','2. 证据来自哪里？',
     '3. 已证明适用于什么条件？','4. 哪些条件不知道或尚未证明？',
     '5. 下一步能做什么？'])assert.ok(understanding.includes(question),question);
@@ -173,6 +179,8 @@ try {
   assert.match(reportHtml,/4. 尚未得到证明或缺失的信息/);
   assert.match(reportHtml,/5. 人工复核意见/);
   assert.match(reportHtml,/6. 完整技术证据和精确引用/);
+  if(expectedAssertion==='Maintain irrigation depletion within the qualified threshold.')
+    assert.match(reportHtml,/中文直译（仅帮助阅读原句）/);
   assert.match(reportHtml,/人工复核意见（非权威产品记录）/);
   const exactSourceRef=knowledge.knowledgeRef?.logicalId ?? knowledge.knowledgeRef?.logical_id;
   assert.ok(exactSourceRef && reportHtml.includes(exactSourceRef),

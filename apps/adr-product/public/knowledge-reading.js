@@ -32,6 +32,29 @@ export const FAMILY_LABELS = Object.freeze({
   MEASUREMENT:'测量及方法',
   JURISDICTION_ECONOMIC:'地区、法规与经济条件'
 });
+// Controlled literal reading aid for the one qualified synthetic Host sentence.
+// Exact-input equality only; unsupported assertions NEVER receive an invented
+// translation. This is not a new agronomic conclusion or threshold authority.
+const EXACT_SYNTHETIC_LITERAL_GLOSS = Object.freeze({
+  'Maintain irrigation depletion within the qualified threshold.':
+    '中文直译（仅帮助阅读原句）：该记录称，灌溉相关的亏缺应维持在其所指的合格阈值范围内。原句未给出具体阈值数字，不能据此作业。'
+});
+const SIMPLE_CATEGORY_TRANSLATIONS = Object.freeze({
+  maize:'玉米',
+  'silt loam':'粉砂壤土'
+});
+export function readableDimensionValue(v) {
+  if(v && typeof v==='object' && !Array.isArray(v)) {
+    const raw=['category','decimal','integer','string'].map(k=>v[k]).find(x=>x!==undefined&&x!==null);
+    if(raw!==undefined) {
+      const term=String(raw);
+      return SIMPLE_CATEGORY_TRANSLATIONS[term] ? SIMPLE_CATEGORY_TRANSLATIONS[term]+'（原始值 '+term+'）' : term;
+    }
+  }
+  return fieldState(v);
+}
+export const literalGloss = (assertion) => typeof assertion==='string' ?
+  (EXACT_SYNTHETIC_LITERAL_GLOSS[assertion]??null) : null;
 export const DIMENSION_LABELS = Object.freeze({
   'crop.code':'作物',
   'crop.stage':'作物生育阶段',
@@ -52,7 +75,8 @@ export function sourceConditions(item) {
     dimensions:Array.isArray(family?.dimensions) ? family.dimensions.map(d => ({
       semanticId:fieldState(d?.semanticId),
       label:DIMENSION_LABELS[d?.semanticId] ?? '来源记录指标',
-      value:fieldState(d?.value)
+      value:fieldState(d?.value),
+      readableValue:readableDimensionValue(d?.value)
     })) : []
   }));
 }
@@ -122,6 +146,7 @@ export function knowledgeReading(evidence,applicability) {
   return {
     evidenceKind:fieldState(evidence?.knowledgeKind),
     assertion:fieldState(assertion),
+    literalChineseGloss:literalGloss(assertion),
     isDerived:derived,items:sourceSummaries,
     sourceCount:sourceSummaries.length,
     qualificationLimits,preconditions,transportConstraints,
