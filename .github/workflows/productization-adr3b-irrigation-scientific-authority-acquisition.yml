@@ -1,0 +1,31 @@
+name: ADR Productization — ADR-3B Irrigation Scientific Authority Acquisition
+
+on:
+  push:
+    branches:
+      - 'analysis/adr3b-irrigation-scientific-authority-acquisition-*'
+    paths:
+      - 'acceptance/adr3b-irrigation-scientific-authority-acquisition/**'
+      - '.github/workflows/productization-adr3b-irrigation-scientific-authority-acquisition.yml'
+  pull_request:
+    paths:
+      - 'acceptance/adr3b-irrigation-scientific-authority-acquisition/**'
+      - '.github/workflows/productization-adr3b-irrigation-scientific-authority-acquisition.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scientific_authority_acquisition:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Report runtime
+        run: node --version
+      - name: ADR-3B source-faithful authority acquisition and fail-closed comparability proof
+        run: node acceptance/adr3b-irrigation-scientific-authority-acquisition/run.mjs
