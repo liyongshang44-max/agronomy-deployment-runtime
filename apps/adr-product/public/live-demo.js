@@ -62,7 +62,18 @@ export async function renderLiveAssessment({shell, json, escapeHtml, status, cel
     '</div></section>' +
     contextCard(sample.targetContext, escapeHtml) +
     sourceCard(sample.scientificEvidence, escapeHtml) +
-    '<section class="panel"><h2>实际执行</h2><p>每次明确触发后生成新的评估逻辑 ID，BFF 固定全部已授权证据引用。发生超时后仅允许使用同一操作 ID 重新核对。</p>' +
+    '<section class="panel"><h2>第三步 · 选择合格演示场景</h2>' +
+    '<label class="review-input">选择实际可执行场景<select id="selected-scenario" required>' +
+    '<option value="">请选择合格演示场景</option>' +
+    '<option value="' + escapeHtml(scenario.scenarioId) + '">v0.3 合格合成世界 · ' + escapeHtml(scenario.scenarioId) + '</option>' +
+    '<option disabled value="">其他知识/田块组合：UNAVAILABLE（缺少合格接口）</option>' +
+    '</select></label><p class="muted">选定场景绑定以下精确输入，而非由浏览器自行签发科学资格：</p>' +
+    '<pre class="evidence-json">' + escapeHtml(jsonText({
+      knowledgeRef:sample.scientificEvidence?.knowledgeRef,
+      contextManifestRef:sample.targetContext?.contextManifestRef,
+      decisionProblemRef:sample.targetContext?.decisionProblemRef
+    })) + '</pre></section>' +
+    '<section class="panel"><h2>第四步 · 确认并执行</h2><p>每次明确触发后生成新的评估逻辑 ID，BFF 固定全部已授权证据引用。发生超时后仅允许使用同一操作 ID 核对。</p>' +
     '<div class="confirmation"><label><input type="checkbox" id="confirm-context"> 已核对当前合成目标上下文、时间和测量来源</label>' +
     '<label><input type="checkbox" id="confirm-knowledge"> 已核对知识引用、原始主张及使用限制</label></div>' +
     '<button type="button" class="primary-link" id="live-run" disabled>运行 ADR 适用性评估</button>' +
@@ -87,6 +98,10 @@ export async function renderLiveAssessment({shell, json, escapeHtml, status, cel
       '<div class="fact-grid">' +
       cell('AuthorityRef', refLabel(result.assessmentRef)) +
       cell('Workbench Projection Hash', c.projectionHash) +
+      cell('本次选择场景', result.scenarioId) +
+      cell('实际输入知识', refLabel(result.inputBinding?.knowledgeRef)) +
+      cell('实际 ContextManifest', refLabel(result.inputBinding?.contextManifestRef)) +
+      cell('实际检索结果', refLabel(result.inputBinding?.retrievalRef)) +
       cell('Transport Status', c.applicability?.transportStatus) +
       cell('Scientific Use Status', c.applicability?.scientificUseStatus) + '</div>' +
       resultCard(c, escapeHtml) +
@@ -168,10 +183,15 @@ export async function renderLiveAssessment({shell, json, escapeHtml, status, cel
 
   const contextAck = document.getElementById('confirm-context');
   const knowledgeAck = document.getElementById('confirm-knowledge');
+  const selectedScenario = document.getElementById('selected-scenario');
   const runButton = document.getElementById('live-run');
-  const updateReady = () => { runButton.disabled = !(contextAck.checked && knowledgeAck.checked); };
+  const updateReady = () => {
+    runButton.disabled = !(contextAck.checked && knowledgeAck.checked
+      && selectedScenario.value === scenario.scenarioId);
+  };
   contextAck.addEventListener('change', updateReady);
   knowledgeAck.addEventListener('change', updateReady);
+  selectedScenario.addEventListener('change', updateReady);
 
   // Once created, an operation identity is retained until the user explicitly
   // begins a new case from a known terminal state. A failed GET never
@@ -229,7 +249,7 @@ export async function renderLiveAssessment({shell, json, escapeHtml, status, cel
       const response = await fetch('/api/demo/assessments', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-csrf-token': session.csrf },
-        body: JSON.stringify({ operationId: id, scenarioId: 'QUALIFIED_SYNTHETIC_V03' })
+        body: JSON.stringify({ operationId: id, scenarioId: selectedScenario.value })
       });
       const result = await response.json();
       if (!response.ok && response.status !== 202) throw new Error(result.code ?? 'RUN_UNCONFIRMED');

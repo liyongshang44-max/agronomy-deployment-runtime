@@ -292,6 +292,51 @@ export function createDemoController(config) {
         });
       } catch (e) { return json(res, e.status ?? 503, { code: toText(e.message) }); }
     }
+    if (pathname === '/api/demo/sources') {
+      if (req.method === 'GET') {
+        return json(res, 200, store.listSources(session.sid));
+      }
+      if (req.method === 'POST') {
+        let body;
+        try { body = await receive(req); }
+        catch (e) { return json(res, e.status ?? 400, { code: e.message }); }
+        // Metadata only; no PDF bytes, text, file paths, rights decisions, or
+        // QualifiedKnowledge refs may be submitted through this product route.
+        const required = ['title', 'owner', 'version', 'crop', 'region', 'season', 'rightsBasis'];
+        const allowed = new Set([...required, 'notes']);
+        const bound = { title: 180, owner: 120, version: 80, crop: 100,
+          region: 140, season: 90, rightsBasis: 40, notes: 400 };
+        if (!body || typeof body !== 'object' || Array.isArray(body) ||
+          Object.keys(body).some((k) => !allowed.has(k)) ||
+          required.some((k) => typeof body[k] !== 'string' ||
+            body[k].trim().length < 1 || body[k].length > bound[k]) ||
+          (body.notes !== undefined &&
+            (typeof body.notes !== 'string' || body.notes.length > bound.notes)) ||
+          !['NOT_PROVIDED', 'CUSTOMER_ASSERTION_RECORDED', 'LICENSE_REFERENCE_RECORDED']
+            .includes(body.rightsBasis)) {
+          return json(res, 400, { code: 'INVALID_SOURCE_METADATA' });
+        }
+        if (store.listSources(session.sid).length >= 20) {
+          return json(res, 409, { code: 'DEMO_SOURCE_LIMIT_REACHED' });
+        }
+        const item = {
+          kind: 'NON_AUTHORITY_SOURCE_INTAKE',
+          id: randomUUID(),
+          ...Object.fromEntries(required.map((k) => [k, body[k].trim()])),
+          notes: body.notes?.trim() ?? '',
+          submittedAt: new Date().toISOString(),
+          status: 'SUBMITTED',
+          qualificationStatus: 'UNAVAILABLE',
+          qualifiedKnowledgeRef: null,
+          rightsVerified: false,
+          fulltextRetained: false,
+          authorizedForModelEgress: false
+        };
+        try { store.addSource(session.sid, item); }
+        catch { return json(res, 503, { code: 'SOURCE_METADATA_PERSISTENCE_UNCONFIRMED' }); }
+        return json(res, 201, item);
+      }
+    }
     if (pathname === '/api/workbench/escalations' && req.method === 'GET') {
       try {
         const result = await upstream(config, '/v1/workbench/escalations');

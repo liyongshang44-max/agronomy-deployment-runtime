@@ -31,9 +31,26 @@ try {
   await page.goto(url, { waitUntil: 'networkidle' });
   await page.screenshot({ path: new URL('01-home-desktop.png', evidenceDir).pathname, fullPage: true });
 
+  // Register metadata only: it must remain SUBMITTED/UNAVAILABLE, never science.
+  await page.locator('.navigation a[href="/knowledge"]').click();
+  await page.locator('text=正式 Host 已可读取的合格演示知识').waitFor();
+  await page.locator('#source-intake input[name="title"]').fill('合成候选研究资料');
+  await page.locator('#source-intake input[name="owner"]').fill('演示来源所有者');
+  await page.locator('#source-intake input[name="version"]').fill('demo-revision-1');
+  await page.locator('#source-intake input[name="crop"]').fill('maize');
+  await page.locator('#source-intake input[name="region"]').fill('Synthetic region');
+  await page.locator('#source-intake input[name="season"]').fill('demo-season');
+  await page.locator('#source-intake select[name="rightsBasis"]').selectOption('NOT_PROVIDED');
+  await page.locator('#source-intake button[type="submit"]').click();
+  await page.locator('text=来源元数据已登记：').waitFor({timeout:15000});
+  assert.match(await page.locator('#sources-list').innerText(), /SUBMITTED/);
+  assert.match(await page.locator('#sources-list').innerText(), /UNAVAILABLE/);
+  await page.screenshot({ path: new URL('01b-knowledge-source-intake.png', evidenceDir).pathname, fullPage: true });
+
   await page.locator('.navigation a[href="/assessments"]').click();
   await page.locator('text=已合格演示世界').waitFor();
   assert.equal(await page.locator('#live-run').isDisabled(), true);
+  await page.locator('#selected-scenario').selectOption('QUALIFIED_SYNTHETIC_V03');
   await page.locator('#confirm-context').check();
   await page.locator('#confirm-knowledge').check();
   assert.equal(await page.locator('#live-run').isEnabled(), true);
@@ -131,6 +148,7 @@ try {
   });
   await page.goto(url + '/assessments', { waitUntil: 'networkidle' });
   await page.locator('text=原操作状态暂不可核对').waitFor();
+  await page.locator('#selected-scenario').selectOption('QUALIFIED_SYNTHETIC_V03');
   await page.locator('#confirm-context').check();
   await page.locator('#confirm-knowledge').check();
   for (let i = 0; i < 3; i += 1) {

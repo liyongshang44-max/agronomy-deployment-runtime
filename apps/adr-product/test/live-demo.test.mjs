@@ -76,6 +76,11 @@ test('real ADR v0.3 HTTP assessment -> Workbench -> persistent non-authority rev
     const created = await first.json();
     assert.equal(first.status, 201, JSON.stringify(created));
     assert.equal(created.state, 'CONFIRMED', JSON.stringify(created));
+    assert.equal(created.scenarioId, 'QUALIFIED_SYNTHETIC_V03');
+    assert.equal(created.inputBinding.contextManifestRef.semantic_hash,
+      scenario.sampleCase.targetContext.contextManifestRef.semanticHash);
+    assert.equal(created.inputBinding.knowledgeRef.semantic_hash,
+      scenario.sampleCase.scientificEvidence.knowledgeRef.semanticHash);
     assert.equal(created.assessmentRef.kind, 'ApplicabilityAssessment');
     assert.equal(created.assessmentRef.logical_id, 'applicability.adr-prod-demo.' + operationId);
     assert.match(created.assessmentRef.semantic_hash, /^sha256:/);

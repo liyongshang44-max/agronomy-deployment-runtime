@@ -1,3 +1,4 @@
+import {renderSourceIntake} from './source-intake.js';
 import { renderLiveAssessment, renderLiveReviews } from './live-demo.js';
 // ADR-PROD product shell. DEMO cases are synthetic illustrations, never scientific outcomes.
 const app = document.getElementById('app');
@@ -123,7 +124,8 @@ function renderCase(c) {
     '<ul class="bullets">' + c.limitations.map((x) => '<li>' + escapeHtml(x) + '</li>').join('') + '</ul>' +
     '<p class="muted">人工复核反馈与报告的持久化正在 ADR-PROD-06 施工范围内；当前界面不伪造保存成功。</p></section>');
 }
-function renderKnowledge() {
+async function renderKnowledge() {
+  if (meta.liveDemoAvailable) return await renderSourceIntake({shell, json, escapeHtml});
   shell('农艺知识', '查看来源、资格与使用边界。',
     empty('尚无正式知识目录',
       '当前 Public API 未提供授权知识目录。产品组将对接 WP 提供的已授权目录；不会将上传成功等同于知识已资格化。',
@@ -172,7 +174,7 @@ async function render() {
     }
     cases = await json('/api/cases');
     if (path === '/') return renderHome();
-    if (path === '/knowledge') return renderKnowledge();
+    if (path === '/knowledge') return await renderKnowledge();
     if (path === '/context') return renderContext();
     if (path === '/assessments') return await renderAssessments();
     if (path === '/reviews') return await renderReviews();

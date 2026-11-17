@@ -8,3 +8,5 @@
 /* Long canonical condition JSON and scientific hashes must wrap within the viewport. */
 .science-card,.science-list,.science-list li,.science-block,.science-table td{overflow-wrap:anywhere;word-break:break-word}
 @media(max-width:690px){.science-card,.science-block,.science-table{min-width:0;max-width:100%}.science-table{table-layout:fixed}.page,.panel{max-width:100%;min-width:0}}
+
+.source-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px}.source-form label{font-size:12px;color:#6b7d91;display:flex;flex-direction:column;gap:7px}.source-form textarea{border:1px solid #d9e1e9;border-radius:9px;padding:12px;font:inherit;resize:vertical}.source-form button,.source-form label:last-of-type,.source-form #source-message{grid-column:1/-1}.source-form button{justify-self:start}@media(max-width:690px){.source-form{grid-template-columns:1fr}}
