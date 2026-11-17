@@ -66,6 +66,8 @@ export async function renderLiveAssessment({shell, json, escapeHtml, status, cel
     '<div class="confirmation"><label><input type="checkbox" id="confirm-context"> 已核对当前合成目标上下文、时间和测量来源</label>' +
     '<label><input type="checkbox" id="confirm-knowledge"> 已核对知识引用、原始主张及使用限制</label></div>' +
     '<button type="button" class="primary-link" id="live-run" disabled>运行 ADR 适用性评估</button>' +
+    '<button type="button" class="print-button" id="new-demo-case" disabled>明确开始新案件</button>' +
+    '<p class="muted" id="operation-identity-status" role="status">尚未创建本次操作。</p>' +
     '<p class="muted">这是隔离测试世界的真实科学计算，不是正式客户的科学授权或农业执行指令。</p></section>' +
     '<div id="live-result" aria-live="polite"></div>');
 
@@ -99,10 +101,38 @@ export async function renderLiveAssessment({shell, json, escapeHtml, status, cel
       '<label class="review-input">复核结论<select id="live-outcome">' +
       OUTCOMES.map((o) => '<option>' + o + '</option>').join('') + '</select></label>' +
       '<label class="review-input">备注<textarea id="live-notes" maxlength="2000" rows="4" placeholder="说明复核依据和需补充的材料"></textarea></label>' +
-      '<div class="quick"><button type="button" id="live-review" class="primary-link">保存复核反馈</button>' +
+      '<div class="quick"><button type="button" id="begin-review" class="print-button">开始人工复核计时</button>' +
+    '<button type="button" id="live-review" class="primary-link" disabled>保存复核反馈</button>' +
       '<a href="/api/demo/reports/' + encodeURIComponent(result.operationId) +
       '" id="live-report">导出含证据的 HTML 报告</a></div>' +
       '<div id="review-feedback" role="status"></div></section>';
+    const startButton = document.getElementById('begin-review');
+    const saveButton = document.getElementById('live-review');
+    const startUrl = '/api/demo/reviews/' + encodeURIComponent(result.operationId) + '/start';
+    const markStarted = (record) => {
+      if (!record?.startedAt) return;
+      startButton.disabled = true;
+      saveButton.disabled = false;
+      document.getElementById('review-feedback').textContent =
+        '复核开始时间：' + record.startedAt + '（与评估创建时间分离）';
+    };
+    startButton.addEventListener('click', async () => {
+      startButton.disabled = true;
+      try {
+        const response = await fetch(startUrl, {
+          method: 'POST',
+          headers: { 'x-csrf-token': session.csrf }
+        });
+        const data = await response.json();
+        if (!response.ok || !data.startedAt) throw new Error(data.code ?? 'REVIEW_START_UNCONFIRMED');
+        markStarted(data);
+      } catch (error) {
+        document.getElementById('review-feedback').textContent =
+          '复核开始事件尚未确认；不可计算复核时长：' + error.message;
+        startButton.disabled = false;
+      }
+    });
+    json(startUrl).then(markStarted).catch(() => {});
     document.getElementById('live-review').addEventListener('click', async () => {
       const button = document.getElementById('live-review');
       button.disabled = true;
@@ -118,7 +148,9 @@ export async function renderLiveAssessment({shell, json, escapeHtml, status, cel
         const record = await response.json();
         if (!response.ok) throw new Error(record.code ?? 'UNKNOWN_FEEDBACK_OUTCOME');
         document.getElementById('review-feedback').textContent =
-          '非权威复核已保存，绑定投影：' + record.caseProjectionHash;
+          '非权威复核已保存，复核时长：' +
+          (record.reviewDurationStatus === 'MEASURED' ? record.durationMs + ' 毫秒' : 'UNKNOWN') +
+          '，绑定投影：' + record.caseProjectionHash;
       } catch (e) {
         document.getElementById('review-feedback').textContent =
           '复核尚未确认保存：' + e.message;
@@ -141,38 +173,79 @@ export async function renderLiveAssessment({shell, json, escapeHtml, status, cel
   contextAck.addEventListener('change', updateReady);
   knowledgeAck.addEventListener('change', updateReady);
 
-  const operation = sessionStorage.getItem('adr-product-demo-operation');
-  if (operation) {
-    try { show(await json('/api/demo/assessments/' + encodeURIComponent(operation))); } catch {}
-  }
+  // Once created, an operation identity is retained until the user explicitly
+  // begins a new case from a known terminal state. A failed GET never
+  // permits a replacement request identity.
+  const key = 'adr-product-demo-operation';
+  const identityStatus = document.getElementById('operation-identity-status');
+  const newCase = document.getElementById('new-demo-case');
+  let terminal = false;
+  const noteIdentity = (id, message) => {
+    identityStatus.textContent = id ? '原操作 ID：' + id + ' · ' + message : message;
+  };
+  const showStored = async (id) => {
+    try {
+      const latest = await json('/api/demo/assessments/' + encodeURIComponent(id));
+      show(latest);
+      terminal = ['CONFIRMED', 'REJECTED'].includes(latest.state);
+      newCase.disabled = !terminal;
+      noteIdentity(id, terminal ? '已确认终态；可以明确开始新案件' : '未终态；保持精确幂等身份');
+      return latest;
+    } catch (error) {
+      terminal = false;
+      newCase.disabled = true;
+      noteIdentity(id, '状态读取失败，未更换身份；等待核对原请求');
+      document.getElementById('live-result').innerHTML =
+        '<section class="panel"><h2>原操作状态暂不可核对</h2><p>' +
+        escapeHtml(error.message) + '</p><p>已保留操作 ID：' + escapeHtml(id) +
+        '。查询失败不能视为新案件授权。</p></section>';
+      return null;
+    }
+  };
+  const operation = sessionStorage.getItem(key);
+  if (operation) await showStored(operation);
+  newCase.addEventListener('click', () => {
+    if (!terminal || !sessionStorage.getItem(key)) return;
+    sessionStorage.removeItem(key);
+    terminal = false;
+    newCase.disabled = true;
+    document.getElementById('live-result').replaceChildren();
+    noteIdentity(null, '已明确开始新案件；下次执行将取得新的操作 ID');
+  });
   document.getElementById('live-run').addEventListener('click', async () => {
     const button = document.getElementById('live-run');
     button.disabled = true;
-    let id = sessionStorage.getItem('adr-product-demo-operation');
-    if (id) {
-      try {
-        const old = await json('/api/demo/assessments/' + encodeURIComponent(id));
-        if (old.state === 'CONFIRMED' || old.state === 'REJECTED') id = null;
-      } catch { id = null; }
-    }
-    if (!id) {
-      id = crypto.randomUUID();
-      sessionStorage.setItem('adr-product-demo-operation', id);
-    }
     try {
+      let id = sessionStorage.getItem(key);
+      if (id) {
+        const old = await showStored(id);
+        if (!old) return; // 5xx/invalid JSON/disconnect must not create a new write
+        if (terminal) return; // explicit new-case action required
+      } else {
+        id = crypto.randomUUID();
+        sessionStorage.setItem(key, id); // persist exact client identity before write
+        noteIdentity(id, '新演示评估，等待真实 Host 回执');
+      }
       const response = await fetch('/api/demo/assessments', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-csrf-token': session.csrf },
-        body: JSON.stringify({ operationId: id })
+        body: JSON.stringify({ operationId: id, scenarioId: 'QUALIFIED_SYNTHETIC_V03' })
       });
       const result = await response.json();
       if (!response.ok && response.status !== 202) throw new Error(result.code ?? 'RUN_UNCONFIRMED');
       show(result);
-    } catch (e) {
+      terminal = ['CONFIRMED', 'REJECTED'].includes(result.state);
+      newCase.disabled = !terminal;
+      noteIdentity(id, terminal ? '已确认终态' : '结果尚未终态；保留原身份以核对');
+    } catch (error) {
+      const id = sessionStorage.getItem(key);
+      terminal = false;
+      newCase.disabled = true;
+      noteIdentity(id, '请求结果不确定；保留同一幂等身份');
       document.getElementById('live-result').innerHTML =
-        '<section class="panel"><h2>提交结果不确定</h2><p>' + escapeHtml(e.message) +
-        '</p><p>原操作 ID：' + escapeHtml(id) +
-        '。不能以新幂等键自动重发。</p></section>';
+        '<section class="panel"><h2>提交结果不确定</h2><p>' + escapeHtml(error.message) +
+        '</p><p>原操作 ID：' + escapeHtml(id ?? '未取得') +
+        '。不可自动创建新幂等键。</p></section>';
     } finally { button.disabled = false; }
   });
 }

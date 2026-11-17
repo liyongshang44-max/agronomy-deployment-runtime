@@ -57,6 +57,8 @@ function storeAt(file) {
     ? JSON.parse(readFileSync(file, 'utf8'))
     : { schema: 'adr-product-demo-records.v1', sessions: {}, attempts: {}, reviews: {} };
   if (state.schema !== 'adr-product-demo-records.v1') throw new Error('INVALID_DEMO_STORE_SCHEMA');
+  state.reviewStarts ??= {};
+  state.sources ??= {};
 
   function save() {
     const tmp = file + '.tmp';
@@ -80,7 +82,24 @@ function storeAt(file) {
     getAttempt(sid, id) { return state.attempts[sid + ':' + id] ?? null; },
     putAttempt(sid, id, value) { state.attempts[sid + ':' + id] = value; save(); },
     getReview(sid, id) { return state.reviews[sid + ':' + id] ?? null; },
-    putReview(sid, id, value) { state.reviews[sid + ':' + id] = value; save(); }
+    putReview(sid, id, value) { state.reviews[sid + ':' + id] = value; save(); },
+    getReviewStart(sid, id) { return state.reviewStarts[sid + ':' + id] ?? null; },
+    startReview(sid, id, assessmentRef, projectionHash) {
+      const key = sid + ':' + id;
+      if (state.reviewStarts[key]) return state.reviewStarts[key];
+      const entry = { kind: 'NON_AUTHORITY_REVIEW_START', operationId: id,
+        startedAt: new Date().toISOString(), assessmentRef, caseProjectionHash: projectionHash };
+      state.reviewStarts[key] = entry;
+      save();
+      return entry;
+    },
+    listSources(sid) { return state.sources[sid] ?? []; },
+    addSource(sid, item) {
+      state.sources[sid] ??= [];
+      state.sources[sid].push(item);
+      save();
+      return item;
+    }
   };
 }
 
@@ -150,6 +169,12 @@ function newEnvelope(id, config) {
 function shapeAttempt(attempt) {
   return {
     operationId: attempt.id,
+    scenarioId: attempt.scenarioId ?? 'QUALIFIED_SYNTHETIC_V03',
+    inputBinding: {
+      knowledgeRef: attempt.envelope.resource.knowledge_ref,
+      contextManifestRef: attempt.envelope.resource.context_manifest_ref,
+      retrievalRef: attempt.envelope.resource.knowledge_retrieval_result_ref
+    },
     state: attempt.state,
     assessmentRef: attempt.assessmentRef ?? null,
     workbenchCase: attempt.workbenchCase ?? null,
@@ -178,7 +203,8 @@ export function createDemoController(config) {
     let attempt = store.getAttempt(session.sid, id);
     if (!attempt) {
       attempt = {
-        id, state: 'PREPARED', createdAt: new Date().toISOString(),
+        id, state: 'PREPARED', scenarioId: 'QUALIFIED_SYNTHETIC_V03',
+        createdAt: new Date().toISOString(),
         idempotencyKey: 'adr-prod-demo-' + id,
         envelope: newEnvelope(id, config)
       };
@@ -285,7 +311,8 @@ export function createDemoController(config) {
       catch (e) { return json(res, e.status ?? 400, { code: e.message }); }
       const id = payload?.operationId;
       if (typeof id !== 'string' || !UUID.test(id)
-        || Object.keys(payload).some((key) => key !== 'operationId')) {
+        || (payload.scenarioId !== undefined && payload.scenarioId !== 'QUALIFIED_SYNTHETIC_V03')
+        || Object.keys(payload).some((key) => !['operationId', 'scenarioId'].includes(key))) {
         return json(res, 400, { code: 'INVALID_DEMO_OPERATION', message: 'only a UUID operationId is accepted' });
       }
       const key = session.sid + ':' + id;
@@ -307,6 +334,27 @@ export function createDemoController(config) {
     if (attemptMatch && req.method === 'GET') {
       const a = store.getAttempt(session.sid, attemptMatch[1]);
       return a ? json(res, 200, shapeAttempt(a)) : json(res, 404, { code: 'OPERATION_NOT_FOUND' });
+    }
+    const reviewStartMatch = /^\/api\/demo\/reviews\/([a-f0-9-]{36})\/start$/.exec(pathname);
+    if (reviewStartMatch) {
+      const id = reviewStartMatch[1];
+      const attempt = store.getAttempt(session.sid, id);
+      if (!attempt || attempt.state !== 'CONFIRMED') {
+        return json(res, 409, { code: 'CONFIRMED_CASE_REQUIRED' });
+      }
+      const previous = store.getReviewStart(session.sid, id);
+      if (req.method === 'GET') {
+        return json(res, 200, previous ?? { kind: 'NON_AUTHORITY_REVIEW_START',
+          operationId: id, startedAt: null, timingStatus: 'UNKNOWN' });
+      }
+      if (req.method === 'POST') {
+        if (store.getReview(session.sid, id)) return json(res, 409, { code: 'REVIEW_ALREADY_RECORDED' });
+        try {
+          const started = store.startReview(session.sid, id, attempt.assessmentRef,
+            attempt.workbenchCase.projectionHash);
+          return json(res, previous ? 200 : 201, started);
+        } catch { return json(res, 503, { code: 'REVIEW_START_UNCONFIRMED' }); }
+      }
     }
     const reviewMatch = /^\/api\/demo\/reviews\/([a-f0-9-]{36})$/.exec(pathname);
     if (reviewMatch) {
@@ -330,7 +378,12 @@ export function createDemoController(config) {
           return json(res, 400, { code: 'INVALID_REVIEW_FEEDBACK' });
         }
         const completedAt = new Date().toISOString();
-        const durationMs = Math.max(0, new Date(completedAt).getTime() - new Date(attempt.createdAt).getTime());
+        const start = store.getReviewStart(session.sid, id);
+        // Review time is measured only from the persisted explicit review-start event.
+        // Assessment execution, waiting and page viewing are never review duration.
+        const reviewStartedAt = start?.startedAt ?? null;
+        const durationMs = reviewStartedAt === null ? null :
+          Math.max(0, Date.parse(completedAt) - Date.parse(reviewStartedAt));
         const record = {
           kind: 'NON_AUTHORITY_PRODUCT_REVIEW_FEEDBACK',
           operationId: id,
@@ -338,9 +391,11 @@ export function createDemoController(config) {
           assessmentRef: attempt.assessmentRef,
           caseProjectionHash: attempt.workbenchCase.projectionHash,
           classificationAtReview: attempt.workbenchCase.classification,
-          startedAt: attempt.createdAt,
+          assessmentCreatedAt: attempt.createdAt,
+          startedAt: reviewStartedAt,
           completedAt,
           durationMs,
+          reviewDurationStatus: reviewStartedAt === null ? 'UNKNOWN' : 'MEASURED',
           outcome: body.outcome,
           notes: body.notes
         };

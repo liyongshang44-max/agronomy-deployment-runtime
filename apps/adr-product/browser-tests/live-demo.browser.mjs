@@ -48,6 +48,14 @@ try {
   await page.screenshot({ path: new URL('02-real-assessment.png', evidenceDir).pathname, fullPage: true });
 
   // User completes and saves a non-authority review, not a scientific promotion.
+  await page.locator('#begin-review').click();
+  await page.locator('text=复核开始时间：').waitFor({timeout:15000});
+  const actualReviewStartLine=await page.locator('#review-feedback').innerText();
+  await page.reload({waitUntil:'networkidle'});
+  await page.locator('text=实际 ADR 评估结果').waitFor({timeout:15000});
+  await page.locator('text=复核开始时间：').waitFor({timeout:15000});
+  assert.equal(await page.locator('#review-feedback').innerText(),actualReviewStartLine);
+  assert.equal(await page.locator('#begin-review').isDisabled(),true);
   await page.locator('#live-outcome').selectOption('CONTEXT_REQUESTED');
   await page.locator('#live-notes').fill('Browser-qualified synthetic example, request additional context.');
   await page.locator('#live-review').click();
@@ -100,6 +108,40 @@ try {
   console.log('MOBILE_LAYOUT_OVERFLOW_DIAGNOSTIC=' + JSON.stringify(overflowElements));
   assert.ok(geometry.width <= geometry.viewport + 5,
     'mobile layout unexpectedly overflows horizontally: ' + JSON.stringify(geometry));
+  // PROD-FIX-01: an existing operation must survive repeated malformed/5xx/lost
+  // lookup attempts without producing any second Authority Write identity.
+  const originalOperation = await page.evaluate(() => sessionStorage.getItem('adr-product-demo-operation'));
+  assert.ok(originalOperation);
+  let lookupCount = 0;
+  const authorityWrites = [];
+  await page.route('**/api/demo/assessments/' + originalOperation, async (route) => {
+    lookupCount += 1;
+    if (lookupCount === 1) return route.fulfill({
+      status: 503, contentType: 'application/json',
+      body: JSON.stringify({code: 'REMOTE_UNKNOWN'})
+    });
+    if (lookupCount === 2) return route.fulfill({
+      status: 200, contentType: 'application/json', body: '{ malformed body'
+    });
+    return route.abort('failed');
+  });
+  await page.route('**/api/demo/assessments', async (route) => {
+    authorityWrites.push(JSON.parse(route.request().postData() || '{}').operationId);
+    return route.continue();
+  });
+  await page.goto(url + '/assessments', { waitUntil: 'networkidle' });
+  await page.locator('text=原操作状态暂不可核对').waitFor();
+  await page.locator('#confirm-context').check();
+  await page.locator('#confirm-knowledge').check();
+  for (let i = 0; i < 3; i += 1) {
+    await page.locator('#live-run').click();
+    assert.equal(await page.evaluate(() => sessionStorage.getItem('adr-product-demo-operation')), originalOperation);
+    assert.equal(await page.locator('#new-demo-case').isDisabled(), true);
+  }
+  assert.equal(authorityWrites.length, 0, 'failed status lookup must not start another write');
+  assert.ok(lookupCount >= 4);
+  await page.unrouteAll({ behavior: 'wait' });
+  console.log('PROD_FIX_01_BROWSER_RECOVERY_PASS=' + originalOperation);
   assert.deepEqual(pageErrors, []);
   await context.close();
   console.log(JSON.stringify({

@@ -114,9 +114,11 @@ export function renderDemoReport({ attempt, review }) {
     section('人工复核（非权威产品记录）',
       review ? table([
         tr('复核人', review.reviewerId), tr('人工结论', review.outcome),
-        tr('备注', review.notes), tr('开始时间', review.startedAt),
-        tr('完成时间', review.completedAt),
-        tr('复核时长（毫秒）', review.durationMs),
+        tr('备注', review.notes), tr('评估创建时间（不计入复核）', review.assessmentCreatedAt),
+        tr('复核开始时间', review.startedAt ?? 'UNKNOWN'),
+        tr('复核完成时间', review.completedAt),
+        tr('复核耗时状态', review.reviewDurationStatus ?? 'UNKNOWN'),
+        tr('复核耗时（毫秒）', review.durationMs ?? 'UNKNOWN'),
         tr('绑定的 Workbench 哈希', review.caseProjectionHash)
       ]) : '<p class="missing">尚无人工复核反馈。</p>') +
     '<footer>来源：ADR v0.3 Pilot Host 已授权 Workbench 投影及独立 DEMO 产品反馈。' +
