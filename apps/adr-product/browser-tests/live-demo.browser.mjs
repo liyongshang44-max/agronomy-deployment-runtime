@@ -85,6 +85,15 @@ try {
   assert.equal(download.suggestedFilename(), 'adr-demo-report.html');
   assert.ok(!await download.failure());
 
+  // Reproduce the observed race: review-feedback GET returns before the
+  // review-start GET. Persisted "already saved" status must always win.
+  const persistedOperationId=await page.evaluate(() => sessionStorage.getItem('adr-product-demo-operation'));
+  let delayedStartRequests=0;
+  await page.route('**/api/demo/reviews/' + persistedOperationId + '/start', async (route) => {
+    delayedStartRequests+=1;
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    return route.continue();
+  });
   // The page must recover exact operation references from the same demo session.
   await page.reload({ waitUntil: 'networkidle' });
   await page.locator('text=实际 ADR 评估结果').waitFor({ timeout: 15000 });
@@ -93,6 +102,12 @@ try {
   assert.ok(recovered.includes('Workbench Projection Hash'));
   assert.ok(originalAssessment.includes('sha256:'));
   await page.locator('text=此前已保存：CONTEXT_REQUESTED').waitFor({ timeout: 15000 });
+  assert.ok(delayedStartRequests>=1);
+  assert.equal(await page.locator('#begin-review').isDisabled(), true);
+  assert.equal(await page.locator('#live-review').isDisabled(), true);
+  assert.match(await page.locator('#review-feedback').innerText(), /此前已保存：CONTEXT_REQUESTED/);
+  await page.unroute('**/api/demo/reviews/' + persistedOperationId + '/start');
+
 
   // A new assessment identity is permissible only after the terminal operation
   // AND an explicit new-case click by the agronomist.

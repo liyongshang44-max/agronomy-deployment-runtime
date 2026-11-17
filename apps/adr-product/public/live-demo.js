@@ -124,11 +124,26 @@ export async function renderLiveAssessment({shell, json, escapeHtml, status, cel
     const startButton = document.getElementById('begin-review');
     const saveButton = document.getElementById('live-review');
     const startUrl = '/api/demo/reviews/' + encodeURIComponent(result.operationId) + '/start';
+    const reviewUrl = '/api/demo/reviews/' + encodeURIComponent(result.operationId);
+    const feedbackView = document.getElementById('review-feedback');
+    let feedbackSaved = false;
+    const currentView = () => feedbackView.isConnected &&
+      document.getElementById('review-feedback') === feedbackView;
+    const showSaved = (record, restored = false) => {
+      if (!currentView()) return;
+      feedbackSaved = true;
+      startButton.disabled = true;
+      saveButton.disabled = true;
+      feedbackView.textContent = restored ? '此前已保存：' + record.outcome :
+        '非权威复核已保存，复核时长：' +
+        (record.reviewDurationStatus === 'MEASURED' ? record.durationMs + ' 毫秒' : 'UNKNOWN') +
+        '，绑定投影：' + record.caseProjectionHash;
+    };
     const markStarted = (record) => {
-      if (!record?.startedAt) return;
+      if (!currentView() || feedbackSaved || !record?.startedAt) return;
       startButton.disabled = true;
       saveButton.disabled = false;
-      document.getElementById('review-feedback').textContent =
+      feedbackView.textContent =
         '复核开始时间：' + record.startedAt + '（与评估创建时间分离）';
     };
     startButton.addEventListener('click', async () => {
@@ -147,7 +162,6 @@ export async function renderLiveAssessment({shell, json, escapeHtml, status, cel
         startButton.disabled = false;
       }
     });
-    json(startUrl).then(markStarted).catch(() => {});
     document.getElementById('live-review').addEventListener('click', async () => {
       const button = document.getElementById('live-review');
       button.disabled = true;
@@ -162,23 +176,24 @@ export async function renderLiveAssessment({shell, json, escapeHtml, status, cel
         });
         const record = await response.json();
         if (!response.ok) throw new Error(record.code ?? 'UNKNOWN_FEEDBACK_OUTCOME');
-        document.getElementById('review-feedback').textContent =
-          '非权威复核已保存，复核时长：' +
-          (record.reviewDurationStatus === 'MEASURED' ? record.durationMs + ' 毫秒' : 'UNKNOWN') +
-          '，绑定投影：' + record.caseProjectionHash;
+        showSaved(record);
       } catch (e) {
         document.getElementById('review-feedback').textContent =
           '复核尚未确认保存：' + e.message;
         button.disabled = false;
       }
     });
-    json('/api/demo/reviews/' + encodeURIComponent(result.operationId))
-      .then((r) => {
-        const view = document.getElementById('review-feedback');
-        if (view) view.textContent = '此前已保存：' + r.outcome;
-        const btn = document.getElementById('live-review');
-        if (btn) btn.disabled = true;
-      }).catch(() => {});
+    // Rehydrate both endpoints as a single state transition. Previously these
+    // independent promises raced: the later review-start GET could overwrite a
+    // persisted "already saved" receipt and re-enable submission.
+    Promise.allSettled([json(startUrl), json(reviewUrl)]).then(([started, saved]) => {
+      if (!currentView() || feedbackSaved) return;
+      if (saved.status === 'fulfilled') {
+        showSaved(saved.value, true);
+      } else if (started.status === 'fulfilled') {
+        markStarted(started.value);
+      }
+    });
   };
 
   const contextAck = document.getElementById('confirm-context');
