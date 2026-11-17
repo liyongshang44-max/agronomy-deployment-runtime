@@ -34,12 +34,14 @@ test('all original ADR six classifications display as synthetic cases', async ()
 });
 
 test('shell serves direct routes and applies browser security headers', async () => {
-  const res = await fetch(demoBase + '/reviews/DEMO-001');
-  const html = await res.text();
-  assert.equal(res.status, 200);
-  assert.match(html, /zh-CN/);
-  assert.match(res.headers.get('content-security-policy'), /default-src 'none'/);
-  assert.match(res.headers.get('cache-control'), /no-store/);
+  for (const route of ['/', '/knowledge', '/context', '/assessments', '/reviews', '/reviews/DEMO-001', '/reports']) {
+    const res = await fetch(demoBase + route);
+    const html = await res.text();
+    assert.equal(res.status, 200, route);
+    assert.match(html, /zh-CN/, route);
+    assert.match(res.headers.get('content-security-policy'), /default-src 'none'/);
+    assert.match(res.headers.get('cache-control'), /no-store/);
+  }
 });
 
 test('no authority write or customer path is available in demo mode', async () => {
