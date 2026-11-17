@@ -31,6 +31,39 @@ try {
   await page.goto(url, { waitUntil: 'networkidle' });
   await page.screenshot({ path: new URL('01-home-desktop.png', evidenceDir).pathname, fullPage: true });
 
+  // UI-01: stress-test an exact long classification code at mobile/tablet/desktop
+  // widths. This changes DOM text for layout testing ONLY, not the Host result
+  // or any scientific/authority write. The original read model is untouched.
+  const originalDashboardClass = await page.locator('.metric strong').nth(1).innerText();
+  for (const width of [320, 390, 768, 1440]) {
+    await page.setViewportSize({width,height:900});
+    await page.locator('.metric strong').nth(1).evaluate(el => {
+      el.textContent='AGRONOMIST_REVIEW_REQUIRED';
+    });
+    const measure=await page.evaluate(() => {
+      const title=document.querySelectorAll('.metric strong')[1];
+      const box=title.getBoundingClientRect();
+      return {
+        viewport:window.innerWidth,
+        pageWidth:document.documentElement.scrollWidth,
+        metricWidth:title.parentElement.getBoundingClientRect().width,
+        codeWidth:box.width,
+        text:title.textContent,
+        textScrollWidth:title.scrollWidth,
+        codeClientWidth:title.clientWidth
+      };
+    });
+    assert.equal(measure.text,'AGRONOMIST_REVIEW_REQUIRED');
+    assert.ok(measure.pageWidth<=measure.viewport+1,
+      'UI-01 document overflow with exact classification: '+JSON.stringify(measure));
+    assert.ok(measure.textScrollWidth<=measure.codeClientWidth+1,
+      'UI-01 classification text overflow: '+JSON.stringify(measure));
+  }
+  await page.setViewportSize({width:1440,height:900});
+  await page.locator('.metric strong').nth(1).evaluate((el,text) => {
+    el.textContent=text;
+  },originalDashboardClass);
+
   // Register metadata only: it must remain SUBMITTED/UNAVAILABLE, never science.
   await page.locator('.navigation a[href="/knowledge"]').click();
   await page.locator('text=正式 Host 已可读取的合格演示知识').waitFor();
