@@ -61,7 +61,8 @@ export function renderDemoReport({attempt,review}) {
     '@page{size:A4;margin:17mm}@media print{body{padding:0;margin:0}'+
     '.report-section,.science-block{break-inside:avoid;page-break-inside:avoid}}'+
     '</style></head><body>'+
-    '<h1>ADR · 合成演示科学知识与适用性报告</h1>'+
+    '<h1>ADR · 合成演示评估报告</h1>'+
+    '<p class="muted">科学知识、证据来源与目标适用性阅读版</p>'+
     '<p class="stamp">DEMO · 合格合成测试世界。非真实客户科学意见、生产授权或农业作业指令。</p>'+
     section('1. 本次评估针对的农业问题',
       '<p>报告仅反映下列来自 ADR Host 的已登记目标，不能把研究结论推广到未给出的田块。</p>'+
