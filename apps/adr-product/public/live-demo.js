@@ -1,3 +1,4 @@
+import { contextCard, sourceCard, resultCard } from './assessment-view.js';
 // Browser UI for the real ADR v0.3 synthetic world.
 // All actual scientific values displayed below come from the ADR Host, never from UI classification rules.
 const jsonText = (value) => JSON.stringify(value, null, 2);
@@ -59,8 +60,12 @@ export async function renderLiveAssessment({shell, json, escapeHtml, status, cel
     cell('科学使用状态', sample.applicability?.scientificUseStatus ?? 'UNKNOWN') +
     cell('基线 Workbench 分类', sample.classification) +
     '</div></section>' +
+    contextCard(sample.targetContext, escapeHtml) +
+    sourceCard(sample.scientificEvidence, escapeHtml) +
     '<section class="panel"><h2>实际执行</h2><p>每次明确触发后生成新的评估逻辑 ID，BFF 固定全部已授权证据引用。发生超时后仅允许使用同一操作 ID 重新核对。</p>' +
-    '<button type="button" class="primary-link" id="live-run">运行 ADR 适用性评估</button>' +
+    '<div class="confirmation"><label><input type="checkbox" id="confirm-context"> 已核对当前合成目标上下文、时间和测量来源</label>' +
+    '<label><input type="checkbox" id="confirm-knowledge"> 已核对知识引用、原始主张及使用限制</label></div>' +
+    '<button type="button" class="primary-link" id="live-run" disabled>运行 ADR 适用性评估</button>' +
     '<p class="muted">这是隔离测试世界的真实科学计算，不是正式客户的科学授权或农业执行指令。</p></section>' +
     '<div id="live-result" aria-live="polite"></div>');
 
@@ -82,14 +87,13 @@ export async function renderLiveAssessment({shell, json, escapeHtml, status, cel
       cell('Workbench Projection Hash', c.projectionHash) +
       cell('Transport Status', c.applicability?.transportStatus) +
       cell('Scientific Use Status', c.applicability?.scientificUseStatus) + '</div>' +
-      '<h2>复核原因及来源证据</h2><pre class="evidence-json">' +
-      escapeHtml(jsonText({
+      resultCard(c, escapeHtml) +
+      sourceCard(c.scientificEvidence, escapeHtml) +
+      '<details class="technical-detail"><summary>查看完整原始 Workbench 证据</summary>' +
+      '<pre class="evidence-json">' + escapeHtml(jsonText({
         why: c.why, scientificEvidence: c.scientificEvidence,
-        targetContext: c.targetContext, limitations: c.applicability?.limitations,
-        conditionResults: c.applicability?.conditionResults,
-        conflicts: c.applicability?.conflicts,
-        missingContextSemanticIds: c.applicability?.missingContextSemanticIds
-      })) + '</pre></section>' +
+        targetContext: c.targetContext, applicability: c.applicability
+      })) + '</pre></details></section>' +
       '<section class="panel"><h2>非权威人工复核</h2>' +
       '<p>反馈只存储在独立产品记录中，不改变 ADR ApplicabilityAssessment。</p>' +
       '<label class="review-input">复核结论<select id="live-outcome">' +
@@ -129,6 +133,13 @@ export async function renderLiveAssessment({shell, json, escapeHtml, status, cel
         if (btn) btn.disabled = true;
       }).catch(() => {});
   };
+
+  const contextAck = document.getElementById('confirm-context');
+  const knowledgeAck = document.getElementById('confirm-knowledge');
+  const runButton = document.getElementById('live-run');
+  const updateReady = () => { runButton.disabled = !(contextAck.checked && knowledgeAck.checked); };
+  contextAck.addEventListener('change', updateReady);
+  knowledgeAck.addEventListener('change', updateReady);
 
   const operation = sessionStorage.getItem('adr-product-demo-operation');
   if (operation) {

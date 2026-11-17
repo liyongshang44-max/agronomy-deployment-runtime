@@ -33,6 +33,10 @@ try {
 
   await page.locator('.navigation a[href="/assessments"]').click();
   await page.locator('text=已合格演示世界').waitFor();
+  assert.equal(await page.locator('#live-run').isDisabled(), true);
+  await page.locator('#confirm-context').check();
+  await page.locator('#confirm-knowledge').check();
+  assert.equal(await page.locator('#live-run').isEnabled(), true);
   await page.locator('#live-run').click();
   await page.locator('text=实际 ADR 评估结果').waitFor({ timeout: 45000 });
   const content = await page.locator('#live-result').innerText();
