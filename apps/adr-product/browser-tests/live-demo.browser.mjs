@@ -31,7 +31,7 @@ try {
   await page.goto(url, { waitUntil: 'networkidle' });
   await page.screenshot({ path: new URL('01-home-desktop.png', evidenceDir).pathname, fullPage: true });
 
-  await page.locator('a[href="/assessments"]').click();
+  await page.locator('.navigation a[href="/assessments"]').click();
   await page.locator('text=已合格演示世界').waitFor();
   await page.locator('#live-run').click();
   await page.locator('text=实际 ADR 评估结果').waitFor({ timeout: 45000 });
