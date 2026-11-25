@@ -29,3 +29,15 @@ jobs:
         run: node --version
       - name: Qualify ADR-3B root-zone soil-water scientific authority
         run: node acceptance/adr3b-root-zone-soil-water-authority/run.mjs
+      - name: Execute bounded C4B native retrospective assessment
+        if: github.ref == 'refs/heads/test/adr3b-root-zone-soil-water-authority-c4b'
+        run: node acceptance/adr3b-root-zone-soil-water-authority/c4b-run.mjs
+        env:
+          LP07_C4B_RECEIPT: ${{ runner.temp }}/LP07-C4B-NATIVE-RECEIPT.json
+      - name: Retain C4B native receipt
+        if: github.ref == 'refs/heads/test/adr3b-root-zone-soil-water-authority-c4b'
+        uses: actions/upload-artifact@v4
+        with:
+          name: LP07-C4B-NATIVE-RECEIPT
+          path: ${{ runner.temp }}/LP07-C4B-NATIVE-RECEIPT.json
+          if-no-files-found: error
