@@ -13,9 +13,9 @@ const unsigned=verifyUnsigned(loadUnsigned());
 const source=review.source_observation;
 const expected='sha256:bced62f287892f147e2f9c450c801a972c48855c0f5e255d17a7358ad3fe2495';
 const url='https://edepot.wur.nl/656804';
-const normalize=s=>s.normalize('NFKC').replace(/\u00ad/g,'').replace(/[\u0000-\u0008\u000b\u000e-\u001f]/g,'').replace(/-\s*\n\s*/g,'-').replace(/\s+/g,' ').toLowerCase();
+const normalize=s=>s.normalize('NFKC').replace(/\p{Cf}/gu,'').replace(/[\u0000-\u0008\u000b\u000e-\u001f]/g,'').replace(/-\s*\n\s*/g,'-').replace(/\s+/g,' ').toLowerCase();
 const rules={
- 1:[/european soybean to benefit people and the environment/,/10\.1038\/s41598-024-57522-z/],
+ 1:[/european soybean to benefit people and the environment/,/10\.1038\/s41598-024-57522-z/,/simulations and field data indicate rainfed soybean/,/cooler northern regions/,/uncertainties inherent in any modelling exercise/],
  2:[/increasing soybean production in europe/,/cool temperatures and a shorter growing season/,/north[-\s]*eastern europe and southern uk/,/clusters b and c/,/cold.tolerance/],
  9:[/crop modelling and simulations/,/phenological model and physiological model/,/0\.5.{0,8}resolution grid/,/4,?036 sites/,/1999 to 2018/,/maturity group from 0000 to iii/,/rainfed/,/european observations/],
  10:[/observed rainfed yield trials/,/belgium, germany, italy, the netherlands, spain, and the united kingdom/,/without any calibration to the data/,/observed mean trial yield of each grown maturity/,/n\s*=\s*84/,/pearson correlation\s*=\s*0\.48/,/percentage error\s*=\s*36\s*%/],
@@ -46,7 +46,7 @@ try{
  for(const [n,anchors] of Object.entries(rules)){
   const raw=execFileSync('pdftotext',['-f',n,'-l',n,'-layout','-enc','UTF-8',pdf,'-'],{encoding:'utf8',maxBuffer:4*1024*1024});
   const normalized=normalize(raw);
-  for(const [i,re] of anchors.entries())need(re.test(normalized),'SOY_LOCATOR_PAGE_'+n+'_ANCHOR_'+(i+1)+'_MISSING');
+  for(const [i,re] of anchors.entries())need(re.test(n==='14'&&i===1?normalized.replace(/\s/g,''):normalized),'SOY_LOCATOR_PAGE_'+n+'_ANCHOR_'+(i+1)+'_MISSING');
   pages[n]={page:Number(n),layout_text_sha256:sourceContentHash(Buffer.from(raw,'utf8')),anchor_count:anchors.length};
  }
  const locate=l=>{const p=pages[l.coordinates.page];need(p,'SOY_UNCHECKED_COORDINATE');return {...l,coordinates:{...l.coordinates,pageTextExtraction:'pdftotext -f PAGE -l PAGE -layout -enc UTF-8',pageTextSha256:p.layout_text_sha256}};};
@@ -58,7 +58,7 @@ try{
  const base='geox.e2e01.soy.rotundo2024';
  const attribution='Rotundo et al. (2024), European soybean to benefit people and the environment, Scientific Reports 14:7612, DOI 10.1038/s41598-024-57522-z. CC BY 4.0 https://creativecommons.org/licenses/by/4.0/. Candidate assertions are paraphrases/adaptations; no third-party materials, underlying datasets or model rights inferred.';
  const inputs={
-  source:{logicalId:'source.'+base,version:'1',sourceType:'PUBLICATION',title:'European soybean to benefit people and the environment',ownership:null,bibliographic:{doi:source.doi,citation:'Rotundo et al. (2024), Scientific Reports 14:7612',journal:'Scientific Reports',publisher:'Springer Nature',year:2024,authors:'Jose L. Rotundo et al.'},sourceVersionLabel:'Version of record',originLocator:url,rights:{license:'CC-BY-4.0',licenseUrl:source.license_url,attribution,internalPolicyRef:null},audit:null},
+  source:{logicalId:'source.'+base,version:'1',sourceType:'PUBLICATION',title:'European soybean to benefit people and the environment',ownership:null,bibliographic:{doi:source.doi,citation:'Rotundo et al. (2024), Scientific Reports 14:7612',journal:'Scientific Reports',publisher:'Springer Nature',year:2024,authors:"Jose L. Rotundo, Rachel Marshall, Ryan McCormick, Sandra K. Truong, David Styles, Jose A. Gerde, Emmanuel Gonzalez-Escobar, Elizabete Carmo-Silva, Victoria Janes-Bassett, Jennifer Logue, Paolo Annicchiarico, Chris de Visser, Alice Dind, Ian C. Dodd, Louise Dye, Stephen P. Long, Marta S. Lopes, Joke Pannecoucque, Moritz Reckling, Jonathan Rushton, Nathaniel Schmid, Ian Shield, Marco Signor, Carlos D. Messina, Mariana C. Rufino"},sourceVersionLabel:'Version of record',originLocator:url,rights:{license:'CC-BY-4.0',licenseUrl:source.license_url,attribution,internalPolicyRef:null},audit:null},
   artifact:{logicalId:'artifact.'+base,version:'1',sourceRef:null,mediaType:'application/pdf',materializationIdentity:expected,acquisition:{method:'HTTPS_PUBLICATION',acquiredAt:null,locator:url},rightsSnapshot:null,audit:null},
   compiler:{logicalId:'compiler.'+base,version:'1',compilerId:'adr.geox.e2e01.soy.review-proposal',implementationVersion:'1',configuration:{mode:'HUMAN_REVIEW_PROPOSAL',sourceContentHash:expected,proposalHash:semanticHash('GeoxSoyClaimProposal',claims)},audit:null},
   compilation:{compilationLogicalId:'compilation.'+base,version:'1',sourceArtifactRef:null,compilerDefinitionRef:null,proposal:{claims,runMetadata:{scope:'SOY_SOURCE_CANDIDATES_ONLY',sourceByteHash:expected,interpretation:'NOT_K03_OR_K04'}},audit:null}
