@@ -7,7 +7,7 @@ import {join} from 'node:path';
 import {sourceContentHash} from '../../../packages/source-registry/src/index.mjs';
 import {loadUnsigned,verifyUnsigned} from './prepare.mjs';
 const pack=loadUnsigned();console.log(JSON.stringify(verifyUnsigned(pack)));
-const allowed=new Set(['edepot.wur.nl','www.wur.nl','wur.nl','www.nature.com','nature.com','link.springer.com','static-content.springer-cdn.net','rdcu.be','research.wur.nl']);
+const allowed=new Set(['edepot.wur.nl','www.wur.nl','wur.nl','www.nature.com','nature.com','link.springer.com','static-content.springer-cdn.net','rdcu.be','research.wur.nl','www.verantwoordeveehouderij.nl']);
 const limit=50*1024*1024;
 async function fetchPdf(start){
  let url=new URL(start);
@@ -36,7 +36,8 @@ function inspect(source,bytes){
 }
 const results=await Promise.all(pack.sources.map(async source=>{
  const attempts=[];
- for(const url of [source.pdf_url,source.alternate_url]){
+ const additional=source.candidate_id==='CORN-WUR-H40-2018-01'?['https://www.verantwoordeveehouderij.nl/upload_mm/c/8/8/16671496-8b7a-4db3-8861-747c2fe65a4d_Handboek%20Snijmais%202019.pdf']:[];
+ for(const url of [source.pdf_url,source.alternate_url,...additional]){
   try{const x=await fetchPdf(url);const locator_check=inspect(source,x.bytes);
    return {candidate_id:source.candidate_id,doi:source.doi,source_url:url,final_url:x.url,raw_sha256:sourceContentHash(x.bytes),byte_length:x.bytes.length,retrieved_at:new Date().toISOString(),locator_check,status:'SOURCE_BYTES_OBSERVED_NOT_ADMITTED',rights_status:source.rights.status,scientific_status:'CANDIDATE_ONLY',attempts};
   }catch(e){attempts.push({url,code:/^[A-Z0-9_]+$/.test(e.message)?e.message:'SOURCE_DOWNLOAD_OR_PARSE_FAILED'});}
