@@ -138,3 +138,6 @@ The acceptance proves:
 - recovery-checkpoint restart and replay.
 
 It does not claim commercial validation.
+
+## GEOX A07 bounded customer evidence (candidate, no deployment approval)
+Private server-to-server POST /v1/customer-evidence/resolve is read-only, outside the frozen P01 write surface. It authenticates the exact original A07 principal and requires a live trusted resolveCustomerEvidenceGrant port on runtime, absent by default. No request-supplied grant or recovered metadata can enable display. The port must resolve current owner approval, exact manager scope, principal, receipt/Release/member set and approved member projection hashes, exact inspection and artifact RightsPolicy references, evaluator and jurisdiction. Freshness <=60s. Native current Deployment, QualifiedKnowledge, inspection and hardened current rights evaluation all run before display; unsupported obligations deny. No raw source bytes, Ledger record, A08, scientific applicability or action. Initial bounded support only for full releases of QualifiedKnowledge with explicit CORN/SOYBEAN member classifications; DerivedKnowledge and filtered releases HOLD. Actual live owner port, IAM and grant issuance remain separate and are not provisioned by this patch.

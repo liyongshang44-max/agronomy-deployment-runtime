@@ -1,3 +1,4 @@
+import {readCustomerEvidence} from './customer-evidence.mjs';
 import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
 import {
@@ -726,6 +727,19 @@ export function createPilotHttpServer(runtime) {
       }
 
       assertRuntimeAvailable(runtime);
+
+      // Private deployment adapter, read-only POST; not a frozen P01 authority-write operation.
+      if (req.method === 'POST' && path === '/v1/customer-evidence/resolve') {
+        try {
+          if(url.search) return json(res,400,{code:'CUSTOMER_EVIDENCE_QUERY_INVALID'});
+          const principal=parseBearer(req,runtime.tokenBindings);
+          const request=await readJson(req,65536);
+          const value=await readCustomerEvidence({ledger:runtime.ledger,principal,request,resolveGrant:runtime.resolveCustomerEvidenceGrant});
+          return json(res,200,value);
+        } catch(error) {
+          return json(res,error.httpStatus===401?401:403,{code:'CUSTOMER_EVIDENCE_DISPLAY_PERMISSION_NOT_ESTABLISHED'});
+        }
+      }
 
       const caseMatch = /^\/v1\/workbench\/cases\/([^/]+)$/.exec(path);
       if (req.method === 'GET' && caseMatch) {

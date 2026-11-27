@@ -619,3 +619,9 @@ export function assertRightsAllowed({
   }
   return validated;
 }
+
+// Pure point-in-time evaluation for read-only bounded consumers; never publishes a RightsDecision.
+export function evaluateRightsReadOnly(args) {
+  requireLedger(args.ledger);
+  return buildRightsDecisionPayload(args);
+}
