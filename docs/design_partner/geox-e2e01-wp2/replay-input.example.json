@@ -1,0 +1,15 @@
+{
+  "knowledge_release_ref": null,
+  "runtime_profile_ref": null,
+  "deployment_ref": null,
+  "a01_principal": null,
+  "a01_authorization_ref": null,
+  "a07_principal": null,
+  "a07_authorization_ref": null,
+  "actual_target_ref": null,
+  "at_time": null,
+  "decision_problem_logical_id": "native_63b8cbcf67d68e450d033f482ce6f4c1357a06803da8cf82e5953e9b9334550f:problem",
+  "use_target": {
+    "use": "CROP_SUITABILITY_EVIDENCE_RETRIEVAL"
+  }
+}

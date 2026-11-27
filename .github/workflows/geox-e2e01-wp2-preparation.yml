@@ -1,0 +1,34 @@
+name: GEOX E2E01 ADR unsigned preparation
+on:
+  pull_request:
+    paths:
+      - 'docs/design_partner/geox-e2e01-wp2/**'
+      - '.github/workflows/geox-e2e01-wp2-preparation.yml'
+permissions:
+  contents: read
+jobs:
+  unsigned-preparation:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: node --check docs/design_partner/geox-e2e01-wp2/replay-checkpoint.mjs
+      - run: node --test docs/design_partner/geox-e2e01-wp2/prepare.test.mjs
+  public-source-byte-receipts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: command -v pdftotext
+      - run: node docs/design_partner/geox-e2e01-wp2/acquire-source-receipts.mjs
