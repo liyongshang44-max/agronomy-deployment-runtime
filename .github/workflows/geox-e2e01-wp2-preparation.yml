@@ -18,6 +18,7 @@ jobs:
           node-version: 24
           package-manager-cache: false
       - run: node --check docs/design_partner/geox-e2e01-wp2/replay-checkpoint.mjs
+      - run: node --check docs/design_partner/geox-e2e01-wp2/verify-soy-k01-k02.mjs
       - run: node --test docs/design_partner/geox-e2e01-wp2/prepare.test.mjs
   public-source-byte-receipts:
     runs-on: ubuntu-24.04

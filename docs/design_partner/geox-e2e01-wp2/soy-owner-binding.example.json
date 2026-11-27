@@ -1,0 +1,23 @@
+{
+  "schema": "adr.geox-e2e01.soy-owner-binding.v1",
+  "preparation_sha256": null,
+  "checkpoint_sha256": null,
+  "issuer": null,
+  "owner_attestation_ref": null,
+  "authority_root_ref": null,
+  "retention_policy_ref": null,
+  "ownership": {
+    "organizationId": null,
+    "tenantId": null
+  },
+  "source_steward_principal": null,
+  "compiler_principal": null,
+  "iam_grantor_principal": null,
+  "jurisdiction": null,
+  "compiler_role_assignment_refs": [],
+  "rights_policy_ref": null,
+  "source_ref": null,
+  "artifact_ref": null,
+  "compiler_definition_ref": null,
+  "compilation_result_ref": null
+}
