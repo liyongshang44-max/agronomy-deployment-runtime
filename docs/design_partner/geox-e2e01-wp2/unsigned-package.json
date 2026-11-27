@@ -26,62 +26,66 @@
   },
   "sources": [
     {
-      "candidate_id": "CORN-WUR-H40-2018-01",
-      "title": "Handboek snijmaïs",
-      "authors_or_editors": "Herman van Schooten, Bert Philipsen, Jos Groten (eds.); Werkgroep Handboek snijmaïs",
-      "publisher": "Wageningen Livestock Research",
-      "version": "December 2018, Handboek 40",
-      "publication_date": "2018-12",
-      "doi": "10.18174/471088",
-      "pdf_url": "https://edepot.wur.nl/471088",
-      "alternate_url": "https://www.wur.nl/upload_mm/c/8/8/16671496-8b7a-4db3-8861-747c2fe65a4d_Handboek%20Snijmais%202019.pdf",
-      "identity_note": "Public PDF cover and imprint explicitly December 2018, DOI 471088. Filename mentions 2019; DOI 514592 is a distinct 2019 publication, must not mix. No exact byte identity asserted yet.",
+      "candidate_id": "CORN-KIEL-HUME-2026-01",
+      "title": "HUME-Maize: modelling silage maize yield formation across genotypes and scales",
+      "authors_or_editors": "Katja Holzhauser, Babette Maria Wienforth, Martin Komainda, Antje Herrmann, Iris Zimmermann, Michaela Anna Dippold, Sandra Spielvogel, Henning Kage, Josephine Bukowiecki",
+      "publisher": "The Journal of Agricultural Science, Cambridge University Press, 164 e34",
+      "version": "Version of record",
+      "publication_date": "2026-06-15",
+      "doi": "10.1017/S0021859626100719",
+      "pdf_url": "https://www.cambridge.org/core/services/aop-cambridge-core/content/view/DD69C50EDAA1C64E3D5E2F31375A88FA/S0021859626100719a.pdf/hume-maize-modelling-silage-maize-yield-formation-across-genotypes-and-scales.pdf",
+      "alternate_url": null,
+      "identity_note": "Publisher PDF and first-page license visually inspected; exact downloaded bytes/hash not yet observed by native K01. Methods and abstract contain differing historical trial-year descriptions; no exact early trial year asserted in candidate claims. New claims are not substitutes for old handbook temperature or rooting values.",
       "raw_sha256": null,
-      "source_kind": "PROFESSIONAL_SYNTHESIS_NOT_SINGLE_EXPERIMENT",
+      "source_kind": "PEER_REVIEWED_FIELD_TRIALS_AND_PROCESS_MODEL_EVALUATION",
       "rights": {
-        "status": "HOLD_SOURCE_RIGHTS_REQUIRED",
-        "evidence_location": "Copyright/imprint before table of contents",
-        "owner": "Wageningen Livestock Research",
-        "license": "ALL_RIGHTS_RESERVED; prior publisher or author permission required for reproduction/publication",
-        "public_access_only": true,
+        "status": "LICENSE_IDENTIFIED_OWNER_POLICY_PENDING",
+        "evidence_location": "PDF page 1 lower left and publisher Creative Commons statement",
+        "license": "CC-BY-4.0",
+        "license_url": "https://creativecommons.org/licenses/by/4.0/",
+        "attribution": "Holzhauser et al. (2026), The Journal of Agricultural Science 164(e34), DOI 10.1017/S0021859626100719; identify adaptations.",
+        "limitations": [
+          "Article license does not automatically license underlying field data, models, code, or third-party materials",
+          "Native source owner policy and retention/use approval remain required"
+        ],
         "commercial_deployment_admitted": false,
         "fulltext_retention_admitted": false
       },
       "claims": [
         {
-          "candidate_claim_id": "CORN-GERMINATION-01",
-          "claim_paraphrase": "The handbook reports a minimum germination soil-temperature range of 8–10 °C for maize; water and oxygen supply are also material.",
-          "evidence_locator": "Chapter 2 §2.2, printed p.23, Kieming",
+          "candidate_claim_id": "CORN-HUME-HYBRID-01",
+          "claim_paraphrase": "Applying a model calibrated for an earlier mid-early silage maize hybrid to a newer hybrid caused systematic growth and yield discrepancies; hybrid-specific physiological parameter adjustments improved model performance.",
+          "evidence_locator": "Abstract, p.1; Discussion: hybrid-specific dry matter production and partitioning; Results: Yield prediction performance in a large-scale evaluation",
           "source_context": {
             "crop": "silage maize / Zea mays",
-            "region": "Netherlands",
-            "stage": "seed germination",
-            "measurement": "soil temperature (not air temperature); handbook discusses circa 5 cm sowing depth",
-            "cultivar": "not specified in this paragraph",
-            "experiment_years": "not specified in this synthesis",
-            "methods": "professional synthesis; no primary test protocol in paragraph"
+            "region": "Germany, northern to central field experiments",
+            "cultivar": "KWS Ronaldinio and KWS Gunnario; two mid-early hybrids",
+            "measurement": "process model evaluated with field biomass and final silage yield; not a direct cultivar suitability test",
+            "stage": "seasonal biomass formation",
+            "methods": "field trials and process-based model; high N treatments intended to exclude N stress"
           },
           "limitations": [
-            "Do not convert to a single universal threshold",
-            "Do not infer target 2027 temperatures, germination or yield",
-            "Not a cross-crop ranking or sowing instruction"
+            "No general maize cultivar ranking or target yield",
+            "No Dutch parcel or 2027 field validation",
+            "No universal temperature threshold, root depth or MCFT parameter transfer"
           ]
         },
         {
-          "candidate_claim_id": "CORN-ROOT-02",
-          "claim_paraphrase": "Root penetration is sensitive to soil and weather conditions; cold and wet weather can restrict early depth.",
-          "evidence_locator": "Chapter 2 §2.2, printed p.23, Wortelontwikkeling",
+          "candidate_claim_id": "CORN-HUME-MODEL-LIMIT-02",
+          "claim_paraphrase": "The German large-scale evaluation included 287 site-year observations; final-yield relative RMSE was 0.16 for the older hybrid and 0.21 for the newer hybrid after hybrid-specific parameterization. Drought and nitrogen stress responses require refinement.",
+          "evidence_locator": "Abstract p.1; Material and methods: Data sets; Results: Yield prediction performance in a large-scale evaluation, Figure 4; Discussion",
           "source_context": {
             "crop": "silage maize",
-            "region": "Netherlands",
-            "stage": "vegetative growth",
-            "cultivar": "not specified",
-            "experiment_years": "not specified",
-            "methods": "professional synthesis, no measurement method stated in paragraph"
+            "region": "67 sites across Germany",
+            "years": "national evaluation 2006–2021 as reported in Data sets",
+            "measurement": "relative root mean square error of final silage yield model predictions; not MAPE or observation error",
+            "cultivar": "two mid-early hybrids",
+            "methods": "national hybrid trials; coarser soil/weather inputs"
           },
           "limitations": [
-            "Not target root depth or MCFT root-zone parameter",
-            "No specific rooting value imported"
+            "Not directly comparable with soybean MAPE",
+            "No field-level uncertainty calibration or 2027 yield",
+            "No claim about N or drought treatment efficacy"
           ]
         }
       ],
@@ -155,7 +159,15 @@
   ],
   "retained_disposition": {
     "wur_2015_soybean": "Metadata located; full text not recovered. Do not compile.",
-    "wur_2019_maize": "Different edition DOI 514592; not substituted for reviewed 2018 content."
+    "wur_2019_maize": "Different edition DOI 514592; not substituted for reviewed 2018 content.",
+    "corn_wur_h40_2018": {
+      "candidate_id": "CORN-WUR-H40-2018-01",
+      "prior_package_hash": "sha256:8e4a65e454cf64880d5783e45b2325f224036334881e8d33f656c6f670610738",
+      "prior_head": "d51f1f2d65b382c0207ce8e7d2bf17dec9254a86",
+      "receipt": "source-byte-observation-20261127.json",
+      "status": "SUPERSEDED_UNSIGNED_CANDIDATE_ORIGINAL_BYTES_AND_RIGHTS_HOLD",
+      "note": "No permission, no claim transfer. Prior package remains available at exact prior head."
+    }
   },
   "proposed_decision_mapping": {
     "decision_type": "CROP_SUITABILITY_REVIEW",

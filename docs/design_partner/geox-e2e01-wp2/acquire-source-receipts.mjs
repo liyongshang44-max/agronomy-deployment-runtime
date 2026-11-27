@@ -7,7 +7,7 @@ import {join} from 'node:path';
 import {sourceContentHash} from '../../../packages/source-registry/src/index.mjs';
 import {loadUnsigned,verifyUnsigned} from './prepare.mjs';
 const pack=loadUnsigned();console.log(JSON.stringify(verifyUnsigned(pack)));
-const allowed=new Set(['edepot.wur.nl','www.wur.nl','wur.nl','www.nature.com','nature.com','link.springer.com','static-content.springer-cdn.net','rdcu.be','research.wur.nl','www.verantwoordeveehouderij.nl']);
+const allowed=new Set(['edepot.wur.nl','www.wur.nl','wur.nl','www.nature.com','nature.com','link.springer.com','static-content.springer-cdn.net','rdcu.be','research.wur.nl','www.verantwoordeveehouderij.nl','www.cambridge.org']);
 const limit=50*1024*1024;
 async function fetchPdf(start){
  let url=new URL(start);
@@ -29,7 +29,8 @@ function inspect(source,bytes){
  try{
   const file=join(root,'source.pdf');writeFileSync(file,bytes,{mode:0o600,flag:'wx'});
   const plain=execFileSync('pdftotext',['-layout',file,'-'],{encoding:'utf8',maxBuffer:16*1024*1024}).normalize('NFKC').replace(/\s+/g,' ').toLowerCase();
-  const required=source.candidate_id.startsWith('CORN')?[/handboek snijma[iï]s/,/december 2018/,/471088/,/alle rechten voorbehouden/,/kieming/,/8\s*[-–]\s*10/]:[/european soybean to benefit people and the environment/,/10\.1038\/s41598-024-57522-z/,/creative commons attribution 4\.0/,/simulation data processing/,/36\s*%/];
+  const required=source.candidate_id==='CORN-KIEL-HUME-2026-01'?[/hume[-–\s]*maize/,/modelling silage maize yield formation/,/10\.1017\/\s*s0021859626100719/,/creativecommons\.org\/licenses\/by\/4\.0/,/287/,/hybrid-specific/,/0\.21/]:source.candidate_id==='SOY-WUR-ROTUNDO-2024-01'?[/european soybean to benefit people and the environment/,/10\.1038\/s41598-024-57522-z/,/creative commons attribution 4\.0/,/simulation data processing/,/36\s*%/]:null;
+  if(!required)throw Error('SOURCE_CANDIDATE_NOT_RECOGNIZED');
   if(!required.every(r=>r.test(plain)))throw Error('SOURCE_IDENTITY_OR_LOCATOR_MISMATCH');
   return 'PDF_TEXT_ANCHORS_PASS_NOT_SCIENTIFIC_REVIEW';
  }finally{rmSync(root,{recursive:true,force:true});}
@@ -37,7 +38,7 @@ function inspect(source,bytes){
 const results=await Promise.all(pack.sources.map(async source=>{
  const attempts=[];
  const additional=source.candidate_id==='CORN-WUR-H40-2018-01'?['https://www.verantwoordeveehouderij.nl/upload_mm/c/8/8/16671496-8b7a-4db3-8861-747c2fe65a4d_Handboek%20Snijmais%202019.pdf']:[];
- for(const url of [source.pdf_url,source.alternate_url,...additional]){
+ for(const url of [source.pdf_url,source.alternate_url,...additional].filter(Boolean)){
   try{const x=await fetchPdf(url);const locator_check=inspect(source,x.bytes);
    return {candidate_id:source.candidate_id,doi:source.doi,source_url:url,final_url:x.url,raw_sha256:sourceContentHash(x.bytes),byte_length:x.bytes.length,retrieved_at:new Date().toISOString(),locator_check,status:'SOURCE_BYTES_OBSERVED_NOT_ADMITTED',rights_status:source.rights.status,scientific_status:'CANDIDATE_ONLY',attempts};
   }catch(e){attempts.push({url,code:/^[A-Z0-9_]+$/.test(e.message)?e.message:'SOURCE_DOWNLOAD_OR_PARSE_FAILED'});}
