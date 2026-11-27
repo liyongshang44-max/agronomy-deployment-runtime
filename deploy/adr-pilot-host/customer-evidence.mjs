@@ -6,7 +6,7 @@ import {validateKnowledgeRetrievalResult} from '../../packages/knowledge-retriev
 import {resolveDeploymentForRuntime} from '../../packages/deployment/src/index.mjs';
 import {validateQualifiedKnowledgeAuthority} from '../../packages/knowledge-registry/src/qualified-authority.mjs';
 import {validateWorkbenchInspectionAuthorization} from '../../packages/workbench/src/index.mjs';
-import {evaluateRightsReadOnly} from '../../packages/rights-authority/src/index.mjs';
+import {evaluateRightsReadOnly,validateRightsGrant} from '../../packages/rights-authority/src/index.mjs';
 const denied=()=>{const e=new Error('customer evidence display is not authorized');e.code='CUSTOMER_EVIDENCE_ACCESS_DENIED';throw e;};
 const need=v=>{if(!v)denied();};
 const text=(v,n=512)=>typeof v==='string'&&v.length>0&&v.length<=n&&!/[\x00-\x1f\x7f]/.test(v);
@@ -58,6 +58,7 @@ export async function readCustomerEvidence({ledger,principal,request,resolveGran
  // Bounded first release: complete exact retrieved member set only. Derived or partially filtered release stays HOLD.
  need(sameSet(world.knowledgeRelease.semanticPayload.memberRefs,v.candidateRefs)&&Array.isArray(grant.members)&&grant.members.length===v.candidateRefs.length&&sameSet(grant.members.map(m=>core(m.knowledge_ref)),v.candidateRefs));
  const use=v.querySemantics.usePurpose,program=world.semanticPayload.deploymentScope.programId;
+ let validUntil=Math.min(Date.parse(grant.valid_until),Date.parse(world.semanticPayload.effectiveInterval.end));
  const items=v.candidateRefs.map(knowledgeRef=>{
   const m=grant.members.find(x=>sameAuthorityRef(core(x.knowledge_ref),knowledgeRef));
   need(m&&request.question_crops.includes(m.crop_code)&&text(m.jurisdiction));
@@ -65,10 +66,11 @@ export async function readCustomerEvidence({ledger,principal,request,resolveGran
   const inspection=validateWorkbenchInspectionAuthorization({ledger,authorizationDecisionAuditRef:core(m.inspection_ref),principal,knowledgeRef,knowledgeOwnership:q.knowledge.semanticPayload.ownership,requiredProgramId:program});
   const artifact=q.claim.semanticPayload.sourceArtifactRef;
   const rights=evaluateRightsReadOnly({ledger,rightsPolicyRef:core(m.rights_policy_ref),subjectRef:artifact,actor:principal,evaluatorPrincipal:m.evaluator_principal,operation:'DISPLAY_EXCERPT',purpose:'GEOX_CUSTOMER_EVIDENCE',jurisdiction:m.jurisdiction,evaluatedAt:at,enforceableObligations:[]});
+  for(const ref of rights.grantRefs){const bound=validateRightsGrant({ledger,rightsGrantRef:ref}).record.semanticPayload.validUntil;if(bound)validUntil=Math.min(validUntil,Date.parse(bound));}
   const item=boundedMemberDisplay(ledger,knowledgeRef,use,m.crop_code);
   need(customerEvidenceMemberHash(item)===m.projection_sha256);
   return {...item,inspection_ref:wire(inspection.authorizationDecisionAudit.ref),rights_policy_ref:wire(rights.rightsPolicyRef),rights_grant_refs:rights.grantRefs.map(wire),rights_checked_at:at};
  });
- current();
- return {contract_version:'geox.adr-a07-customer-evidence.v1',authority_class:'RETRIEVAL_EVIDENCE_NON_SCIENTIFIC',display_status:'AUTHORIZED_RECORDED_EVIDENCE',approval_ref:grant.approval_ref,valid_until:grant.valid_until,request,items,coverage_crops:[...new Set(items.map(i=>i.crop_code))].sort(),action_authority:false,applicability_authority:false};
+ current();need(validUntil>clock());
+ return {contract_version:'geox.adr-a07-customer-evidence.v1',authority_class:'RETRIEVAL_EVIDENCE_NON_SCIENTIFIC',display_status:'AUTHORIZED_RECORDED_EVIDENCE',approval_ref:grant.approval_ref,valid_until:new Date(validUntil).toISOString(),request,items,coverage_crops:[...new Set(items.map(i=>i.crop_code))].sort(),action_authority:false,applicability_authority:false};
 }

@@ -35,3 +35,6 @@ jobs:
         run: npm run test:v0.3-pilot-release
       - name: Qualify thin HTTP host
         run: node deploy/adr-pilot-host/acceptance.mjs
+
+      - name: Qualify bounded A07 evidence and native rights revocation (TEST_ONLY)
+        run: node --test deploy/adr-pilot-host/customer-evidence.test.mjs
