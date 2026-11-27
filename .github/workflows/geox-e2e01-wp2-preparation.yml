@@ -37,3 +37,13 @@ jobs:
           fi
           pdftotext -v
       - run: node docs/design_partner/geox-e2e01-wp2/acquire-source-receipts.mjs
+
+      - name: Prepare exact soybean PDF coordinates and unsigned native K01/K02 inputs
+        run: |
+          node --check docs/design_partner/geox-e2e01-wp2/prepare-soy-k01-k02.mjs
+          SOY_PREPARATION_OUTPUT="$RUNNER_TEMP/geox-soy-k01-k02-unsigned.json" node docs/design_partner/geox-e2e01-wp2/prepare-soy-k01-k02.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: geox-soy-k01-k02-unsigned-inputs
+          path: ${{ runner.temp }}/geox-soy-k01-k02-unsigned.json
+          if-no-files-found: error
