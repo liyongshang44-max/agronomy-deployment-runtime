@@ -82,12 +82,41 @@ This is smoke-test only. It reuses the existing non-GEOX v0.3 release acceptance
 
 ## Authentication
 
-ADR_PILOT_TOKEN_BINDINGS_JSON binds opaque bearer tokens to exact ADR principals.
+ADR_PILOT_TOKEN_BINDINGS_JSON binds opaque bearer tokens to exact ADR principals. The scoped binding form is:
+
+```json
+{
+  "<opaque-token>": {
+    "principal": {
+      "principal_id": "<exact ADR Principal ID>",
+      "type": "SERVICE_ACCOUNT",
+      "organization_id": "<exact organization>",
+      "tenant_id": "<exact tenant>",
+      "program_ids": ["<exact program>"]
+    },
+    "allowed_operations": [
+      "executeKnowledgeRetrieval",
+      "resolveCustomerEvidence"
+    ]
+  }
+}
+```
 
 The host requires exact equality between:
 
 - authenticated token principal;
 - request body principal.
+
+`allowed_operations` is a transport-surface allowlist, not an ADR RoleAssignment and not a grant of domain authority. The host enforces it before reading or dispatching a write request, before idempotency-cache lookup, and on the private customer-evidence and Workbench routes. Policies are keyed by the normalized full Principal identity; multiple tokens for one Principal cannot carry conflicting operation sets. Unknown, duplicate, empty, or conflicting operation policies fail closed.
+
+For a non-`SYNTHETIC_SMOKE` checkpoint, a Principal without an explicit operation allowlist is denied at the HTTP boundary. Legacy unwrapped token bindings remain accepted only by the existing `SYNTHETIC_SMOKE` fixture, preserving its historical behavior.
+
+The E2E01 A07-only service Principal is intended to receive exactly:
+
+- `executeKnowledgeRetrieval` — A07 retrieval;
+- `resolveCustomerEvidence` — read-only, rights-gated evidence projection.
+
+It must not receive `createApplicabilityAssessment` (A08), `createDecisionProblem` (A01), context writes, or Workbench operations. The existing `knowledge.runtime.use` RoleAssignment remains necessary for A07 but is not sufficient to bypass this host allowlist. The A08 backend and global P01 contract remain unchanged; the restricted Principal cannot reach its route through this host.
 
 Token values must be supplied through deployment secrets and must not be committed.
 
@@ -140,4 +169,4 @@ The acceptance proves:
 It does not claim commercial validation.
 
 ## GEOX A07 bounded customer evidence (candidate, no deployment approval)
-Private server-to-server POST /v1/customer-evidence/resolve is read-only, outside the frozen P01 write surface. It authenticates the exact original A07 principal and requires a live trusted resolveCustomerEvidenceGrant port on runtime, absent by default. No request-supplied grant or recovered metadata can enable display. The port must resolve current owner approval, exact manager scope, principal, receipt/Release/member set and approved member projection hashes, exact inspection and artifact RightsPolicy references, evaluator and jurisdiction. Freshness <=60s. Native current Deployment, QualifiedKnowledge, inspection and hardened current rights evaluation all run before display; unsupported obligations deny. No raw source bytes, Ledger record, A08, scientific applicability or action. Initial bounded support only for full releases of QualifiedKnowledge with explicit CORN/SOYBEAN member classifications; DerivedKnowledge and filtered releases HOLD. Actual live owner port, IAM and grant issuance remain separate and are not provisioned by this patch.
+Private server-to-server POST /v1/customer-evidence/resolve is read-only, outside the frozen P01 write surface. It authenticates the exact original A07 principal and requires a live trusted resolveCustomerEvidenceGrant port on runtime, absent by default. No request-supplied grant or recovered metadata can enable display. The port must resolve current owner approval, exact manager scope, principal, receipt/Release/member set and approved member projection hashes, exact inspection and artifact RightsPolicy references, evaluator and jurisdiction. Freshness <=60s. Native current Deployment, QualifiedKnowledge, inspection and hardened current rights evaluation all run before display; unsupported obligations deny. No raw source bytes, Ledger record, A08, scientific applicability or action. Initial bounded support only for full releases of QualifiedKnowledge with explicit CORN/SOYBEAN member classifications; DerivedKnowledge and filtered releases HOLD. Actual live owner port, IAM and grant issuance remain separate and are not provisioned by this patch. The host operation allowlist is a second, independent boundary: the A07-only service Principal may reach only A07 retrieval and the read-only evidence resolver, not the generic A08 applicability route.
