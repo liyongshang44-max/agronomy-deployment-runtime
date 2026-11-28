@@ -21,15 +21,33 @@ const listText=(objects)=>{need(Array.isArray(objects)&&objects.length<=64);retu
  const fields=['description','statement','rationale','message','reason','code','semanticId','type','kind'].filter(k=>text(o?.[k],600)).map(k=>o[k]);
  return fields.length?fields.join(' · ').slice(0,1000):'Governed condition recorded; detailed interpretation not available in this projection.';
  });};
+const ATTRIBUTION_OBLIGATION='RETAIN_SOURCE_ATTRIBUTION_LICENSE_ADAPTATION_NOTICE';
+const CC_BY_URL='https://creativecommons.org/licenses/by/4.0/';
+// Only the bounded publication-summary presentation is implemented. No full-text egress,
+// no generic obligation waiver, no authority inferred from a license string.
+export function sourceLicenseDisplay(source,artifact){
+ const s=source.rights??{},a=artifact.rightsSnapshot;
+ if(source.sourceType!=='PUBLICATION'&&!s.license&&!a?.license)return null;
+ need(s.license==='CC-BY-4.0'&&s.licenseUrl===CC_BY_URL&&a?.license===s.license&&a.licenseUrl===s.licenseUrl);
+ need(text(s.attribution,700)&&a.attribution===s.attribution&&s.attribution.includes(CC_BY_URL)&&text(source.title,500)&&s.attribution.includes(source.title));
+ need(a.policyRef?.kind==='RightsPolicy'&&text(a.policyRef.logicalId)&&text(a.policyRef.version)&&/^sha256:[a-f0-9]{64}$/.test(a.policyRef.semanticHash));
+ return {attribution:s.attribution,license:s.license,license_url:s.licenseUrl,modification_notice:'The displayed claim summary is a paraphrase/adaptation of the cited publication; it is not the original article or a grant of underlying data or model rights.'};
+}
 export function boundedMemberDisplay(ledger,knowledgeRef,use,cropCode){
  need(knowledgeRef.kind==='QualifiedKnowledge'&&['CORN','SOYBEAN'].includes(cropCode));
  const q=validateQualifiedKnowledgeAuthority({ledger,qualifiedKnowledgeRef:knowledgeRef,requiredUseTarget:{use}});
  const artifact=ledger.resolve(q.claim.semanticPayload.sourceArtifactRef);
  need(artifact.ref.kind==='SourceArtifact'&&sameAuthorityRef(artifact.semanticPayload.sourceRef,q.source.ref)&&artifact.semanticPayload.contentHash===q.claim.semanticPayload.sourceArtifactContentHash);
+ const dims=q.sourceContext.semanticPayload.contextFamilies?.BIOLOGICAL?.dimensions??[];
+ const crops=dims.filter(d=>d.semanticId==='crop.code'&&d.value?.type==='CATEGORY');
+ const sourceCrop=crops.length===1?({maize:'CORN',corn:'CORN',soybean:'SOYBEAN',CORN:'CORN',SOYBEAN:'SOYBEAN'})[crops[0].value.category]:null;
+ need(sourceCrop===cropCode);
  const s=q.source.semanticPayload,b=s.bibliographic??{},summary=q.claim.semanticPayload.assertion;
  need(text(s.title,500)&&text(summary,1200));
  const publication={};
  for(const k of ['doi','journal','citation','publisher','year','authors']){const v=b[k];if(text(v,700))publication[k]=v;else if(k==='year'&&Number.isInteger(v))publication[k]=String(v);else if(k==='authors'&&Array.isArray(v)&&v.length<=20&&v.every(x=>text(x,100)))publication[k]=v.join(', ');}
+ const license=sourceLicenseDisplay(s,artifact.semanticPayload);
+ if(license)Object.assign(publication,license);
  const active=q.decisions.filter(d=>d.semanticPayload.qualificationTarget.use===use&&d.semanticPayload.disposition==='QUALIFY_USE');need(active.length===1);
  const p=active[0].semanticPayload;
  return {knowledge_ref:wire(q.knowledge.ref),source_ref:wire(q.source.ref),artifact_ref:wire(artifact.ref),claim_ref:wire(q.claim.ref),qualification_ref:wire(active[0].ref),artifact_sha256:artifact.semanticPayload.contentHash,crop_code:cropCode,source_title:s.title,publication,summary,allowed_use:use,limitations:listText(p.limitations??[]),conditions:listText([...(p.semanticPreconditions??[]),...(p.effectModifiers??[]),...(p.transportConstraints??[])])};
@@ -65,9 +83,13 @@ export async function readCustomerEvidence({ledger,principal,request,resolveGran
   const q=validateQualifiedKnowledgeAuthority({ledger,qualifiedKnowledgeRef:knowledgeRef,requiredUseTarget:{use}});
   const inspection=validateWorkbenchInspectionAuthorization({ledger,authorizationDecisionAuditRef:core(m.inspection_ref),principal,knowledgeRef,knowledgeOwnership:q.knowledge.semanticPayload.ownership,requiredProgramId:program});
   const artifact=q.claim.semanticPayload.sourceArtifactRef;
-  const rights=evaluateRightsReadOnly({ledger,rightsPolicyRef:core(m.rights_policy_ref),subjectRef:artifact,actor:principal,evaluatorPrincipal:m.evaluator_principal,operation:'DISPLAY_EXCERPT',purpose:'GEOX_CUSTOMER_EVIDENCE',jurisdiction:m.jurisdiction,evaluatedAt:at,enforceableObligations:[]});
-  for(const ref of rights.grantRefs){const bound=validateRightsGrant({ledger,rightsGrantRef:ref}).record.semanticPayload.validUntil;if(bound)validUntil=Math.min(validUntil,Date.parse(bound));}
   const item=boundedMemberDisplay(ledger,knowledgeRef,use,m.crop_code);
+  const licensed=item.publication.license==='CC-BY-4.0';
+  const rightsPolicyRef=core(m.rights_policy_ref);
+  if(licensed)need(sameAuthorityRef(ledger.resolve(artifact).semanticPayload.rightsSnapshot.policyRef,rightsPolicyRef));
+  const rights=evaluateRightsReadOnly({ledger,rightsPolicyRef,subjectRef:artifact,actor:principal,evaluatorPrincipal:m.evaluator_principal,operation:'DISPLAY_EXCERPT',purpose:'GEOX_CUSTOMER_EVIDENCE',jurisdiction:m.jurisdiction,evaluatedAt:at,enforceableObligations:licensed?[ATTRIBUTION_OBLIGATION]:[]});
+  if(licensed)need(rights.obligations.includes(ATTRIBUTION_OBLIGATION));
+  for(const ref of rights.grantRefs){const bound=validateRightsGrant({ledger,rightsGrantRef:ref}).record.semanticPayload.validUntil;if(bound)validUntil=Math.min(validUntil,Date.parse(bound));}
   need(customerEvidenceMemberHash(item)===m.projection_sha256);
   return {...item,inspection_ref:wire(inspection.authorizationDecisionAudit.ref),rights_policy_ref:wire(rights.rightsPolicyRef),rights_grant_refs:rights.grantRefs.map(wire),rights_checked_at:at};
  });

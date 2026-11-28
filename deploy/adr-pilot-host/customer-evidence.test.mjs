@@ -4,7 +4,7 @@ import {createRetrievalEnvironment,executeAuthorizedRetrieval,audit} from '../..
 import {createInspectionAuthorization} from '../../acceptance/workbench/fixture.mjs';
 import {publishBuiltinRoleAssignment} from '../../packages/authorization/src/index.mjs';
 import {publishRightsPolicy,publishRightsGrant,publishRightsRevocation} from '../../packages/rights-authority/src/index.mjs';
-import {readCustomerEvidence,boundedMemberDisplay,customerEvidenceRequestHash,customerEvidenceMemberHash} from './customer-evidence.mjs';
+import {readCustomerEvidence,boundedMemberDisplay,customerEvidenceRequestHash,customerEvidenceMemberHash,sourceLicenseDisplay} from './customer-evidence.mjs';
 const wire=r=>({kind:r.kind,logical_id:r.logicalId,version:r.version,semantic_hash:r.semanticHash});
 test('TEST_ONLY native A07 customer projection rechecks grant, inspection and rights revocation',async()=>{
  const env=createRetrievalEnvironment('customer-evidence-test-only'),{ledger,runtimePrincipal:principal}=env;
@@ -19,6 +19,7 @@ test('TEST_ONLY native A07 customer projection rechecks grant, inspection and ri
  const rights=publishRightsGrant({ledger,logicalId:'grant.test-only.display',version:'1',rightsPolicyRef:policy.ref,subjectRef:q.artifact.ref,grantee:{organizationId:principal.organizationId,tenantId:principal.tenantId,principalId:principal.principalId,principalType:principal.type},rules:[{operation:'DISPLAY_EXCERPT',purposes:['GEOX_CUSTOMER_EVIDENCE'],jurisdictions:['US'],obligations:[]}],validFrom:'2026-08-19T00:00:00Z',validUntil:new Date(now+20000).toISOString(),grantorPrincipal:owner,audit:ownerAudit('test-only-grant')});
  const request={retrieval_ref:wire(result.ref),decision_problem_ref:wire(v.decisionProblemRef),deployment_ref:wire(v.deploymentRef),runtime_profile_ref:wire(v.runtimeProfileRef),knowledge_release_ref:wire(v.knowledgeReleaseRef),candidate_refs:v.candidateRefs.map(wire),manager_scope:{tenant_id:'tenant-a',project_id:'fixture-project',group_id:'fixture-group',field_id:'field-1',actor_id:'fixture-manager',mapping_version:'1'},question_crops:['CORN','SOYBEAN'],basis_sha256:'a'.repeat(64),journal_sha256:'b'.repeat(64),review_id:'fixture-review'};
  const member=boundedMemberDisplay(ledger,k,v.querySemantics.usePurpose,'CORN');
+ assert.throws(()=>boundedMemberDisplay(ledger,k,v.querySemantics.usePurpose,'SOYBEAN'),/not authorized/);
  const grant={status:'ACTIVE',permission:'ADR_A07_CUSTOMER_EVIDENCE_DISPLAY',request_sha256:customerEvidenceRequestHash(request,principal),approval_ref:'TEST_ONLY-display',checked_at:at,valid_until:new Date(now+30000).toISOString(),members:[{knowledge_ref:wire(k),crop_code:'CORN',jurisdiction:'US',inspection_ref:wire(inspection.recorded.ref),rights_policy_ref:wire(policy.ref),evaluator_principal:owner,projection_sha256:customerEvidenceMemberHash(member)}]};
  const read=(overrides={})=>readCustomerEvidence({ledger,principal,request,clock,resolveGrant:async()=>grant,...overrides});
  const value=await read();
@@ -30,4 +31,20 @@ test('TEST_ONLY native A07 customer projection rechecks grant, inspection and ri
  publishRightsRevocation({ledger,logicalId:'revoke.test-only.display',version:'1',rightsGrantRef:rights.ref,effectiveAt:at,reasonCodes:['TEST_ONLY'],revokerPrincipal:owner,audit:{...ownerAudit('test-only-revoke'),occurredAt:at}});
  await assert.rejects(read());
  console.log('PASS NATIVE_A07_CUSTOMER_EVIDENCE_RIGHTS_RECHECK_TEST_ONLY');
+});
+
+test('TEST_ONLY CC BY presentation requires exact retained attribution and license snapshot',()=>{
+ const licenseUrl='https://creativecommons.org/licenses/by/4.0/';
+ const title='Synthetic licensed publication';
+ const attribution='Fixture authors, '+title+'. CC BY 4.0 '+licenseUrl;
+ const source={sourceType:'PUBLICATION',title,rights:{license:'CC-BY-4.0',licenseUrl,attribution}};
+ const policyRef={kind:'RightsPolicy',logicalId:'test-only-policy',version:'1',semanticHash:'sha256:'+'a'.repeat(64)};
+ const artifact={rightsSnapshot:{license:'CC-BY-4.0',licenseUrl,attribution,policyRef,obligations:['INTERNAL_ONLY_NO_EGRESS']}};
+ const result=sourceLicenseDisplay(source,artifact);
+ assert.equal(result.attribution,attribution);
+ assert.equal(result.license_url,licenseUrl);
+ assert.match(result.modification_notice,/paraphrase\/adaptation/);
+ for(const broken of [undefined,{...artifact.rightsSnapshot,attribution:'wrong'},{...artifact.rightsSnapshot,licenseUrl:'https://other.invalid/'},{...artifact.rightsSnapshot,policyRef:null}])assert.throws(()=>sourceLicenseDisplay(source,{rightsSnapshot:broken}),/not authorized/);
+ assert.throws(()=>sourceLicenseDisplay({...source,rights:{}},artifact),/not authorized/);
+ assert.equal(sourceLicenseDisplay({sourceType:'PROTOCOL',rights:{}},{}),null);
 });
