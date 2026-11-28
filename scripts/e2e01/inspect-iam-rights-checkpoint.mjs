@@ -1,6 +1,6 @@
 // Read-only E2E01 IAM/Rights checkpoint inspection. Never reads deployment secrets.
 import {readdirSync,readFileSync,statSync} from 'node:fs';
-import {join,relative,basename} from 'node:path';
+import {join,relative} from 'node:path';
 import {createHash} from 'node:crypto';
 import {restoreAuthorityRecoveryCheckpoint} from '../../packages/recovery-operations/src/index.mjs';
 import {sameAuthorityRef} from '../../packages/contracts/src/authority.mjs';
@@ -43,6 +43,10 @@ const snapshot=ledger.exportSnapshot(),records=snapshot.records;
 const policy=records.find(x=>x.ref.kind==='RightsPolicy'&&x.ref.logicalId==='rights.policy.geox.e2e01.soy.rotundo2024');
 const source=records.find(x=>x.ref.kind==='Source'&&x.ref.logicalId==='source.geox.e2e01.soy.rotundo2024');
 const artifact=records.find(x=>x.ref.kind==='SourceArtifact'&&x.ref.logicalId==='artifact.geox.e2e01.soy.rotundo2024');
+const memberPolicy=records.find(x=>x.ref.kind==='KnowledgeGovernancePolicy'&&x.ref.logicalId==='policy.geox.e2e01.soy.program-release-member');
+const release=records.find(x=>x.ref.kind==='KnowledgeRelease'&&x.ref.logicalId==='release.geox.e2e01.soy.model-limit.program-e2e01');
+const profile=records.find(x=>x.ref.kind==='RuntimeProfile'&&x.ref.logicalId==='runtime-profile.geox.e2e01.soy.evidence-only');
+const deployment=records.find(x=>x.ref.kind==='Deployment'&&x.ref.logicalId==='deployment.geox.e2e01.soy.evidence-only');
 const same=(a,b)=>Boolean(a&&b&&sameAuthorityRef(a,b));
 const relatedRights=(kind)=>!policy||!artifact?[]:records.filter(x=>x.ref.kind===kind&&same(x.semanticPayload?.rightsPolicyRef,policy.ref)&&same(x.semanticPayload?.subjectRef,artifact.ref));
 function safe(value,depth=0){
@@ -88,12 +92,17 @@ const out={
     source:source?.ref??null,
     source_artifact:artifact?.ref??null,
     qualified_knowledge:records.find(x=>x.ref.kind==='QualifiedKnowledge'&&x.ref.logicalId==='knowledge.geox.e2e01.soy.SOY-MODEL-LIMIT-02')?.ref??null,
-    program_release:records.find(x=>x.ref.kind==='KnowledgeRelease'&&x.ref.logicalId==='release.geox.e2e01.soy.model-limit.program-e2e01')?.ref??null,
-    runtime_profile:records.find(x=>x.ref.kind==='RuntimeProfile'&&x.ref.logicalId==='runtime-profile.geox.e2e01.soy.evidence-only')?.ref??null,
-    deployment:records.find(x=>x.ref.kind==='Deployment'&&x.ref.logicalId==='deployment.geox.e2e01.soy.evidence-only')?.ref??null
+    program_release:release?.ref??null,
+    member_policy:memberPolicy?.ref??null,
+    runtime_profile:profile?.ref??null,
+    deployment:deployment?.ref??null
   },
   rights_policy:safe(policy?.semanticPayload??null),
   rights_policy_basis_evidence:basisEvidence,
+  program_member_policy:safe(memberPolicy?.semanticPayload??null),
+  program_release:safe(release?.semanticPayload??null),
+  runtime_profile:safe(profile?.semanticPayload??null),
+  deployment:safe(deployment?.semanticPayload??null),
   source:safe(source?.semanticPayload??null),
   source_artifact:safe(artifact?.semanticPayload??null),
   rights_grants:relatedRights('RightsGrant').map(x=>({ref:x.ref,semanticPayload:safe(x.semanticPayload)})),
