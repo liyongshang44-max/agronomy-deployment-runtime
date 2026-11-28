@@ -68,6 +68,11 @@ const WRITE_BY_PATH = new Map(
     .map((operation) => [`/v1${operation.path}`, operation])
 );
 
+const HOST_OPERATION_IDS = new Set([
+  ...PUBLIC_API_OPERATIONS.map((operation) => operation.operationId),
+  'resolveCustomerEvidence'
+]);
+
 function plainObject(value, name) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     const error = new Error(`${name} must be an object`);
@@ -271,15 +276,44 @@ class FileContextSnapshotStore {
   }
 }
 
-function tokenBindingsFromEnv() {
+function tokenBindingsConfigFromEnv() {
   const raw = process.env.ADR_PILOT_TOKEN_BINDINGS_JSON;
-  if (!raw) return new Map();
+  if (!raw) return { bindings: new Map(), operationPolicies: new Map() };
   const parsed = plainObject(JSON.parse(raw), 'ADR_PILOT_TOKEN_BINDINGS_JSON');
-  const map = new Map();
-  for (const [token, principal] of Object.entries(parsed)) {
-    map.set(nonEmpty(token, 'bearer token'), corePrincipal(principal));
+  const bindings = new Map();
+  const operationPolicies = new Map();
+  for (const [tokenValue, input] of Object.entries(parsed)) {
+    const token = nonEmpty(tokenValue, 'bearer token');
+    const binding = plainObject(input, 'token binding');
+    const scoped = Object.hasOwn(binding, 'principal') || Object.hasOwn(binding, 'allowed_operations');
+    let principalInput = binding;
+    let allowedOperations = null;
+    if (scoped) {
+      if (Object.keys(binding).length !== 2
+        || !Object.hasOwn(binding, 'principal')
+        || !Object.hasOwn(binding, 'allowed_operations')
+        || !Array.isArray(binding.allowed_operations)
+        || binding.allowed_operations.length === 0
+        || binding.allowed_operations.some((value) => typeof value !== 'string' || value.trim() !== value || value.length === 0)
+        || new Set(binding.allowed_operations).size !== binding.allowed_operations.length
+        || binding.allowed_operations.some((value) => !HOST_OPERATION_IDS.has(value))) {
+        throw new Error('ADR_PILOT_TOKEN_OPERATION_POLICY_INVALID');
+      }
+      principalInput = binding.principal;
+      allowedOperations = [...binding.allowed_operations].sort();
+    }
+    const principal = corePrincipal(principalInput);
+    const key = principalIdentity(principal);
+    if (allowedOperations) {
+      const existing = operationPolicies.get(key);
+      if (existing && JSON.stringify(existing) !== JSON.stringify(allowedOperations)) {
+        throw new Error('ADR_PILOT_TOKEN_OPERATION_POLICY_CONFLICT');
+      }
+      operationPolicies.set(key, allowedOperations);
+    }
+    bindings.set(token, principal);
   }
-  return map;
+  return { bindings, operationPolicies };
 }
 
 function wireResource(record, operationId, runtime) {
@@ -320,6 +354,27 @@ function parseBearer(req, bindings) {
     const error = new Error('bearer token is not bound to a pilot principal');
     error.code = 'HTTP_UNAUTHENTICATED';
     error.httpStatus = 401;
+    throw error;
+  }
+  return principal;
+}
+
+function assertTokenOperation(req, runtime, operationId) {
+  const principal = parseBearer(req, runtime.tokenBindings);
+  const allowed = runtime.tokenOperationPolicies?.get(principalIdentity(principal));
+  if (!allowed) {
+    // Preserve the existing synthetic smoke fixture only. A real checkpoint
+    // must explicitly bind every authenticated principal to a host operation set.
+    if (runtime.metadata?.mode === 'SYNTHETIC_SMOKE') return principal;
+    const error = new Error('token principal has no explicit host operation allowlist');
+    error.code = 'HTTP_OPERATION_NOT_ALLOWED';
+    error.httpStatus = 404;
+    throw error;
+  }
+  if (!allowed.includes(operationId)) {
+    const error = new Error('token principal is not allowed to invoke this host operation');
+    error.code = 'HTTP_OPERATION_NOT_ALLOWED';
+    error.httpStatus = 404;
     throw error;
   }
   return principal;
@@ -452,7 +507,7 @@ function normalizeEnvelope(body, expectedContract) {
 
 async function dispatchWrite(runtime, operation, req, path) {
   assertRuntimeAvailable(runtime);
-  const authenticated = parseBearer(req, runtime.tokenBindings);
+  const authenticated = assertTokenOperation(req, runtime, operation.operationId);
   const idempotencyKey = nonEmpty(req.headers['idempotency-key'], 'Idempotency-Key');
   const body = await readJson(req);
   // Queued requests and requests whose bodies were still arriving must observe
@@ -628,6 +683,7 @@ export async function initializePilotRuntime({
   allowSyntheticBootstrap = process.env.ADR_PILOT_SYNTHETIC_BOOTSTRAP === 'true'
 } = {}) {
   mkdirSync(dirname(statePath), { recursive: true });
+  const tokenConfig = tokenBindingsConfigFromEnv();
   const snapshotStore = new FileContextSnapshotStore(snapshotDir);
   let ledger;
   let metadata;
@@ -652,7 +708,8 @@ export async function initializePilotRuntime({
       reason: 'VALIDATED_BOOTSTRAP_CHECKPOINT_REQUIRED',
       statePath,
       snapshotDir,
-      tokenBindings: tokenBindingsFromEnv()
+      tokenBindings: tokenConfig.bindings,
+      tokenOperationPolicies: tokenConfig.operationPolicies
     };
   }
 
@@ -663,7 +720,8 @@ export async function initializePilotRuntime({
     snapshotStore,
     statePath,
     snapshotDir,
-    tokenBindings: tokenBindingsFromEnv(),
+    tokenBindings: tokenConfig.bindings,
+    tokenOperationPolicies: tokenConfig.operationPolicies,
     persist() {
       assertRuntimeAvailable(runtime);
       try {
@@ -730,9 +788,9 @@ export function createPilotHttpServer(runtime) {
 
       // Private deployment adapter, read-only POST; not a frozen P01 authority-write operation.
       if (req.method === 'POST' && path === '/v1/customer-evidence/resolve') {
+        const principal = assertTokenOperation(req, runtime, 'resolveCustomerEvidence');
         try {
           if(url.search) return json(res,400,{code:'CUSTOMER_EVIDENCE_QUERY_INVALID'});
-          const principal=parseBearer(req,runtime.tokenBindings);
           const request=await readJson(req,65536);
           const value=await readCustomerEvidence({ledger:runtime.ledger,principal,request,resolveGrant:runtime.resolveCustomerEvidenceGrant});
           return json(res,200,value);
@@ -743,7 +801,7 @@ export function createPilotHttpServer(runtime) {
 
       const caseMatch = /^\/v1\/workbench\/cases\/([^/]+)$/.exec(path);
       if (req.method === 'GET' && caseMatch) {
-        const principal = parseBearer(req, runtime.tokenBindings);
+        const principal = assertTokenOperation(req, runtime, 'getAgronomistWorkbenchCase');
         const ref = assessmentRefByLogicalId(runtime, decodeURIComponent(caseMatch[1]));
         const inspectionAuthorizations = workbenchAuthRefs(runtime, principal, ref);
         const workbenchCase = projectAgronomistWorkbenchCase({
@@ -757,7 +815,7 @@ export function createPilotHttpServer(runtime) {
       }
 
       if (req.method === 'GET' && path === '/v1/workbench/escalations') {
-        const principal = parseBearer(req, runtime.tokenBindings);
+        const principal = assertTokenOperation(req, runtime, 'listAgronomistEscalations');
         const assessments = runtime.ledger.exportSnapshot().records
           .filter((record) => record.ref.kind === 'ApplicabilityAssessment')
           .map((record) => record.ref);
