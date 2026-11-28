@@ -1,0 +1,92 @@
+// Read-only E2E01 IAM/Rights checkpoint inspection. Never reads deployment secrets.
+import {readdirSync,readFileSync,statSync} from 'node:fs';
+import {join,relative,basename} from 'node:path';
+import {createHash} from 'node:crypto';
+import {restoreAuthorityRecoveryCheckpoint} from '../../packages/recovery-operations/src/index.mjs';
+import {sameAuthorityRef} from '../../packages/contracts/src/authority.mjs';
+
+const root=process.argv[2];
+const expected='sha256:06f5755e0b3f3d4442f2bd7955670cdf0e1dddf4be94a495b8a69313736360fc';
+const need=(value,code)=>{if(!value)throw Object.assign(new Error(code),{code});};
+need(typeof root==='string'&&root.length>0,'FORMAL_ROOT_PATH_REQUIRED');
+const ignored=/(^|[\\/])(node_modules|\.git|\.cache)([\\/]|$)/i;
+const secretName=/(token|credential|secret|session|oidc|keycloak|private[-_]?key)/i;
+function* jsonFiles(dir,depth=0){
+  if(depth>8)return;
+  for(const entry of readdirSync(dir,{withFileTypes:true})){
+    const path=join(dir,entry.name);
+    if(ignored.test(path)||secretName.test(entry.name))continue;
+    if(entry.isDirectory())yield* jsonFiles(path,depth+1);
+    else if(entry.isFile()&&entry.name.toLowerCase().endsWith('.json')){
+      const size=statSync(path).size;
+      if(size>0&&size<=32*1024*1024)yield path;
+    }
+  }
+}
+const matches=[];
+for(const path of jsonFiles(root)){
+  try{
+    const data=JSON.parse(readFileSync(path,'utf8'));
+    const candidates=[data?.checkpoint,data?.recoveryCheckpoint,data].filter(Boolean);
+    for(const cp of candidates){
+      if(cp?.contractVersion==='adr.recovery-checkpoint.v1'&&cp?.checkpointHash===expected){
+        matches.push({path,cp,bytes:readFileSync(path)});
+        break;
+      }
+    }
+  }catch{}
+}
+need(matches.length===1,matches.length===0?'E2E01_A05_A06_CHECKPOINT_NOT_FOUND': 'E2E01_A05_A06_CHECKPOINT_AMBIGUOUS');
+const found=matches[0];
+const {ledger,report}=restoreAuthorityRecoveryCheckpoint(found.cp);
+const snapshot=ledger.exportSnapshot(),records=snapshot.records;
+const byRef=ref=>records.find(x=>sameAuthorityRef(x.ref,ref));
+const policy=records.find(x=>x.ref.kind==='RightsPolicy'&&x.ref.logicalId==='rights.policy.geox.e2e01.soy.rotundo2024');
+const source=records.find(x=>x.ref.kind==='Source'&&x.ref.logicalId==='source.geox.e2e01.soy.rotundo2024');
+const artifact=records.find(x=>x.ref.kind==='SourceArtifact'&&x.ref.logicalId==='artifact.geox.e2e01.soy.rotundo2024');
+const relatedRights=(kind)=>records.filter(x=>x.ref.kind===kind&&sameAuthorityRef(x.semanticPayload?.rightsPolicyRef,policy?.ref)&&sameAuthorityRef(x.semanticPayload?.subjectRef,artifact?.ref));
+const roleAssignments=records.filter(x=>x.ref.kind==='RoleAssignment'&&(
+  x.semanticPayload?.principal?.organizationId==='org_geox'&&x.semanticPayload?.principal?.tenantId==='tenant_geox_e2e01'
+));
+const runtimeAssignments=roleAssignments.filter(x=>(
+  x.semanticPayload?.permissions??[]
+).some(p=>['knowledge.runtime.use','deployment.runtime.read','deployment.runtime.use'].includes(p)));
+const authorizationAudits=records.filter(x=>x.ref.kind==='AuthorizationDecisionAudit'&&(
+  ['DEPLOYMENT_RUNTIME_READ','KNOWLEDGE_RUNTIME_USE','DECISION_PROBLEM_CREATE'].includes(x.semanticPayload?.operation)
+  || x.semanticPayload?.resourceScope?.resourceId==='deployment.geox.e2e01.soy.evidence-only'
+));
+const selected=[policy,source,artifact,...relatedRights('RightsGrant'),...relatedRights('RightsDecision'),...relatedRights('RightsRevocation'),...roleAssignments,...authorizationAudits].filter(Boolean);
+const keys=new Set(selected.map(x=>JSON.stringify(x.ref)));
+const audits=snapshot.audit.filter(a=>[...keys].some(k=>k===JSON.stringify(a.objectRef)));
+const out={
+  status:'E2E01_IAM_RIGHTS_CHECKPOINT_READONLY_INSPECTION_PASS',
+  checkpoint_file:relative(root,found.path),
+  checkpoint_file_sha256:'sha256:'+createHash('sha256').update(found.bytes).digest('hex'),
+  checkpoint_hash:found.cp.checkpointHash,
+  recovery_report:report,
+  counts:{records:snapshot.records.length,audit_events:snapshot.audit.length},
+  exact_refs:{
+    rights_policy:policy?.ref??null,
+    source:source?.ref??null,
+    source_artifact:artifact?.ref??null,
+    qualified_knowledge:records.find(x=>x.ref.kind==='QualifiedKnowledge'&&x.ref.logicalId==='knowledge.geox.e2e01.soy.SOY-MODEL-LIMIT-02')?.ref??null,
+    program_release:records.find(x=>x.ref.kind==='KnowledgeRelease'&&x.ref.logicalId==='release.geox.e2e01.soy.model-limit.program-e2e01')?.ref??null,
+    runtime_profile:records.find(x=>x.ref.kind==='RuntimeProfile'&&x.ref.logicalId==='runtime-profile.geox.e2e01.soy.evidence-only')?.ref??null,
+    deployment:records.find(x=>x.ref.kind==='Deployment'&&x.ref.logicalId==='deployment.geox.e2e01.soy.evidence-only')?.ref??null
+  },
+  rights_policy:policy?.semanticPayload??null,
+  source:source?.semanticPayload??null,
+  source_artifact:artifact?.semanticPayload??null,
+  rights_grants:relatedRights('RightsGrant').map(x=>({ref:x.ref,semanticPayload:x.semanticPayload})),
+  rights_decisions:relatedRights('RightsDecision').map(x=>({ref:x.ref,semanticPayload:x.semanticPayload})),
+  rights_revocations:relatedRights('RightsRevocation').map(x=>({ref:x.ref,semanticPayload:x.semanticPayload})),
+  relevant_role_assignments:roleAssignments.map(x=>({ref:x.ref,semanticPayload:x.semanticPayload})),
+  runtime_role_assignments:runtimeAssignments.map(x=>({ref:x.ref,semanticPayload:x.semanticPayload})),
+  relevant_authorization_audits:authorizationAudits.map(x=>({ref:x.ref,semanticPayload:x.semanticPayload})),
+  selected_publication_audits:audits.map(a=>({eventId:a.eventId,occurredAt:a.occurredAt,actor:a.actor,action:a.action,objectRef:a.objectRef,inputRefs:a.inputRefs,details:a.details})),
+  runtime_service_principal_in_checkpoint:runtimeAssignments.some(x=>x.semanticPayload?.principal?.type==='SERVICE_ACCOUNT')
+    ?'SERVICE_ACCOUNT_ROLE_ASSIGNMENT_PRESENT'
+    :'NO_RUNTIME_SERVICE_ACCOUNT_ROLE_ASSIGNMENT_IN_CHECKPOINT',
+  deployment_token_bindings:'NOT_READ; no token or credential values inspected'
+};
+console.log(JSON.stringify(out,null,2));
