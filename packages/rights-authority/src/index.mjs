@@ -1,6 +1,7 @@
 export * from './contract.mjs';
 export {
   assertRightsAllowed,
+  evaluateRightsReadOnly,
   publishRightsDecision,
   publishRightsGrant,
   publishRightsPolicy,

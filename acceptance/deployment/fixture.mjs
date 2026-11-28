@@ -28,8 +28,8 @@ export function audit(actorId, actorType = 'USER', prefix = 'a06') {
   };
 }
 
-export function createDeploymentEnvironment(label = 'base', profileOverrides = {}) {
-  const env = createRuntimeProfileEnvironment(`a06-${label}`);
+export function createDeploymentEnvironment(label = 'base', profileOverrides = {}, options = {}) {
+  const env = createRuntimeProfileEnvironment(`a06-${label}`,options);
   const profile = publishAuthorizedProfile(env, {
     logicalId: `runtime-profile.a06.${label}`,
     version: '1',

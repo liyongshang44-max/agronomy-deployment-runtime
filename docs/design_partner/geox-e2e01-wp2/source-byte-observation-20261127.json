@@ -1,0 +1,38 @@
+{
+  "schema": "adr.geox-e2e01.source-byte-observation.v1",
+  "job": "https://github.com/liyongshang44-max/agronomy-deployment-runtime/actions/runs/45984509864/job/140456566478",
+  "executed_head": "e1eb653a8cddbfff6632057215d27f79f6c0d6a7",
+  "unsigned_package_hash": "sha256:8e4a65e454cf64880d5783e45b2325f224036334881e8d33f656c6f670610738",
+  "formal_authority_ready": false,
+  "results": [
+    {
+      "candidate_id": "SOY-WUR-ROTUNDO-2024-01",
+      "doi": "10.1038/s41598-024-57522-z",
+      "source_url": "https://edepot.wur.nl/656804",
+      "final_url": "https://edepot.wur.nl/656804",
+      "raw_sha256": "sha256:bced62f287892f147e2f9c450c801a972c48855c0f5e255d17a7358ad3fe2495",
+      "byte_length": 1804554,
+      "retrieved_at": "2026-11-27T10:44:27.613Z",
+      "locator_check": "PDF_TEXT_ANCHORS_PASS_NOT_SCIENTIFIC_REVIEW",
+      "status": "SOURCE_BYTES_OBSERVED_NOT_ADMITTED",
+      "rights_status": "LICENSE_IDENTIFIED_OWNER_POLICY_PENDING",
+      "scientific_status": "CANDIDATE_ONLY"
+    },
+    {
+      "candidate_id": "CORN-WUR-H40-2018-01",
+      "raw_sha256": null,
+      "status": "HOLD_ORIGINAL_SOURCE_BYTES",
+      "attempts": [
+        {
+          "url": "https://edepot.wur.nl/471088",
+          "code": "SOURCE_DOWNLOAD_OR_PARSE_FAILED"
+        },
+        {
+          "url": "https://www.wur.nl/upload_mm/c/8/8/16671496-8b7a-4db3-8861-747c2fe65a4d_Handboek%20Snijmais%202019.pdf",
+          "code": "SOURCE_HTTP_404"
+        }
+      ],
+      "rights_status": "HOLD_SOURCE_RIGHTS_REQUIRED"
+    }
+  ]
+}

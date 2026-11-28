@@ -30,8 +30,8 @@ export function audit(actorId, actorType = 'USER', prefix = 'a07') {
   };
 }
 
-export function createRetrievalEnvironment(label = 'base') {
-  const env = createDeploymentEnvironment(`a07-${label}`);
+export function createRetrievalEnvironment(label = 'base', options = {}) {
+  const env = createDeploymentEnvironment(`a07-${label}`,{},options);
   const deployment = publishAuthorizedDeployment(env, {
     logicalId: `deployment.a07.${label}`,
     version: '1'

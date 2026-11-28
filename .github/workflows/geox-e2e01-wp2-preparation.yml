@@ -1,0 +1,53 @@
+name: GEOX E2E01 ADR unsigned preparation
+on:
+  pull_request:
+    paths:
+      - 'docs/design_partner/geox-e2e01-wp2/**'
+      - 'scripts/e2e01/**'
+      - '.github/workflows/geox-e2e01-wp2-preparation.yml'
+permissions:
+  contents: read
+jobs:
+  unsigned-preparation:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: node --check docs/design_partner/geox-e2e01-wp2/replay-checkpoint.mjs
+      - run: node --check docs/design_partner/geox-e2e01-wp2/verify-soy-k01-k02.mjs
+      - name: Check read-only IAM/Rights checkpoint inspector syntax
+        run: node --check scripts/e2e01/inspect-iam-rights-checkpoint.mjs
+      - run: node --test docs/design_partner/geox-e2e01-wp2/prepare.test.mjs
+  public-source-byte-receipts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: |
+          if ! command -v pdftotext >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends poppler-utils
+          fi
+          pdftotext -v
+      - run: node docs/design_partner/geox-e2e01-wp2/acquire-source-receipts.mjs
+
+      - name: Prepare exact soybean PDF coordinates and unsigned native K01/K02 inputs
+        run: |
+          node --check docs/design_partner/geox-e2e01-wp2/prepare-soy-k01-k02.mjs
+          SOY_PREPARATION_OUTPUT="$RUNNER_TEMP/geox-soy-k01-k02-unsigned.json" node docs/design_partner/geox-e2e01-wp2/prepare-soy-k01-k02.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: geox-soy-k01-k02-unsigned-inputs
+          path: ${{ runner.temp }}/geox-soy-k01-k02-unsigned.json
+          if-no-files-found: error

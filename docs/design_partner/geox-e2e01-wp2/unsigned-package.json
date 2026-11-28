@@ -1,0 +1,353 @@
+{
+  "schema": "adr.geox-e2e01.unsigned-preparation.v1",
+  "task": "ADR_WP2_SOURCE_AND_AUTHORITY_PACKAGE",
+  "status": "UNSIGNED_CANDIDATE_ONLY",
+  "adr_baseline": "d63c3058d6b95873e811445920f7302ded980ef3",
+  "geox_consumer": "1a6d04f1a1899e22aad142b9d241bcf8cd009b69",
+  "scope": {
+    "tenant_id": "tenant_geox_e2e01",
+    "project_id": "project_geox_e2e01",
+    "group_id": "group_geox_e2e01",
+    "field_id": "field_geox_e2e01_001",
+    "review_id": "review_geox_e2e01_001",
+    "manager_subject": "2bb8822d-1b7f-4ad5-9cc7-9dd99aee2083",
+    "manager_login": "fdw-manager-a",
+    "crop_codes": [
+      "CORN",
+      "SOYBEAN"
+    ],
+    "target_start_date": "2027-04-01",
+    "target_end_date": "2027-10-01",
+    "documents": [],
+    "source_field_id": "25281db9-db71-5965-94f3-e591ada7c278",
+    "source_geometry_sha256": "8d4202262136ccbff713cef151349888f516031342bb1da38a7deda90384497f",
+    "source_original_sha256": "c0c90cffb60894fef08f2a72d0980f267736a2fc45686c46bda319ca76c5e133",
+    "source_binding_kind": "LOCAL_PUBLIC_HISTORICAL_REFERENCE_FIELD_ONLY"
+  },
+  "sources": [
+    {
+      "candidate_id": "CORN-KIEL-HUME-2026-01",
+      "title": "HUME-Maize: modelling silage maize yield formation across genotypes and scales",
+      "authors_or_editors": "Katja Holzhauser, Babette Maria Wienforth, Martin Komainda, Antje Herrmann, Iris Zimmermann, Michaela Anna Dippold, Sandra Spielvogel, Henning Kage, Josephine Bukowiecki",
+      "publisher": "The Journal of Agricultural Science, Cambridge University Press, 164 e34",
+      "version": "Version of record",
+      "publication_date": "2026-06-15",
+      "doi": "10.1017/S0021859626100719",
+      "pdf_url": "https://www.cambridge.org/core/services/aop-cambridge-core/content/view/DD69C50EDAA1C64E3D5E2F31375A88FA/S0021859626100719a.pdf/hume-maize-modelling-silage-maize-yield-formation-across-genotypes-and-scales.pdf",
+      "alternate_url": null,
+      "identity_note": "Publisher PDF and first-page license visually inspected; exact downloaded bytes/hash not yet observed by native K01. Methods and abstract contain differing historical trial-year descriptions; no exact early trial year asserted in candidate claims. New claims are not substitutes for old handbook temperature or rooting values.",
+      "raw_sha256": null,
+      "source_kind": "PEER_REVIEWED_FIELD_TRIALS_AND_PROCESS_MODEL_EVALUATION",
+      "rights": {
+        "status": "LICENSE_IDENTIFIED_OWNER_POLICY_PENDING",
+        "evidence_location": "PDF page 1 lower left and publisher Creative Commons statement",
+        "license": "CC-BY-4.0",
+        "license_url": "https://creativecommons.org/licenses/by/4.0/",
+        "attribution": "Holzhauser et al. (2026), The Journal of Agricultural Science 164(e34), DOI 10.1017/S0021859626100719; identify adaptations.",
+        "limitations": [
+          "Article license does not automatically license underlying field data, models, code, or third-party materials",
+          "Native source owner policy and retention/use approval remain required"
+        ],
+        "commercial_deployment_admitted": false,
+        "fulltext_retention_admitted": false
+      },
+      "claims": [
+        {
+          "candidate_claim_id": "CORN-HUME-HYBRID-01",
+          "claim_paraphrase": "Applying a model calibrated for an earlier mid-early silage maize hybrid to a newer hybrid caused systematic growth and yield discrepancies; hybrid-specific physiological parameter adjustments improved model performance.",
+          "evidence_locator": "Abstract, p.1; Discussion: hybrid-specific dry matter production and partitioning; Results: Yield prediction performance in a large-scale evaluation",
+          "source_context": {
+            "crop": "silage maize / Zea mays",
+            "region": "Germany, northern to central field experiments",
+            "cultivar": "KWS Ronaldinio and KWS Gunnario; two mid-early hybrids",
+            "measurement": "process model evaluated with field biomass and final silage yield; not a direct cultivar suitability test",
+            "stage": "seasonal biomass formation",
+            "methods": "field trials and process-based model; high N treatments intended to exclude N stress"
+          },
+          "limitations": [
+            "No general maize cultivar ranking or target yield",
+            "No Dutch parcel or 2027 field validation",
+            "No universal temperature threshold, root depth or MCFT parameter transfer"
+          ]
+        },
+        {
+          "candidate_claim_id": "CORN-HUME-MODEL-LIMIT-02",
+          "claim_paraphrase": "The German large-scale evaluation included 287 site-year observations; final-yield relative RMSE was 0.16 for the older hybrid and 0.21 for the newer hybrid after hybrid-specific parameterization. Drought and nitrogen stress responses require refinement.",
+          "evidence_locator": "Abstract p.1; Material and methods: Data sets; Results: Yield prediction performance in a large-scale evaluation, Figure 4; Discussion",
+          "source_context": {
+            "crop": "silage maize",
+            "region": "67 sites across Germany",
+            "years": "national evaluation 2006–2021 as reported in Data sets",
+            "measurement": "relative root mean square error of final silage yield model predictions; not MAPE or observation error",
+            "cultivar": "two mid-early hybrids",
+            "methods": "national hybrid trials; coarser soil/weather inputs"
+          },
+          "limitations": [
+            "Not directly comparable with soybean MAPE",
+            "No field-level uncertainty calibration or 2027 yield",
+            "No claim about N or drought treatment efficacy"
+          ]
+        }
+      ],
+      "proposed_use": "CROP_SUITABILITY_EVIDENCE_RETRIEVAL",
+      "scientific_status": "CANDIDATE_ONLY"
+    },
+    {
+      "candidate_id": "SOY-WUR-ROTUNDO-2024-01",
+      "title": "European soybean to benefit people and the environment",
+      "authors_or_editors": "Jose L. Rotundo, Rachel Marshall, Ryan McCormick et al.; Chris de Visser (WUR) coauthor",
+      "publisher": "Scientific Reports 14, article 7612",
+      "version": "Version of record",
+      "publication_date": "2024-03-31",
+      "doi": "10.1038/s41598-024-57522-z",
+      "pdf_url": "https://www.nature.com/articles/s41598-024-57522-z.pdf",
+      "alternate_url": "https://edepot.wur.nl/656804",
+      "raw_sha256": null,
+      "source_kind": "PEER_REVIEWED_REGIONAL_MODEL_AND_TRIAL_COMPARISON",
+      "rights": {
+        "status": "LICENSE_IDENTIFIED_OWNER_POLICY_PENDING",
+        "evidence_location": "Publisher Rights and permissions, CC BY 4.0",
+        "license": "CC-BY-4.0",
+        "license_url": "https://creativecommons.org/licenses/by/4.0/",
+        "attribution": "Rotundo et al. (2024), Scientific Reports 14:7612, DOI 10.1038/s41598-024-57522-z; disclose adaptations.",
+        "limitations": [
+          "Third-party materials separately credited may be excluded",
+          "Underlying weather, trial data and models are not automatically covered by article license"
+        ],
+        "commercial_deployment_admitted": false,
+        "fulltext_retention_admitted": false
+      },
+      "claims": [
+        {
+          "candidate_claim_id": "SOY-COLD-SEASON-01",
+          "claim_paraphrase": "The regional analysis identifies cool northern conditions and shorter seasons as limitations; cultivar cold adaptation and maturity matter.",
+          "evidence_locator": "Abstract; crop performance discussion surrounding Figure 2, clusters B/C; Methods: Crop modelling and simulations",
+          "source_context": {
+            "crop": "soybean",
+            "region": "European grid and surrounding regions",
+            "cultivars": "model maturity groups 0000–III, not a named field cultivar",
+            "years": "1999–2018 historical weather; separate field trial comparison includes Netherlands",
+            "measurement": "simulation at 0.5-degree grid with phenology/growth models; maturity at R7; rainfed scenarios; no calibration to European trials"
+          },
+          "limitations": [
+            "Regional plausibility, not field-level forecast",
+            "No selected 2027 cultivar or local weather/soil inputs",
+            "Cannot identify the PDOK polygon's cluster by assumption",
+            "No cross-crop rank or prescribed action"
+          ]
+        },
+        {
+          "candidate_claim_id": "SOY-MODEL-LIMIT-02",
+          "claim_paraphrase": "Out-of-sample rainfed trial comparison had 84 observations and 36% mean absolute percentage error; results are evidence of regional plausibility rather than exact parcel yield.",
+          "evidence_locator": "Methods: Simulation data processing, PDF page 10 (one-based), Supplementary Fig. 1",
+          "source_context": {
+            "crop": "soybean",
+            "region": "Belgium, Germany, Italy, Netherlands, Spain, UK",
+            "measurement": "comparison of simulated rainfed yield potential to observed maturity-group mean yields",
+            "cultivar": "group-level comparison",
+            "years": "trial years not asserted here"
+          },
+          "limitations": [
+            "Do not treat simulation output as observations",
+            "No target yield, maturity date or ranking inferred"
+          ]
+        }
+      ],
+      "proposed_use": "CROP_SUITABILITY_EVIDENCE_RETRIEVAL",
+      "scientific_status": "CANDIDATE_ONLY"
+    }
+  ],
+  "retained_disposition": {
+    "wur_2015_soybean": "Metadata located; full text not recovered. Do not compile.",
+    "wur_2019_maize": "Different edition DOI 514592; not substituted for reviewed 2018 content.",
+    "corn_wur_h40_2018": {
+      "candidate_id": "CORN-WUR-H40-2018-01",
+      "prior_package_hash": "sha256:8e4a65e454cf64880d5783e45b2325f224036334881e8d33f656c6f670610738",
+      "prior_head": "d51f1f2d65b382c0207ce8e7d2bf17dec9254a86",
+      "receipt": "source-byte-observation-20261127.json",
+      "status": "SUPERSEDED_UNSIGNED_CANDIDATE_ORIGINAL_BYTES_AND_RIGHTS_HOLD",
+      "note": "No permission, no claim transfer. Prior package remains available at exact prior head."
+    }
+  },
+  "proposed_decision_mapping": {
+    "decision_type": "CROP_SUITABILITY_REVIEW",
+    "objective_code": "COMPARE_CROP_SUITABILITY",
+    "use_purpose": "CROP_SUITABILITY_EVIDENCE_RETRIEVAL",
+    "use_class": "ADVISORY",
+    "decision_authority_mode": "RUNTIME_ONLY",
+    "crop_action_bindings": [
+      {
+        "crop_code": "CORN",
+        "action_code": "CORN"
+      },
+      {
+        "crop_code": "SOYBEAN",
+        "action_code": "SOYBEAN"
+      }
+    ],
+    "status": "PROPOSED_NOT_GOVERNED",
+    "decision_horizon": null,
+    "decision_deadline": null,
+    "evaluation_time": null
+  },
+  "proposed_resources": {
+    "decision_problem_logical_id": "native_63b8cbcf67d68e450d033f482ce6f4c1357a06803da8cf82e5953e9b9334550f:problem",
+    "retrieval_logical_id": "native_63b8cbcf67d68e450d033f482ce6f4c1357a06803da8cf82e5953e9b9334550f:retrieval",
+    "version": "1",
+    "decision_problem_idempotency_key": "native_63b8cbcf67d68e450d033f482ce6f4c1357a06803da8cf82e5953e9b9334550f:problem:1",
+    "retrieval_idempotency_key": "native_63b8cbcf67d68e450d033f482ce6f4c1357a06803da8cf82e5953e9b9334550f:retrieval:1",
+    "basis_sha256": null,
+    "request_sha256": null
+  },
+  "approval_requests": [
+    {
+      "gate": "SOURCE_RIGHTS",
+      "actor_required": "actual source owner or rights-authorized delegate / tenant rights steward",
+      "native_inputs": [
+        "exact SourceArtifact bytes/contentHash",
+        "license or permission scope",
+        "retention and deployment rights"
+      ],
+      "approval_ref": null,
+      "status": "HOLD_SOURCE_RIGHTS_REQUIRED"
+    },
+    {
+      "gate": "K03",
+      "actor_required": "AGRONOMY_REVIEWER, exact SOURCE_READ and KNOWLEDGE_INSPECT",
+      "native_inputs": [
+        "Source",
+        "SourceArtifact",
+        "ScientificCompilationResult",
+        "ClaimCandidate",
+        "SourceContextCandidate",
+        "KnowledgeGovernancePolicy",
+        "RoleAssignment",
+        "AuthorizationDecisionAudit"
+      ],
+      "approval_ref": null,
+      "status": "HOLD_SOURCE_FAITHFUL_REVIEW_REQUIRED"
+    },
+    {
+      "gate": "K04",
+      "actor_required": "SCIENTIFIC_APPROVER, exact KNOWLEDGE_QUALIFY and KNOWLEDGE_INSPECT",
+      "native_inputs": [
+        "K03 accepted Claim and SourceContext exact refs",
+        "qualificationTarget.use (proposed use only)",
+        "limitations/preconditions/transport constraints",
+        "policy and assignment refs",
+        "active qualification decisions"
+      ],
+      "approval_ref": null,
+      "status": "HOLD_AUTHORIZED_APPROVER_REQUIRED"
+    },
+    {
+      "gate": "K06",
+      "actor_required": "publisher with exact KNOWLEDGE_RELEASE and member owner entitlement",
+      "native_inputs": [
+        "QualifiedKnowledge exact refs",
+        "per-member policy/authorization",
+        "releaseTarget",
+        "conflict state",
+        "KnowledgeReleasePublicationDecision"
+      ],
+      "approval_ref": null,
+      "status": "HOLD_RELEASE_PUBLISHER_REQUIRED"
+    },
+    {
+      "gate": "A05",
+      "actor_required": "RUNTIME_PROFILE_MANAGE holder",
+      "native_inputs": [
+        "KnowledgeRelease ref",
+        "controlScope",
+        "authorized use/mode/constraints",
+        "AuthorizationDecisionAudit"
+      ],
+      "approval_ref": null,
+      "status": "HOLD_RUNTIME_PROFILE_APPROVAL"
+    },
+    {
+      "gate": "A06",
+      "actor_required": "DEPLOYMENT_MANAGER with exact KNOWLEDGE_DEPLOY; DEPLOY_PRODUCTION if required",
+      "native_inputs": [
+        "RuntimeProfile ref",
+        "actual organization/tenant/program",
+        "region/crops/decisionTypes/usePurpose/class",
+        "effectiveInterval",
+        "staging/pilot rollout",
+        "AuthorizationDecisionAudit"
+      ],
+      "approval_ref": null,
+      "status": "HOLD_DEPLOYMENT_APPROVAL"
+    },
+    {
+      "gate": "TARGET",
+      "actor_required": "actual GEOX/ADR tenant/target owner or delegated directory authority",
+      "native_inputs": [
+        "GEOX scope and real FDW actor",
+        "boundary/source hashes",
+        "P3 basis SHA-256",
+        "ADR target ref and correspondence record",
+        "decision mapping"
+      ],
+      "approval_ref": null,
+      "status": "HOLD_TARGET_BINDING_REQUIRED"
+    },
+    {
+      "gate": "A01",
+      "actor_required": "authorized IAM owner and exact principal",
+      "native_inputs": [
+        "DECISION_PROBLEM_CREATE RoleAssignment",
+        "exact target organization and tenant",
+        "logical id",
+        "approved request digest binding",
+        "native AuthorizationDecisionAudit"
+      ],
+      "approval_ref": null,
+      "status": "HOLD_A01_AUTHORIZATION_REQUIRED"
+    },
+    {
+      "gate": "A07",
+      "actor_required": "authorized IAM owner and exact runtime principal",
+      "native_inputs": [
+        "KNOWLEDGE_RUNTIME_USE RoleAssignment",
+        "DEPLOYMENT_RUNTIME_READ exact deployment scope",
+        "current release/profile/deployment refs",
+        "approved request binding and native AuthorizationDecisionAudit"
+      ],
+      "approval_ref": null,
+      "status": "HOLD_A07_AUTHORIZATION_REQUIRED"
+    },
+    {
+      "gate": "PILOT_SECRET",
+      "actor_required": "authorized credential issuer and deployment operator",
+      "native_inputs": [
+        "exact Principal",
+        "non-synthetic checkpoint digest",
+        "isolated state path and snapshots",
+        "secret delivery ref (not value)",
+        "approved readiness and rollback"
+      ],
+      "approval_ref": null,
+      "status": "HOLD_SECRET_AND_PILOT_ADMISSION"
+    }
+  ],
+  "formal_refs": {
+    "source_refs": [],
+    "qualified_knowledge_refs": [],
+    "knowledge_release_ref": null,
+    "runtime_profile_ref": null,
+    "deployment_ref": null,
+    "target_binding_ref": null,
+    "decision_mapping_ref": null,
+    "a01_principal": null,
+    "a07_principal": null,
+    "a01_authorization_ref": null,
+    "a07_authorization_ref": null,
+    "checkpoint_sha256": null
+  },
+  "scientific_qualification": "NOT_ESTABLISHED",
+  "action_authority": false,
+  "publication_authorized": false,
+  "secret_issuance_authorized": false,
+  "deployment_authorized": false
+}

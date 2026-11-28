@@ -14,18 +14,54 @@ const snapshotDir = join(tempRoot, 'snapshots');
 
 const WRITE_TOKEN = 'acceptance-write-token';
 const READ_TOKEN = 'acceptance-read-token';
+const A07_TOKEN = 'acceptance-a07-only-token';
+const MISMATCH_TOKEN = 'acceptance-mismatch-principal-token';
+const LEGACY_TOKEN = 'acceptance-legacy-unscoped-token';
 
 process.env.ADR_PILOT_TOKEN_BINDINGS_JSON = JSON.stringify({
   [WRITE_TOKEN]: {
-    principal_id: 'design-partner-context-provider-host',
-    type: 'SERVICE_ACCOUNT',
-    organization_id: 'org-a',
-    tenant_id: 'tenant-a',
-    program_ids: ['pilot-a']
+    principal: {
+      principal_id: 'design-partner-context-provider-host',
+      type: 'SERVICE_ACCOUNT',
+      organization_id: 'org-a',
+      tenant_id: 'tenant-a',
+      program_ids: ['pilot-a']
+    },
+    allowed_operations: ['createContextDatum']
   },
   [READ_TOKEN]: {
-    principal_id: 'agronomist-v03-host',
-    type: 'USER',
+    principal: {
+      principal_id: 'agronomist-v03-host',
+      type: 'USER',
+      organization_id: 'org-a',
+      tenant_id: 'tenant-a',
+      program_ids: ['pilot-a']
+    },
+    allowed_operations: ['getAgronomistWorkbenchCase', 'listAgronomistEscalations']
+  },
+  [A07_TOKEN]: {
+    principal: {
+      principal_id: 'test-geox-e2e01-a07-service',
+      type: 'SERVICE_ACCOUNT',
+      organization_id: 'org_geox',
+      tenant_id: 'tenant_geox_e2e01',
+      program_ids: ['program_geox_e2e01']
+    },
+    allowed_operations: ['executeKnowledgeRetrieval', 'resolveCustomerEvidence']
+  },
+  [MISMATCH_TOKEN]: {
+    principal: {
+      principal_id: 'different-context-provider',
+      type: 'SERVICE_ACCOUNT',
+      organization_id: 'org-a',
+      tenant_id: 'tenant-a',
+      program_ids: ['pilot-a']
+    },
+    allowed_operations: ['createContextDatum']
+  },
+  [LEGACY_TOKEN]: {
+    principal_id: 'legacy-unscoped-service-test',
+    type: 'SERVICE_ACCOUNT',
     organization_id: 'org-a',
     tenant_id: 'tenant-a',
     program_ids: ['pilot-a']
@@ -59,7 +95,7 @@ let runtime = await initializePilotRuntime({
 });
 assert.equal(runtime.ready, true);
 assert.equal(runtime.metadata.mode, 'SYNTHETIC_SMOKE');
-assert.equal(runtime.tokenBindings.size, 2);
+assert.equal(runtime.tokenBindings.size, 5);
 
 let host = await listen(runtime);
 
@@ -84,6 +120,73 @@ try {
   for (const forbidden of ['/recommend', '/runtime-eligibility', '/runtime-bindings', '/decision-results']) {
     assert.equal(Object.keys(openapi.body.paths).some((path) => path.includes(forbidden)), false);
   }
+
+  const a07OnlyDeniedA08 = await request(host.baseUrl, '/v1/applicability-assessments', {
+    method: 'POST',
+    headers: {
+      ...auth(A07_TOKEN),
+      'Content-Type': 'application/json',
+      'Idempotency-Key': 'a07-only-deny-a08'
+    },
+    body: '{}'
+  });
+  assert.equal(a07OnlyDeniedA08.response.status, 404);
+  assert.equal(a07OnlyDeniedA08.body.code, 'HTTP_OPERATION_NOT_ALLOWED');
+
+  const a07OnlyDeniedA01 = await request(host.baseUrl, '/v1/decision-problems', {
+    method: 'POST',
+    headers: {
+      ...auth(A07_TOKEN),
+      'Content-Type': 'application/json',
+      'Idempotency-Key': 'a07-only-deny-a01'
+    },
+    body: '{}'
+  });
+  assert.equal(a07OnlyDeniedA01.response.status, 404);
+  assert.equal(a07OnlyDeniedA01.body.code, 'HTTP_OPERATION_NOT_ALLOWED');
+
+  const a07RouteAllowedButInvalidInput = await request(host.baseUrl, '/v1/knowledge-retrieval-results', {
+    method: 'POST',
+    headers: {
+      ...auth(A07_TOKEN),
+      'Content-Type': 'application/json',
+      'Idempotency-Key': 'a07-only-allowed-a07'
+    },
+    body: '{}'
+  });
+  assert.equal(a07RouteAllowedButInvalidInput.response.status, 400);
+  assert.equal(a07RouteAllowedButInvalidInput.body.code, 'INVALID_HTTP_INPUT');
+
+  const a07DisplayRouteRequiresLiveGrant = await request(host.baseUrl, '/v1/customer-evidence/resolve', {
+    method: 'POST',
+    headers: { ...auth(A07_TOKEN), 'Content-Type': 'application/json' },
+    body: '{}'
+  });
+  assert.equal(a07DisplayRouteRequiresLiveGrant.response.status, 403);
+  assert.equal(a07DisplayRouteRequiresLiveGrant.body.code, 'CUSTOMER_EVIDENCE_DISPLAY_PERMISSION_NOT_ESTABLISHED');
+
+  const a07OnlyDeniedWorkbench = await request(host.baseUrl, '/v1/workbench/escalations', {
+    headers: auth(A07_TOKEN)
+  });
+  assert.equal(a07OnlyDeniedWorkbench.response.status, 404);
+  assert.equal(a07OnlyDeniedWorkbench.body.code, 'HTTP_OPERATION_NOT_ALLOWED');
+
+  const recordsBeforeDeniedOperations = runtime.ledger.exportSnapshot().records.length;
+  const previousMode = runtime.metadata.mode;
+  runtime.metadata.mode = 'CHECKPOINT';
+  const checkpointWithoutAllowlistDenied = await request(host.baseUrl, '/v1/knowledge-retrieval-results', {
+    method: 'POST',
+    headers: {
+      ...auth(LEGACY_TOKEN),
+      'Content-Type': 'application/json',
+      'Idempotency-Key': 'checkpoint-requires-operation-policy'
+    },
+    body: '{}'
+  });
+  assert.equal(checkpointWithoutAllowlistDenied.response.status, 404);
+  assert.equal(checkpointWithoutAllowlistDenied.body.code, 'HTTP_OPERATION_NOT_ALLOWED');
+  runtime.metadata.mode = previousMode;
+  assert.equal(runtime.ledger.exportSnapshot().records.length, recordsBeforeDeniedOperations);
 
   const unauthCase = await request(host.baseUrl, '/v1/workbench/cases/applicability.v03.host');
   assert.equal(unauthCase.response.status, 401);
@@ -151,7 +254,7 @@ try {
   const principalMismatch = await request(host.baseUrl, smoke.path, {
     method: 'POST',
     headers: {
-      ...auth(READ_TOKEN),
+      ...auth(MISMATCH_TOKEN),
       'Content-Type': 'application/json',
       'Idempotency-Key': 'host-acceptance-principal-mismatch'
     },

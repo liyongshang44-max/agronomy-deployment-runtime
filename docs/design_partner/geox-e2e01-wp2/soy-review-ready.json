@@ -1,0 +1,482 @@
+{
+  "schema": "adr.geox-e2e01.soy-review-preparation.v1",
+  "task": "ADR_SOY_K03_K04_REVIEW_READY_PACKAGE",
+  "status": "SCIENTIFIC_REVIEW_READY_MATERIALS_ONLY",
+  "source_status": "SOURCE_OBSERVED",
+  "formal_status": "HOLD_FORMAL_AUTHORITY",
+  "source_observation": {
+    "candidate_id": "SOY-WUR-ROTUNDO-2024-01",
+    "doi": "10.1038/s41598-024-57522-z",
+    "source_url": "https://edepot.wur.nl/656804",
+    "publisher_url": "https://www.nature.com/articles/s41598-024-57522-z",
+    "raw_sha256": "sha256:bced62f287892f147e2f9c450c801a972c48855c0f5e255d17a7358ad3fe2495",
+    "byte_length": 1804554,
+    "job_id": 140484762900,
+    "run_id": 45992839468,
+    "observed_head": "6d9e0c1d7ea362a5645d85a90a7276b5ab70ddb7",
+    "observed_package_hash": "sha256:7e4a302f6cbbfa2d5ce9d760310549827e6e133a69762239728aec5c2811c0b7",
+    "previous_job_id": 140456566478,
+    "retrieved_at": "2026-11-27T11:44:09.207Z",
+    "locator_status": "PDF_TEXT_ANCHORS_PASS_NOT_SCIENTIFIC_REVIEW",
+    "publisher_locator_review": "Publisher version text inspected; exact WUR PDF byte identity observed in CI, not independently rehashed in review browser; verify same page/section in exact bytes before K02 completion",
+    "license": "CC-BY-4.0",
+    "license_url": "https://creativecommons.org/licenses/by/4.0/",
+    "license_locator": {
+      "kind": "DOCUMENT_COORDINATE",
+      "scheme": "PDF_PAGE_SECTION_V1",
+      "coordinates": {
+        "page": 14,
+        "section": "Open Access"
+      }
+    },
+    "attribution": "Rotundo et al. (2024), Scientific Reports 14:7612, DOI 10.1038/s41598-024-57522-z. Candidate assertions are adaptations/paraphrases.",
+    "article_permission": "COMMERCIAL_ARTICLE_USE_PERMITTED_SUBJECT_TO_LICENSE_TERMS",
+    "internal_policy_ref": null,
+    "excluded": "No underlying trial data, model, code, separately excluded third-party material or unapproved customer display entitlement inferred."
+  },
+  "parallel_corn_observation": {
+    "candidate_id": "CORN-KIEL-HUME-2026-01",
+    "raw_sha256": "sha256:e0eb6abb5a9086f08fe608c382a4c966220cdae0e8cceba3484a360d8172b363",
+    "byte_length": 701273,
+    "job_id": 140484762900,
+    "scientific_status": "CANDIDATE_ONLY_NOT_IN_PROPOSED_SOY_RELEASE",
+    "prior_handbook": "HOLD_SUPERSEDED_UNSIGNED_NO_RETRY"
+  },
+  "scope": {
+    "tenant_id": "tenant_geox_e2e01",
+    "project_id": "project_geox_e2e01",
+    "group_id": "group_geox_e2e01",
+    "field_id": "field_geox_e2e01_001",
+    "review_id": "review_geox_e2e01_001",
+    "manager_subject": "2bb8822d-1b7f-4ad5-9cc7-9dd99aee2083",
+    "manager_login": "fdw-manager-a",
+    "crop_codes": [
+      "CORN",
+      "SOYBEAN"
+    ],
+    "target_start_date": "2027-04-01",
+    "target_end_date": "2027-10-01",
+    "documents": [],
+    "source_field_id": "25281db9-db71-5965-94f3-e591ada7c278",
+    "source_geometry_sha256": "8d4202262136ccbff713cef151349888f516031342bb1da38a7deda90384497f",
+    "source_original_sha256": "c0c90cffb60894fef08f2a72d0980f267736a2fc45686c46bda319ca76c5e133",
+    "source_binding_kind": "LOCAL_PUBLIC_HISTORICAL_REFERENCE_FIELD_ONLY"
+  },
+  "consumer": {
+    "head": "e29589148ec6ca875eae64690390ebcd3d439a75",
+    "base": "7213026ee25ae675b35ff450fdfa4989f912d103",
+    "ci_run": 45984844530,
+    "acceptance_job": 140458583458,
+    "browser_job": 140457687634,
+    "native_host_job": 140457688014,
+    "attempt_id": "native_63b8cbcf67d68e450d033f482ce6f4c1357a06803da8cf82e5953e9b9334550f",
+    "decision_problem_logical_id": "native_63b8cbcf67d68e450d033f482ce6f4c1357a06803da8cf82e5953e9b9334550f:problem",
+    "retrieval_logical_id": "native_63b8cbcf67d68e450d033f482ce6f4c1357a06803da8cf82e5953e9b9334550f:retrieval",
+    "version": "1",
+    "a01_idempotency_key": "native_63b8cbcf67d68e450d033f482ce6f4c1357a06803da8cf82e5953e9b9334550f:problem:1",
+    "a07_idempotency_key": "native_63b8cbcf67d68e450d033f482ce6f4c1357a06803da8cf82e5953e9b9334550f:retrieval:1",
+    "basis_sha256": null,
+    "a01_request_sha256": null,
+    "a07_request_sha256": null,
+    "target_binding_ref": null,
+    "decision_mapping_ref": null,
+    "a01_authorization_ref": null,
+    "a07_authorization_ref": null
+  },
+  "claims": [
+    {
+      "key": "SOY-COLD-SEASON-01",
+      "claimType": "EVALUATION_CLAIM",
+      "assertion": "In the regional simulation, cooler temperatures and shorter seasons constrain soybean potential in northeastern Europe and southern UK (clusters B/C); the authors discuss cold-adapted cultivars and maturity group adaptation.",
+      "sourceLocator": {
+        "kind": "DOCUMENT_COORDINATE",
+        "scheme": "PDF_PAGE_SECTION_V1",
+        "coordinates": {
+          "page": 2,
+          "section": "Results: Increasing soybean production in Europe, paragraph on clusters B/C"
+        }
+      },
+      "sourceContext": {
+        "BIOLOGICAL": {
+          "status": "REPORTED",
+          "dimensions": [
+            {
+              "semanticHint": "crop",
+              "valueCandidate": "soybean",
+              "supportClass": "EXPLICIT_SOURCE",
+              "sourceLocator": {
+                "kind": "DOCUMENT_COORDINATE",
+                "scheme": "PDF_PAGE_SECTION_V1",
+                "coordinates": {
+                  "page": 9,
+                  "section": "Crop modelling and simulations"
+                }
+              }
+            },
+            {
+              "semanticHint": "simulated maturity groups",
+              "valueCandidate": "0000–III",
+              "supportClass": "EXPLICIT_SOURCE",
+              "sourceLocator": {
+                "kind": "DOCUMENT_COORDINATE",
+                "scheme": "PDF_PAGE_SECTION_V1",
+                "coordinates": {
+                  "page": 9,
+                  "section": "Crop modelling and simulations"
+                }
+              }
+            }
+          ]
+        },
+        "ENVIRONMENTAL": {
+          "status": "REPORTED",
+          "dimensions": [
+            {
+              "semanticHint": "reported region",
+              "valueCandidate": "northeastern Europe and southern UK, clusters B/C",
+              "supportClass": "EXPLICIT_SOURCE",
+              "sourceLocator": {
+                "kind": "DOCUMENT_COORDINATE",
+                "scheme": "PDF_PAGE_SECTION_V1",
+                "coordinates": {
+                  "page": 2,
+                  "section": "Increasing soybean production in Europe"
+                }
+              }
+            },
+            {
+              "semanticHint": "historical weather years",
+              "valueCandidate": "1999–2018",
+              "supportClass": "EXPLICIT_SOURCE",
+              "sourceLocator": {
+                "kind": "DOCUMENT_COORDINATE",
+                "scheme": "PDF_PAGE_SECTION_V1",
+                "coordinates": {
+                  "page": 9,
+                  "section": "Crop modelling and simulations"
+                }
+              }
+            },
+            {
+              "semanticHint": "simulation grid resolution degrees",
+              "valueCandidate": 0.5,
+              "supportClass": "EXPLICIT_SOURCE",
+              "sourceLocator": {
+                "kind": "DOCUMENT_COORDINATE",
+                "scheme": "PDF_PAGE_SECTION_V1",
+                "coordinates": {
+                  "page": 9,
+                  "section": "Crop modelling and simulations"
+                }
+              }
+            }
+          ]
+        },
+        "MANAGEMENT": {
+          "status": "REPORTED",
+          "dimensions": [
+            {
+              "semanticHint": "simulation water regimes",
+              "valueCandidate": "potential and rainfed",
+              "supportClass": "EXPLICIT_SOURCE",
+              "sourceLocator": {
+                "kind": "DOCUMENT_COORDINATE",
+                "scheme": "PDF_PAGE_SECTION_V1",
+                "coordinates": {
+                  "page": 9,
+                  "section": "Crop modelling and simulations"
+                }
+              }
+            }
+          ]
+        },
+        "OPERATIONAL": {
+          "status": "NOT_REPORTED",
+          "dimensions": []
+        },
+        "MEASUREMENT": {
+          "status": "REPORTED",
+          "dimensions": [
+            {
+              "semanticHint": "evidence method",
+              "valueCandidate": "regional phenological and physiological model simulations",
+              "supportClass": "EXPLICIT_SOURCE",
+              "sourceLocator": {
+                "kind": "DOCUMENT_COORDINATE",
+                "scheme": "PDF_PAGE_SECTION_V1",
+                "coordinates": {
+                  "page": 9,
+                  "section": "Crop modelling and simulations"
+                }
+              }
+            }
+          ]
+        },
+        "JURISDICTION_ECONOMIC": {
+          "status": "NOT_REPORTED",
+          "dimensions": []
+        }
+      },
+      "proposedLimitations": [
+        "Regional simulation, not parcel observation or cultivar trial for this target",
+        "No assignment of target parcel to a model cluster",
+        "No target maturity date, sowing threshold, yield, root-depth parameter or action"
+      ],
+      "requiredForLaterApplicability": [
+        "target cultivar and maturity group",
+        "target weather/soil and actual season",
+        "source-to-target correspondence and independent applicability review"
+      ]
+    },
+    {
+      "key": "SOY-MODEL-LIMIT-02",
+      "claimType": "EVALUATION_CLAIM",
+      "assertion": "The authors compared simulated rainfed yield potential with observed mean trial yields by maturity group without calibrating to those European observations: n=84, Pearson r=0.48, MAPE=36%. The comparison supports regional plausibility, not parcel-level prediction.",
+      "sourceLocator": {
+        "kind": "DOCUMENT_COORDINATE",
+        "scheme": "PDF_PAGE_SECTION_V1",
+        "coordinates": {
+          "page": 10,
+          "section": "Methods: Simulation data processing, paragraph comparing simulated and observed rainfed yield; Supplementary Fig. 1 cited"
+        }
+      },
+      "sourceContext": {
+        "BIOLOGICAL": {
+          "status": "REPORTED",
+          "dimensions": [
+            {
+              "semanticHint": "crop",
+              "valueCandidate": "soybean",
+              "supportClass": "EXPLICIT_SOURCE",
+              "sourceLocator": {
+                "kind": "DOCUMENT_COORDINATE",
+                "scheme": "PDF_PAGE_SECTION_V1",
+                "coordinates": {
+                  "page": 9,
+                  "section": "Crop modelling and simulations"
+                }
+              }
+            },
+            {
+              "semanticHint": "comparison aggregation",
+              "valueCandidate": "mean trial yield by grown maturity",
+              "supportClass": "EXPLICIT_SOURCE",
+              "sourceLocator": {
+                "kind": "DOCUMENT_COORDINATE",
+                "scheme": "PDF_PAGE_SECTION_V1",
+                "coordinates": {
+                  "page": 10,
+                  "section": "Simulation data processing"
+                }
+              }
+            }
+          ]
+        },
+        "ENVIRONMENTAL": {
+          "status": "REPORTED",
+          "dimensions": [
+            {
+              "semanticHint": "trial regions",
+              "valueCandidate": "Belgium, Germany, Italy, Netherlands, Spain, United Kingdom",
+              "supportClass": "EXPLICIT_SOURCE",
+              "sourceLocator": {
+                "kind": "DOCUMENT_COORDINATE",
+                "scheme": "PDF_PAGE_SECTION_V1",
+                "coordinates": {
+                  "page": 10,
+                  "section": "Simulation data processing"
+                }
+              }
+            }
+          ]
+        },
+        "MANAGEMENT": {
+          "status": "REPORTED",
+          "dimensions": [
+            {
+              "semanticHint": "water regime",
+              "valueCandidate": "rainfed",
+              "supportClass": "EXPLICIT_SOURCE",
+              "sourceLocator": {
+                "kind": "DOCUMENT_COORDINATE",
+                "scheme": "PDF_PAGE_SECTION_V1",
+                "coordinates": {
+                  "page": 10,
+                  "section": "Simulation data processing"
+                }
+              }
+            }
+          ]
+        },
+        "OPERATIONAL": {
+          "status": "NOT_REPORTED",
+          "dimensions": []
+        },
+        "MEASUREMENT": {
+          "status": "REPORTED",
+          "dimensions": [
+            {
+              "semanticHint": "comparison count",
+              "valueCandidate": 84,
+              "supportClass": "EXPLICIT_SOURCE",
+              "sourceLocator": {
+                "kind": "DOCUMENT_COORDINATE",
+                "scheme": "PDF_PAGE_SECTION_V1",
+                "coordinates": {
+                  "page": 10,
+                  "section": "Simulation data processing"
+                }
+              }
+            },
+            {
+              "semanticHint": "Pearson correlation",
+              "valueCandidate": 0.48,
+              "supportClass": "EXPLICIT_SOURCE",
+              "sourceLocator": {
+                "kind": "DOCUMENT_COORDINATE",
+                "scheme": "PDF_PAGE_SECTION_V1",
+                "coordinates": {
+                  "page": 10,
+                  "section": "Simulation data processing"
+                }
+              }
+            },
+            {
+              "semanticHint": "mean absolute percentage error percent",
+              "valueCandidate": 36,
+              "supportClass": "EXPLICIT_SOURCE",
+              "sourceLocator": {
+                "kind": "DOCUMENT_COORDINATE",
+                "scheme": "PDF_PAGE_SECTION_V1",
+                "coordinates": {
+                  "page": 10,
+                  "section": "Simulation data processing"
+                }
+              }
+            },
+            {
+              "semanticHint": "calibration to European comparison observations",
+              "valueCandidate": "none",
+              "supportClass": "EXPLICIT_SOURCE",
+              "sourceLocator": {
+                "kind": "DOCUMENT_COORDINATE",
+                "scheme": "PDF_PAGE_SECTION_V1",
+                "coordinates": {
+                  "page": 10,
+                  "section": "Simulation data processing"
+                }
+              }
+            }
+          ]
+        },
+        "JURISDICTION_ECONOMIC": {
+          "status": "NOT_REPORTED",
+          "dimensions": []
+        }
+      },
+      "proposedLimitations": [
+        "84 aggregated comparison observations, not 84 independent target-parcel trials",
+        "MAPE is not a calibrated per-field prediction interval or success rate",
+        "No cross-crop ranking; no imported model/underlying data authority"
+      ],
+      "requiredForLaterApplicability": [
+        "independent same-target observations and error definition",
+        "actual target conditions and model domain correspondence"
+      ]
+    }
+  ],
+  "proposed_qualification_target": {
+    "use": "CROP_SUITABILITY_EVIDENCE_RETRIEVAL"
+  },
+  "proposed_release": {
+    "member_candidate_keys": [
+      "SOY-COLD-SEASON-01",
+      "SOY-MODEL-LIMIT-02"
+    ],
+    "evidence_crops": [
+      "SOYBEAN"
+    ],
+    "question_crops": [
+      "CORN",
+      "SOYBEAN"
+    ],
+    "deployment_scope_proposal": "DUAL_CROP_QUESTION_SCOPE_SOY_ONLY_RELEASE_MEMBERS_REQUIRES_OWNER_APPROVAL",
+    "coverage_notice": "Soybean evidence only; maize evidence not admitted; cross-crop evidence incomplete; no crop ranking or field suitability finding.",
+    "release_target": null,
+    "release_ref": null,
+    "publication_decision_ref": null,
+    "validity": null
+  },
+  "gates": [
+    {
+      "gate": "SOURCE_POLICY_K01_K02",
+      "required_actor": "Actual ADR source steward and authorized COMPILER_SERVICE",
+      "principal": null,
+      "role_assignment_refs": [],
+      "decision_ref": null,
+      "inputs": [
+        "Article license/attribution/exclusions; owner scope and exact source policy",
+        "Exact bytes SHA-256 and Source/SourceArtifact; compiler definition; completed ScientificCompilationResult with exact matching pair for each claim"
+      ],
+      "status": "HOLD_NATIVE_SOURCE_AND_COMPILATION_REFS"
+    },
+    {
+      "gate": "K03",
+      "required_actor": "AGRONOMY_REVIEWER with crop science/agronomy literature-review competency and source.read + knowledge.inspect scoped to exact source",
+      "principal": null,
+      "role_assignment_refs": [],
+      "decision_ref": null,
+      "inputs": [
+        "Exact compilation result and candidate pair, SourceArtifact and compiler lineage",
+        "SourceReview resource ID and KnowledgeGovernancePolicy; recomputable authorization audit",
+        "ACCEPT_SOURCE_FAITHFUL or REJECT_SOURCE_FAITHFUL; reject/recompile rather than rewrite"
+      ],
+      "status": "HOLD_REVIEWER_AND_NATIVE_REFS"
+    },
+    {
+      "gate": "K04",
+      "required_actor": "SCIENTIFIC_APPROVER with soybean agronomy, crop phenology/model validation and transfer limitations expertise; knowledge.qualify + knowledge.inspect",
+      "principal": null,
+      "role_assignment_refs": [],
+      "decision_ref": null,
+      "inputs": [
+        "Exact accepted Claim + SourceContext pairs, K03 decisions and audits",
+        "qualificationResourceId; exact policy, scoped RoleAssignment and authorization audit; one-field qualificationTarget",
+        "QUALIFY_USE or PROHIBIT_USE with limits, preconditions and transport constraints; complete active branch set"
+      ],
+      "status": "HOLD_APPROVER_AND_K03"
+    },
+    {
+      "gate": "K06",
+      "required_actor": "Actual publisher with exact knowledge.release assignment (not an assumed built-in RELEASE_PUBLISHER role)",
+      "principal": null,
+      "role_assignment_refs": [],
+      "decision_ref": null,
+      "inputs": [
+        "Exact active QualifiedKnowledge refs; member policies and entitlements for actual releaseTarget",
+        "Publication decision with publisher principal, member authorizations, conflicts/resolutions and exact immutable member set"
+      ],
+      "status": "HOLD_PUBLISHER_AND_K04"
+    }
+  ],
+  "native_refs": {
+    "source": null,
+    "artifact": null,
+    "compiler_definition": null,
+    "compilation_result": null,
+    "claim_candidates": [],
+    "source_context_candidates": [],
+    "k03_decisions": [],
+    "claims": [],
+    "source_contexts": [],
+    "k04_decisions": [],
+    "qualified_knowledge": [],
+    "release": null
+  },
+  "formal_authority_ready": false,
+  "action_authority": false,
+  "execution_authority": false,
+  "publication_authorized": false,
+  "secret_issuance_authorized": false,
+  "deployment_authorized": false
+}

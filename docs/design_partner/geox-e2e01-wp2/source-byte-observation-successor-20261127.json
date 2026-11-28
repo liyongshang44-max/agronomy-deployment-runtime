@@ -1,0 +1,27 @@
+{
+  "schema": "adr.geox-e2e01.source-byte-observation.v1",
+  "job": "https://github.com/liyongshang44-max/agronomy-deployment-runtime/actions/runs/45992839468/job/140484762900",
+  "executed_head": "6d9e0c1d7ea362a5645d85a90a7276b5ab70ddb7",
+  "unsigned_package_hash": "sha256:7e4a302f6cbbfa2d5ce9d760310549827e6e133a69762239728aec5c2811c0b7",
+  "formal_authority_ready": false,
+  "results": [
+    {
+      "candidate_id": "CORN-KIEL-HUME-2026-01",
+      "raw_sha256": "sha256:e0eb6abb5a9086f08fe608c382a4c966220cdae0e8cceba3484a360d8172b363",
+      "byte_length": 701273,
+      "retrieved_at": "2026-11-27T11:44:02.795Z",
+      "source_url": "https://www.cambridge.org/core/services/aop-cambridge-core/content/view/DD69C50EDAA1C64E3D5E2F31375A88FA/S0021859626100719a.pdf/hume-maize-modelling-silage-maize-yield-formation-across-genotypes-and-scales.pdf",
+      "status": "SOURCE_BYTES_OBSERVED_NOT_ADMITTED",
+      "locator_check": "PDF_TEXT_ANCHORS_PASS_NOT_SCIENTIFIC_REVIEW"
+    },
+    {
+      "candidate_id": "SOY-WUR-ROTUNDO-2024-01",
+      "raw_sha256": "sha256:bced62f287892f147e2f9c450c801a972c48855c0f5e255d17a7358ad3fe2495",
+      "byte_length": 1804554,
+      "retrieved_at": "2026-11-27T11:44:09.207Z",
+      "source_url": "https://edepot.wur.nl/656804",
+      "status": "SOURCE_BYTES_OBSERVED_NOT_ADMITTED",
+      "locator_check": "PDF_TEXT_ANCHORS_PASS_NOT_SCIENTIFIC_REVIEW"
+    }
+  ]
+}

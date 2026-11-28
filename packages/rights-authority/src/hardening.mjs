@@ -8,6 +8,7 @@ import {
 } from './contract.mjs';
 import {
   assertRightsAllowed as rawAssertRightsAllowed,
+  evaluateRightsReadOnly as rawEvaluateRightsReadOnly,
   publishRightsDecision as rawPublishRightsDecision,
   publishRightsGrant as rawPublishRightsGrant,
   publishRightsPolicy as rawPublishRightsPolicy,
@@ -283,4 +284,15 @@ export function assertRightsAllowed({ enforceableObligations = undefined, ...arg
     }
   }
   return rawAssertRightsAllowed(args);
+}
+
+// Same hardened policy/grant/revocation checks as publication. No authority record is created.
+export function evaluateRightsReadOnly({enforceableObligations, ...args}) {
+  const policy = strictPreflightRightsWorld(args);
+  if (!ownershipMatchesPrincipal(policy.ownership,args.evaluatorPrincipal)) throw new RightsAuthorityError('RIGHTS_EVALUATOR_SCOPE_MISMATCH','read evaluator scope mismatch');
+  const result = rawEvaluateRightsReadOnly(args);
+  const capabilities = normalizedCapabilities(enforceableObligations);
+  if(result.outcome !== 'ALLOW') throw new RightsAuthorityError('RIGHTS_DENIED','current rights denied');
+  if(result.obligations.some(x=>!capabilities.has(x))) throw new RightsAuthorityError('RIGHTS_OBLIGATION_UNSUPPORTED','unsupported display obligation');
+  return result;
 }
