@@ -15,6 +15,7 @@ const snapshotDir = join(tempRoot, 'snapshots');
 const WRITE_TOKEN = 'acceptance-write-token';
 const READ_TOKEN = 'acceptance-read-token';
 const A07_TOKEN = 'acceptance-a07-only-token';
+const MISMATCH_TOKEN = 'acceptance-mismatch-principal-token';
 const LEGACY_TOKEN = 'acceptance-legacy-unscoped-token';
 
 process.env.ADR_PILOT_TOKEN_BINDINGS_JSON = JSON.stringify({
@@ -47,6 +48,16 @@ process.env.ADR_PILOT_TOKEN_BINDINGS_JSON = JSON.stringify({
       program_ids: ['program_geox_e2e01']
     },
     allowed_operations: ['executeKnowledgeRetrieval', 'resolveCustomerEvidence']
+  },
+  [MISMATCH_TOKEN]: {
+    principal: {
+      principal_id: 'different-context-provider',
+      type: 'SERVICE_ACCOUNT',
+      organization_id: 'org-a',
+      tenant_id: 'tenant-a',
+      program_ids: ['pilot-a']
+    },
+    allowed_operations: ['createContextDatum']
   },
   [LEGACY_TOKEN]: {
     principal_id: 'legacy-unscoped-service-test',
@@ -84,7 +95,7 @@ let runtime = await initializePilotRuntime({
 });
 assert.equal(runtime.ready, true);
 assert.equal(runtime.metadata.mode, 'SYNTHETIC_SMOKE');
-assert.equal(runtime.tokenBindings.size, 4);
+assert.equal(runtime.tokenBindings.size, 5);
 
 let host = await listen(runtime);
 
@@ -243,7 +254,7 @@ try {
   const principalMismatch = await request(host.baseUrl, smoke.path, {
     method: 'POST',
     headers: {
-      ...auth(READ_TOKEN),
+      ...auth(MISMATCH_TOKEN),
       'Content-Type': 'application/json',
       'Idempotency-Key': 'host-acceptance-principal-mismatch'
     },
