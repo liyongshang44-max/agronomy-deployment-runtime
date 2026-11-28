@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - 'docs/design_partner/geox-e2e01-wp2/**'
+      - 'scripts/e2e01/**'
       - '.github/workflows/geox-e2e01-wp2-preparation.yml'
 permissions:
   contents: read
@@ -19,6 +20,8 @@ jobs:
           package-manager-cache: false
       - run: node --check docs/design_partner/geox-e2e01-wp2/replay-checkpoint.mjs
       - run: node --check docs/design_partner/geox-e2e01-wp2/verify-soy-k01-k02.mjs
+      - name: Check read-only IAM/Rights checkpoint inspector syntax
+        run: node --check scripts/e2e01/inspect-iam-rights-checkpoint.mjs
       - run: node --test docs/design_partner/geox-e2e01-wp2/prepare.test.mjs
   public-source-byte-receipts:
     runs-on: ubuntu-24.04
