@@ -36,12 +36,12 @@ export function audit(actorId, actorType = 'USER', prefix = 'a05') {
   };
 }
 
-export function createRuntimeProfileEnvironment(label = 'base') {
+export function createRuntimeProfileEnvironment(label = 'base', {sourceFixture=null}={}) {
   const env = createEnvironment();
   const qualified = makeQualifiedKnowledge(env, {
     label: `a05-${label}`,
     assertion: 'Maintain irrigation depletion within the qualified threshold.',
-    useTarget: USE_APPLICABILITY
+    useTarget: USE_APPLICABILITY, sourceFixture
   });
 
   const releaseManager = createPrincipal({

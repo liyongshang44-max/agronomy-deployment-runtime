@@ -1,5 +1,6 @@
 import { AuthorityLedger } from '../../packages/provenance/src/index.mjs';
 import { ExactArtifactStore, SourceRegistry } from '../../packages/source-registry/src/index.mjs';
+import { publishRightsPolicy, publishRightsGrant } from '../../packages/rights-authority/src/index.mjs';
 import {
   SOURCE_CONTEXT_FAMILIES,
   ScientificCompiler,
@@ -83,23 +84,41 @@ function contextAdjudication() {
   };
 }
 
+// Acceptance-only licensed source fixture: original retention authority and a later
+// display grant are distinct, even though they use the same native policy.
+export function licensedPublicationFixture(label,owner){
+  const title='TEST_ONLY licensed publication '+label;
+  const licenseUrl='https://creativecommons.org/licenses/by/4.0/';
+  const rights={license:'CC-BY-4.0',licenseUrl,attribution:'TEST_ONLY authors, '+title+'. CC BY 4.0 '+licenseUrl};
+  const obligation='RETAIN_SOURCE_ATTRIBUTION_LICENSE_ADAPTATION_NOTICE';
+  return {sourceType:'PUBLICATION',title,rights,bibliographic:{citation:'TEST_ONLY publication, '+label},createRightsSnapshot({ledger,source,ownership}){
+    const policy=publishRightsPolicy({ledger,logicalId:'policy.licensed.'+label,version:'1',ownership,ownerPrincipal:owner,basis:{class:'LICENSE',evidenceRefs:[source.ref]},audit:audit('policy.licensed.'+label,owner.principalId,owner.type)});
+    const grant=publishRightsGrant({ledger,logicalId:'grant.retention.'+label,version:'1',rightsPolicyRef:policy.ref,subjectRef:source.ref,grantee:{organizationId:owner.organizationId,tenantId:owner.tenantId,principalId:owner.principalId,principalType:owner.type},rules:[{operation:'RETAIN_FULLTEXT',purposes:['TEST_ONLY_RETENTION'],jurisdictions:['US'],obligations:['INTERNAL_ONLY_NO_EGRESS',obligation]}],validFrom:'2026-08-15T15:50:00.000Z',validUntil:'2026-08-16T00:00:00.000Z',grantorPrincipal:owner,audit:audit('grant.retention.'+label,owner.principalId,owner.type)});
+    return {...rights,policyRef:policy.ref,sourceGrantRef:grant.ref,obligations:['INTERNAL_ONLY_NO_EGRESS',obligation]};
+  }};
+}
+
 export function makeQualifiedKnowledge(env, {
   label,
   assertion,
   ownership = { organizationId: 'org-a', tenantId: 'tenant-a' },
-  useTarget = USE_APPLICABILITY
+  useTarget = USE_APPLICABILITY,
+  sourceFixture = null
 }) {
   const { ledger, sourceRegistry } = env;
   const source = sourceRegistry.registerSource({
     logicalId: `source.${label}`,
     version: '1',
-    sourceType: 'PROTOCOL',
-    title: `K05 source ${label}`,
+    sourceType: sourceFixture?.sourceType??'PROTOCOL',
+    title: sourceFixture?.title??`K05 source ${label}`,
+    ...(sourceFixture?{rights:sourceFixture.rights,bibliographic:sourceFixture.bibliographic}:{}),
     ownership,
     audit: audit(`evt-source-${label}`, 'source-admin')
   });
   const text = `${assertion} Context: ${label.includes('a') ? 'silt loam' : 'sandy loam'}.`;
+  const rightsSnapshot=sourceFixture?.createRightsSnapshot({ledger,source,ownership});
   const artifact = sourceRegistry.materializeArtifact({
+    ...(rightsSnapshot?{rightsSnapshot}:{}),
     logicalId: `artifact.${label}`,
     version: '1',
     sourceRef: source.ref,
